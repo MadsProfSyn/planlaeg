@@ -1,83 +1,80 @@
-# Property Inspection Scheduling SaaS
+# Syn Planner
 
 Internal SaaS for scheduling property inspections across Denmark, assigning them to part-time inspectors.
 
-## Project Documentation
+## Documentation
 
-📋 **[Product Requirements Document (PRD)](./docs/PRD.md)** - Complete product overview, core flow, entities, and success criteria
+- [Product Requirements Document (PRD)](./docs/PRD.md)
+- [Data Model](./docs/data-model.md)
+- [UX Guidelines](./docs/ux-guidelines.md)
 
-🗄️ **[Data Model](./docs/data-model.md)** - Postgres/Supabase schema, tables, indexes, and RLS policies  
+## Local Development Setup
 
-🎨 **[UX Guidelines](./docs/ux-guidelines.md)** - Navigation, theming, accessibility, and design standards
+### Prerequisites
 
-## Project info
+- Node.js 18+ and npm
+- Supabase project with database access
 
-**URL**: https://lovable.dev/projects/7b7dd475-831b-43ee-b020-81ff53b012af
+### Environment Setup
 
-## How can I edit this code?
-
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/7b7dd475-831b-43ee-b020-81ff53b012af) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+1. Copy the environment template:
+```bash
+cp .env.example .env
 ```
 
-**Edit a file directly in GitHub**
+2. Update `.env` with your Supabase credentials:
+```
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_anon_key
+```
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Database Setup
 
-**Use GitHub Codespaces**
+The database tables and seed data are automatically created via Supabase migrations. The following tables are included:
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+- `supabase_inspections` - Main inspections table
+- `supabase_availability` - Inspector availability tracking  
+- `supabase_shifts` - Assigned shifts/assignments
+- `inspections_vrp` - VRP optimization suggestions
 
-## What technologies are used for this project?
+### Available Scripts
 
-This project is built with:
+In the project directory, you can run:
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+#### `npm run dev`
 
-## How can I deploy this project?
+Runs the app in development mode.\
+Open [http://localhost:8080](http://localhost:8080) to view it in the browser.
 
-Simply open [Lovable](https://lovable.dev/projects/7b7dd475-831b-43ee-b020-81ff53b012af) and click on Share -> Publish.
+#### `npm run build`
 
-## Can I connect a custom domain to my Lovable project?
+Builds the app for production to the `dist` folder.
 
-Yes, you can!
+#### `npm run preview`
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+Serves the production build from the `dist` folder.
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+## Features
+
+### Current (MVP)
+
+- ✅ **Page 1: Inspections to be Scheduled**
+  - Server-side paginated table of unscheduled inspections
+  - Department multi-select filtering
+  - Date range filtering with quick presets
+  - Multi-select with persistence across pagination
+  - Responsive design with semantic UI tokens
+
+### Planned
+
+- **Page 2: VRP Optimization Results**
+- **WorkFeed API Integration**
+- **Advanced Reporting**
+
+## Technology Stack
+
+- **Frontend**: React 18 + TypeScript + Vite
+- **UI**: Tailwind CSS + shadcn/ui components
+- **Backend**: Supabase (PostgreSQL + Row-Level Security)
+- **State Management**: TanStack Query for server state
+- **Routing**: React Router v6
