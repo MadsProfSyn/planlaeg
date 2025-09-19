@@ -1,4 +1,14 @@
-# Welcome to your Lovable project
+# Property Inspection Scheduling SaaS
+
+Internal SaaS for scheduling property inspections across Denmark, assigning them to part-time inspectors.
+
+## Project Documentation
+
+📋 **[Product Requirements Document (PRD)](./docs/PRD.md)** - Complete product overview, core flow, entities, and success criteria
+
+🗄️ **[Data Model](./docs/data-model.md)** - Postgres/Supabase schema, tables, indexes, and RLS policies  
+
+🎨 **[UX Guidelines](./docs/ux-guidelines.md)** - Navigation, theming, accessibility, and design standards
 
 ## Project info
 
