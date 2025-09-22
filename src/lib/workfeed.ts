@@ -40,26 +40,14 @@ export interface FetchShiftsResponse {
  */
 export async function fetchWorkfeedShifts(request: FetchShiftsRequest = {}): Promise<FetchShiftsResponse> {
   try {
-    // Build query parameters
-    const params = new URLSearchParams();
-    
-    if (request.startDate) {
-      params.append('startDate', request.startDate);
-    }
-    if (request.endDate) {
-      params.append('endDate', request.endDate);
-    }
-    if (request.employeeId) {
-      params.append('employeeId', request.employeeId);
-    }
-    if (request.department) {
-      params.append('department', request.department);
-    }
-
+    // For edge functions, we pass parameters in the body, not as query params
     const { data, error } = await supabase.functions.invoke('fetch-workfeed-shifts', {
-      method: 'GET',
-      // Pass query parameters as part of the URL
-      body: null,
+      body: {
+        startDate: request.startDate,
+        endDate: request.endDate,
+        employeeId: request.employeeId,
+        department: request.department,
+      },
     });
 
     if (error) {
