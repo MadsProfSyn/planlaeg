@@ -118,7 +118,7 @@ export default function InspectionsPage() {
             Syn til planlægning
           </h1>
           <p className="text-muted-foreground">
-            Vælg og planlæg syn
+            Select and manage unscheduled property inspections
           </p>
         </div>
       </div>
@@ -133,7 +133,7 @@ export default function InspectionsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Unscheduled Inspections</span>
+            <span>Ikke planlagte syn</span>
             <span className="text-sm font-normal text-muted-foreground">
               {totalCount} total
             </span>
