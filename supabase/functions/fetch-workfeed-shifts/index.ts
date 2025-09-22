@@ -26,7 +26,7 @@ serve(async (req) => {
     const workfeedResponse = await fetch(testUrl, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${workfeedApiKey}`,
+        'Authorization': workfeedApiKey, // No "Bearer " prefix to match Postman
         'Content-Type': 'application/json',
       },
     });
