@@ -8,7 +8,7 @@ import { ShiftsPagination } from "@/components/shifts/ShiftsPagination";
 import { ShiftDetailModal } from "@/components/shifts/ShiftDetailModal";
 import { getShiftDepartments, getCanonicalRoles, Shift, ShiftFilters } from "@/lib/shifts";
 import { getCurrentDateForInput } from "@/lib/date-utils";
-import { fetchWorkfeedShifts, WorkfeedShift, DateRanges } from "@/lib/workfeed";
+import { ensureAndFetchShifts, WorkfeedShift, DateRanges } from "@/lib/workfeed";
 import { useToast } from "@/components/ui/use-toast";
 
 export default function ScheduledShiftsPage() {
@@ -29,12 +29,15 @@ export default function ScheduledShiftsPage() {
     refetch: refetchShifts,
   } = useQuery({
     queryKey: ["workfeed-shifts", filters],
-    queryFn: () => fetchWorkfeedShifts({
-      startDate: filters.dateFrom,
-      endDate: filters.dateTo,
-      department: filters.department,
-      // Note: ShiftFilters doesn't have inspectorId, so we don't pass it
-    }),
+    queryFn: async () => {
+      const result = await ensureAndFetchShifts({
+        startDate: filters.dateFrom,
+        endDate: filters.dateTo,
+        department: filters.department,
+        // Note: ShiftFilters doesn't have inspectorId, so we don't pass it
+      });
+      return result.shifts;
+    },
     retry: 1,
   });
 

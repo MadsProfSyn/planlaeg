@@ -152,7 +152,7 @@ export async function fetchStoredShifts(request: FetchShiftsRequest = {}): Promi
 
     return {
       success: true,
-      shifts: data || [],
+      shifts: data as unknown as WorkfeedShift[],
       total: data?.length || 0,
       filters: request
     };
