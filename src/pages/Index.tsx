@@ -47,7 +47,7 @@ const Index = () => {
         <div className="pt-8">
           <Button size="lg" className="text-lg px-8 py-4" asChild>
             <Link to="/inspections">
-              View Inspections
+              Se syn
             </Link>
           </Button>
         </div>
