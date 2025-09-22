@@ -1,11 +1,15 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
+import { RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { ShiftsFiltersBar } from "@/components/filters/ShiftsFiltersBar";
 import { ShiftsTable } from "@/components/shifts/ShiftsTable";
 import { ShiftsPagination } from "@/components/shifts/ShiftsPagination";
 import { ShiftDetailModal } from "@/components/shifts/ShiftDetailModal";
 import { getShifts, getShiftDepartments, getCanonicalRoles, Shift, ShiftFilters, SEED_SHIFTS } from "@/lib/shifts";
 import { getCurrentDateForInput } from "@/lib/date-utils";
+import { syncWorkfeedShifts, getTodayDateRange } from "@/lib/workfeed";
+import { useToast } from "@/components/ui/use-toast";
 
 export default function ScheduledShiftsPage() {
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -15,6 +19,8 @@ export default function ScheduledShiftsPage() {
   });
   const [selectedShift, setSelectedShift] = React.useState<Shift | null>(null);
   const [showDetailModal, setShowDetailModal] = React.useState(false);
+  const [isSyncing, setIsSyncing] = React.useState(false);
+  const { toast } = useToast();
 
   // Fetch shifts
   const {
@@ -78,6 +84,40 @@ export default function ScheduledShiftsPage() {
     setShowDetailModal(true);
   };
 
+  const handleSyncShifts = async () => {
+    setIsSyncing(true);
+    try {
+      // Use current filter date range or default to today
+      const startFrom = filters.dateFrom ? `${filters.dateFrom}T00:00:00.000Z` : getTodayDateRange().startFrom;
+      const startTo = filters.dateTo ? `${filters.dateTo}T23:59:59.999Z` : getTodayDateRange().startTo;
+      
+      const result = await syncWorkfeedShifts({ startFrom, startTo });
+      
+      if (result.success) {
+        toast({
+          title: "Sync Completed",
+          description: `Successfully synced ${result.shifts} shifts from Workfeed`,
+        });
+        // Refetch data after successful sync
+        window.location.reload(); // Simple way to refresh data
+      } else {
+        toast({
+          title: "Sync Failed", 
+          description: result.error || "Failed to sync shifts",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Sync Error",
+        description: "An error occurred while syncing shifts",
+        variant: "destructive", 
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   // Use fallback data on error
   const shifts = shiftsError ? SEED_SHIFTS : (shiftsResponse?.data || []);
   const totalCount = shiftsError ? SEED_SHIFTS.length : (shiftsResponse?.count || 0);
@@ -87,6 +127,14 @@ export default function ScheduledShiftsPage() {
     <div className="container mx-auto py-8 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Planlagte vagter</h1>
+        <Button 
+          onClick={handleSyncShifts}
+          disabled={isSyncing}
+          className="flex items-center gap-2"
+        >
+          <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+          {isSyncing ? 'Syncing...' : 'Sync Workfeed'}
+        </Button>
       </div>
 
       {shiftsError && (
