@@ -33,7 +33,7 @@ export default function ScheduledShiftsPage() {
       startDate: filters.dateFrom,
       endDate: filters.dateTo,
       department: filters.department,
-      employeeId: filters.inspectorId, // Assuming this maps to employeeId
+      // Note: ShiftFilters doesn't have inspectorId, so we don't pass it
     }),
     retry: 1,
   });
@@ -63,8 +63,27 @@ export default function ScheduledShiftsPage() {
     } as Shift;
   };
 
-  // Process the data for pagination and filtering
-  const allShifts = workfeedResponse?.shifts?.map(transformWorkfeedShift) || [];
+  // Process the data for pagination and client-side filtering
+  let allShifts = workfeedResponse?.shifts?.map(transformWorkfeedShift) || [];
+  
+  // Apply client-side filters that aren't handled by the API
+  if (filters.synsTypes && filters.synsTypes.length > 0) {
+    allShifts = allShifts.filter(shift => 
+      filters.synsTypes!.some(synsType => 
+        shift.type?.includes(synsType) || 
+        shift.wf_role_id?.includes(synsType.toLowerCase())
+      )
+    );
+  }
+
+  if (filters.globalSearch && filters.globalSearch.trim()) {
+    const search = filters.globalSearch.toLowerCase().trim();
+    allShifts = allShifts.filter(shift => 
+      shift.inspector_name?.toLowerCase().includes(search) ||
+      shift.department?.toLowerCase().includes(search) ||
+      shift.type?.toLowerCase().includes(search)
+    );
+  }
   
   // Client-side pagination (since we're getting all data from API)
   const pageSize = 25;
