@@ -24,7 +24,7 @@ const navigationItems = [
     icon: CalendarCheck,
   },
   {
-    title: "Availability",
+    title: "Tilgængelige synskonsulenter",
     url: "/availability",
     icon: Users,
   },
