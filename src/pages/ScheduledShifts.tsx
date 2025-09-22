@@ -34,9 +34,13 @@ export default function ScheduledShiftsPage() {
         startDate: filters.dateFrom,
         endDate: filters.dateTo,
         department: filters.department,
-        // Note: ShiftFilters doesn't have inspectorId, so we don't pass it
       });
-      return result.shifts;
+      
+      if (!result.shifts.success) {
+        throw new Error(result.shifts.error || 'Failed to fetch shifts');
+      }
+      
+      return result.shifts.shifts;
     },
     retry: 1,
   });
@@ -54,20 +58,22 @@ export default function ScheduledShiftsPage() {
   const transformWorkfeedShift = (workfeedShift: WorkfeedShift): Shift => {
     return {
       id: workfeedShift.id,
+      wf_shift_id: workfeedShift.wf_shift_id,
+      wf_role_id: workfeedShift.wf_shift_id,
+      start_utc: workfeedShift.start_utc,
+      end_utc: workfeedShift.end_utc,
+      date_local: workfeedShift.date_local,
       inspector_name: workfeedShift.inspector_name,
       department: workfeedShift.department,
       type: workfeedShift.type,
-      date_local: workfeedShift.date_local,
-      start_utc: workfeedShift.start_utc,
-      end_utc: workfeedShift.end_utc,
       status: workfeedShift.status,
-      wf_role_id: workfeedShift.type, // Map type to wf_role_id for compatibility
-      // Add any other fields your Shift interface expects
-    } as Shift;
+      created_at: new Date().toISOString(),
+      inspector_id: workfeedShift.inspector_id,
+    };
   };
 
   // Process the data for pagination and client-side filtering
-  let allShifts = workfeedResponse?.shifts?.map(transformWorkfeedShift) || [];
+  let allShifts = workfeedResponse?.map(transformWorkfeedShift) || [];
   
   // Apply client-side filters that aren't handled by the API
   if (filters.synsTypes && filters.synsTypes.length > 0) {
@@ -176,13 +182,6 @@ export default function ScheduledShiftsPage() {
         </div>
       )}
 
-      {workfeedResponse && !workfeedResponse.success && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-sm text-red-800">
-            Workfeed API error: {workfeedResponse.error}
-          </p>
-        </div>
-      )}
 
       <ShiftsFiltersBar
         departments={departments}

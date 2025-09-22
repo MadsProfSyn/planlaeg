@@ -1,16 +1,18 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export interface WorkfeedShift {
-  id: string;
-  inspector_id: string;
+  id: string;                    // Supabase UUID
+  wf_shift_id: string;          // Workfeed shift ID  
+  inspector_id: string;         // UUID from inspectors_import_staging
+  wf_employee_id: string;       // Original Workfeed employee ID
   inspector_name: string;
   department: string;
-  type: string;
+  type: string;                 // Role name (FF, IF, PS, PA)
   status: string;
-  date_local: string;
+  date_local: string;           // YYYY-MM-DD format
   start_utc: string | null;
   end_utc: string | null;
-  wf_shift_id: string | null;
+  address: string;              // Extracted from Workfeed comments
 }
 
 export interface SyncShiftsRequest {
@@ -23,7 +25,7 @@ export interface FetchShiftsRequest {
   startDate?: string;    // ISO date string like "2025-09-22"
   endDate?: string;      // ISO date string like "2025-09-26"
   department?: string;   // Filter by department
-  inspectorId?: string;  // Filter by inspector
+  inspectorId?: string;  // Filter by wf_employee_id (Workfeed employee ID)
   status?: string;       // Filter by status
 }
 
@@ -117,43 +119,44 @@ export async function syncUpcomingShifts(days: number = 7, forceSync = false): P
  */
 export async function fetchStoredShifts(request: FetchShiftsRequest = {}): Promise<FetchShiftsResponse> {
   try {
-    let query = supabase
+    // Use a raw query approach since the types file is out of sync
+    const { data, error } = await supabase
       .from('supabase_shifts')
-      .select('id, inspector_id, inspector_name, department, type, status, date_local, start_utc, end_utc, wf_shift_id')
+      .select('*')
+      .gte('date_local', request.startDate || '1900-01-01')
+      .lte('date_local', request.endDate || '2099-12-31')
       .order('date_local', { ascending: true })
       .order('start_utc', { ascending: true });
-
-    // Apply filters
-    if (request.startDate) {
-      query = query.gte('date_local', request.startDate);
-    }
-    
-    if (request.endDate) {
-      query = query.lte('date_local', request.endDate);
-    }
-    
-    if (request.department) {
-      query = query.ilike('department', `%${request.department}%`);
-    }
-    
-    if (request.inspectorId) {
-      query = query.eq('inspector_id', request.inspectorId);
-    }
-    
-    if (request.status) {
-      query = query.eq('status', request.status);
-    }
-
-    const { data, error } = await query;
 
     if (error) {
       throw new Error(error.message);
     }
 
+    // Apply additional filters client-side
+    let filteredData = data || [];
+    
+    if (request.department) {
+      filteredData = filteredData.filter((shift: any) => 
+        shift.department?.toLowerCase().includes(request.department!.toLowerCase())
+      );
+    }
+    
+    if (request.inspectorId) {
+      filteredData = filteredData.filter((shift: any) => 
+        shift.wf_employee_id === request.inspectorId
+      );
+    }
+    
+    if (request.status) {
+      filteredData = filteredData.filter((shift: any) => 
+        shift.status === request.status
+      );
+    }
+
     return {
       success: true,
-      shifts: data as unknown as WorkfeedShift[],
-      total: data?.length || 0,
+      shifts: filteredData as unknown as WorkfeedShift[],
+      total: filteredData.length,
       filters: request
     };
 
