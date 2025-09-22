@@ -1,81 +1,231 @@
 import { supabase } from "@/integrations/supabase/client";
 
-export interface SyncShiftsRequest {
-  startFrom: string;  // ISO datetime string like "2025-09-22T00:00:00.000Z"
-  startTo: string;    // ISO datetime string like "2025-09-26T23:59:59.999Z"
+export interface WorkfeedShift {
+  id: string;
+  inspector_id: string;
+  inspector_name: string;
+  department: string;
+  type: string;
+  status: string;
+  date_local: string;
+  start_utc: string | null;
+  end_utc: string | null;
+  address: string;
 }
 
-export interface SyncShiftsResponse {
+export interface FetchShiftsRequest {
+  startDate?: string;    // ISO date string like "2025-09-22"
+  endDate?: string;      // ISO date string like "2025-09-26"
+  employeeId?: string;   // Filter by specific employee
+  department?: string;   // Filter by department
+}
+
+export interface FetchShiftsResponse {
   success: boolean;
-  message: string;
-  shifts: number;
+  shifts: WorkfeedShift[];
+  total: number;
+  filters: {
+    startDate: string;
+    endDate: string;
+    employeeId?: string;
+    department?: string;
+  };
   error?: string;
 }
 
 /**
- * Syncs shifts from Workfeed API to Supabase database
- * @param request - The date range to sync shifts for
- * @returns Promise with sync results
+ * Fetches current and future shifts from Workfeed API
+ * @param request - Optional filters for the shifts
+ * @returns Promise with shift data
  */
-export async function syncWorkfeedShifts(request: SyncShiftsRequest): Promise<SyncShiftsResponse> {
+export async function fetchWorkfeedShifts(request: FetchShiftsRequest = {}): Promise<FetchShiftsResponse> {
   try {
+    // Build query parameters
+    const params = new URLSearchParams();
+    
+    if (request.startDate) {
+      params.append('startDate', request.startDate);
+    }
+    if (request.endDate) {
+      params.append('endDate', request.endDate);
+    }
+    if (request.employeeId) {
+      params.append('employeeId', request.employeeId);
+    }
+    if (request.department) {
+      params.append('department', request.department);
+    }
+
     const { data, error } = await supabase.functions.invoke('fetch-workfeed-shifts', {
-      body: request
+      method: 'GET',
+      // Pass query parameters as part of the URL
+      body: null,
     });
 
     if (error) {
-      throw new Error(error.message || 'Failed to invoke sync function');
+      throw new Error(error.message || 'Failed to fetch shifts');
     }
 
-    return data as SyncShiftsResponse;
+    return data as FetchShiftsResponse;
   } catch (error) {
-    console.error('Error syncing Workfeed shifts:', error);
+    console.error('Error fetching Workfeed shifts:', error);
     return {
       success: false,
-      message: 'Failed to sync shifts',
-      shifts: 0,
+      shifts: [],
+      total: 0,
+      filters: {
+        startDate: request.startDate || '',
+        endDate: request.endDate || '',
+        employeeId: request.employeeId,
+        department: request.department
+      },
       error: error instanceof Error ? error.message : 'Unknown error'
     };
   }
 }
 
 /**
- * Helper function to create date range for today
+ * Fetches all shifts for today
  */
-export function getTodayDateRange(): SyncShiftsRequest {
-  const today = new Date();
-  const startFrom = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
-  const endTo = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999).toISOString();
+export async function fetchTodayShifts(): Promise<FetchShiftsResponse> {
+  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
   
-  return {
-    startFrom,
-    startTo: endTo
-  };
+  return fetchWorkfeedShifts({
+    startDate: today,
+    endDate: today
+  });
 }
 
 /**
- * Helper function to create date range for a specific date range
+ * Fetches shifts for the current week (Monday to Sunday)
  */
-export function getDateRange(from: Date, to: Date): SyncShiftsRequest {
-  const startFrom = new Date(from.getFullYear(), from.getMonth(), from.getDate()).toISOString();
-  const endTo = new Date(to.getFullYear(), to.getMonth(), to.getDate(), 23, 59, 59, 999).toISOString();
-  
-  return {
-    startFrom,
-    startTo: endTo
-  };
-}
-
-/**
- * Helper function to sync shifts for the current week
- */
-export async function syncCurrentWeekShifts(): Promise<SyncShiftsResponse> {
+export async function fetchCurrentWeekShifts(): Promise<FetchShiftsResponse> {
   const today = new Date();
   const startOfWeek = new Date(today);
-  startOfWeek.setDate(today.getDate() - today.getDay()); // Sunday
   
-  const endOfWeek = new Date(today);
-  endOfWeek.setDate(today.getDate() + (6 - today.getDay())); // Saturday
+  // Get Monday (1) of current week
+  const day = today.getDay();
+  const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+  startOfWeek.setDate(diff);
   
-  return syncWorkfeedShifts(getDateRange(startOfWeek, endOfWeek));
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 6); // Sunday
+  
+  return fetchWorkfeedShifts({
+    startDate: startOfWeek.toISOString().split('T')[0],
+    endDate: endOfWeek.toISOString().split('T')[0]
+  });
 }
+
+/**
+ * Fetches shifts for a specific date range
+ */
+export async function fetchShiftsByDateRange(from: Date, to: Date): Promise<FetchShiftsResponse> {
+  return fetchWorkfeedShifts({
+    startDate: from.toISOString().split('T')[0],
+    endDate: to.toISOString().split('T')[0]
+  });
+}
+
+/**
+ * Fetches shifts for a specific employee
+ */
+export async function fetchShiftsByEmployee(employeeId: string, startDate?: string, endDate?: string): Promise<FetchShiftsResponse> {
+  return fetchWorkfeedShifts({
+    employeeId,
+    startDate,
+    endDate
+  });
+}
+
+/**
+ * Fetches shifts for a specific department
+ */
+export async function fetchShiftsByDepartment(department: string, startDate?: string, endDate?: string): Promise<FetchShiftsResponse> {
+  return fetchWorkfeedShifts({
+    department,
+    startDate,
+    endDate
+  });
+}
+
+/**
+ * Fetches shifts for the next N days
+ */
+export async function fetchUpcomingShifts(days: number = 7): Promise<FetchShiftsResponse> {
+  const today = new Date();
+  const endDate = new Date(today);
+  endDate.setDate(today.getDate() + days);
+  
+  return fetchWorkfeedShifts({
+    startDate: today.toISOString().split('T')[0],
+    endDate: endDate.toISOString().split('T')[0]
+  });
+}
+
+/**
+ * Helper function to format date for API calls
+ */
+export function formatDateForAPI(date: Date): string {
+  return date.toISOString().split('T')[0];
+}
+
+/**
+ * Helper function to get date ranges
+ */
+export const DateRanges = {
+  today: () => {
+    const today = formatDateForAPI(new Date());
+    return { startDate: today, endDate: today };
+  },
+  
+  tomorrow: () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const date = formatDateForAPI(tomorrow);
+    return { startDate: date, endDate: date };
+  },
+  
+  thisWeek: () => {
+    const today = new Date();
+    const startOfWeek = new Date(today);
+    const day = today.getDay();
+    const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+    startOfWeek.setDate(diff);
+    
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    
+    return {
+      startDate: formatDateForAPI(startOfWeek),
+      endDate: formatDateForAPI(endOfWeek)
+    };
+  },
+  
+  nextWeek: () => {
+    const today = new Date();
+    const startOfNextWeek = new Date(today);
+    const day = today.getDay();
+    const diff = today.getDate() - day + (day === 0 ? -6 : 1) + 7;
+    startOfNextWeek.setDate(diff);
+    
+    const endOfNextWeek = new Date(startOfNextWeek);
+    endOfNextWeek.setDate(startOfNextWeek.getDate() + 6);
+    
+    return {
+      startDate: formatDateForAPI(startOfNextWeek),
+      endDate: formatDateForAPI(endOfNextWeek)
+    };
+  },
+  
+  next30Days: () => {
+    const today = new Date();
+    const endDate = new Date(today);
+    endDate.setDate(today.getDate() + 30);
+    
+    return {
+      startDate: formatDateForAPI(today),
+      endDate: formatDateForAPI(endDate)
+    };
+  }
+};
