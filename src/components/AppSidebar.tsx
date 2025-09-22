@@ -14,12 +14,12 @@ import {
 
 const navigationItems = [
   {
-    title: "Syn ikke planlagt",
+    title: "Inspections to be scheduled",
     url: "/inspections",
     icon: ClipboardList,
   },
   {
-    title: "Planlagte syn",
+    title: "Scheduled inspections",
     url: "/scheduled", 
     icon: CalendarCheck,
   },

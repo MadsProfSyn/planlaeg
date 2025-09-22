@@ -118,14 +118,14 @@ export default function InspectionsPage() {
             Syn til planlægning
           </h1>
           <p className="text-muted-foreground">
-            Vælg og planlæg syn
+            Select and manage unscheduled property inspections
           </p>
         </div>
       </div>
 
       <FiltersBar
-        departments={Landsdele}
-        filters={filtre}
+        departments={departments}
+        filters={filters}
         onFiltersChange={handleFiltersChange}
         isLoading={isLoading}
       />
