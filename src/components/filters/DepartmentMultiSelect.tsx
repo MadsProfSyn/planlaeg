@@ -74,7 +74,7 @@ export function DepartmentMultiSelect({
           >
             <span className="truncate">
               {selectedDepartments.length === 0
-                ? "Select departments..."
+                ? "Vælg landsdel"
                 : `${selectedDepartments.length} department${
                     selectedDepartments.length === 1 ? "" : "s"
                   } selected`}
