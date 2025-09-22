@@ -118,7 +118,7 @@ export default function InspectionsPage() {
             Syn til planlægning
           </h1>
           <p className="text-muted-foreground">
-            Select and manage unscheduled property inspections
+            Vælg og planlæg syn
           </p>
         </div>
       </div>
