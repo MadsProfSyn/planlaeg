@@ -1,46 +1,27 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export interface WorkfeedShift {
-  id: string;                    // Supabase UUID
-  wf_shift_id: string;          // Workfeed shift ID  
-  inspector_id: string;         // UUID from inspectors_import_staging
-  wf_employee_id: string;       // Original Workfeed employee ID
+  id: string;
+  inspector_id: string;
   inspector_name: string;
   department: string;
-  type: string;                 // Role name (FF, IF, PS, PA)
+  type: string;
   status: string;
-  date_local: string;           // YYYY-MM-DD format
+  date_local: string;
   start_utc: string | null;
   end_utc: string | null;
-  address: string;              // Extracted from Workfeed comments
-}
-
-export interface SyncShiftsRequest {
-  startDate?: string;    // ISO date string like "2025-09-22"
-  endDate?: string;      // ISO date string like "2025-09-26"
-  forceSync?: boolean;   // Whether to re-sync existing shifts
+  address?: string;
+  wf_shift_id?: string;
+  wf_role_id?: string;
+  created_at?: string;
+  inspection_id?: string | null;
 }
 
 export interface FetchShiftsRequest {
-  startDate?: string;    // ISO date string like "2025-09-22"
-  endDate?: string;      // ISO date string like "2025-09-26"
-  department?: string;   // Filter by department
-  inspectorId?: string;  // Filter by wf_employee_id (Workfeed employee ID)
-  status?: string;       // Filter by status
-}
-
-export interface SyncShiftsResponse {
-  success: boolean;
-  synced: number;
-  skipped: number;
-  errors: number;
-  total: number;
-  dateRange: {
-    from: string;
-    to: string;
-  };
-  summary: string;
-  error?: string;
+  startDate?: string;
+  endDate?: string;
+  employeeId?: string;
+  department?: string;
 }
 
 export interface FetchShiftsResponse {
@@ -51,117 +32,22 @@ export interface FetchShiftsResponse {
   error?: string;
 }
 
-// ===== SYNC FUNCTIONS =====
-
 /**
- * Syncs shifts from Workfeed API to Supabase
+ * Fetches shifts from supabase_shifts table
  */
-export async function syncWorkfeedShifts(request: SyncShiftsRequest = {}): Promise<SyncShiftsResponse> {
+export async function fetchWorkfeedShifts(request: FetchShiftsRequest = {}): Promise<FetchShiftsResponse> {
   try {
-    console.log('Syncing shifts with request:', request);
-    
-    const { data, error } = await supabase.functions.invoke('sync-workfeed-shifts', {
-      body: request
+    const { data, error } = await supabase.functions.invoke('fetch-shifts', {
+      body: request,
     });
 
     if (error) {
-      throw new Error(error.message || 'Failed to sync shifts');
+      throw new Error(error.message || 'Failed to fetch shifts');
     }
 
-    return data as SyncShiftsResponse;
+    return data as FetchShiftsResponse;
   } catch (error) {
-    console.error('Error syncing Workfeed shifts:', error);
-    return {
-      success: false,
-      synced: 0,
-      skipped: 0,
-      errors: 1,
-      total: 0,
-      dateRange: { from: '', to: '' },
-      summary: 'Sync failed',
-      error: error instanceof Error ? error.message : 'Unknown error'
-    };
-  }
-}
-
-/**
- * Syncs today's shifts
- */
-export async function syncTodayShifts(forceSync = false): Promise<SyncShiftsResponse> {
-  const today = new Date().toISOString().split('T')[0];
-  
-  return syncWorkfeedShifts({
-    startDate: today,
-    endDate: today,
-    forceSync
-  });
-}
-
-/**
- * Syncs shifts for the next N days
- */
-export async function syncUpcomingShifts(days: number = 7, forceSync = false): Promise<SyncShiftsResponse> {
-  const today = new Date();
-  const endDate = new Date(today);
-  endDate.setDate(today.getDate() + days);
-  
-  return syncWorkfeedShifts({
-    startDate: today.toISOString().split('T')[0],
-    endDate: endDate.toISOString().split('T')[0],
-    forceSync
-  });
-}
-
-// ===== FETCH FUNCTIONS (from stored data) =====
-
-/**
- * Fetches shifts from Supabase (stored data)
- */
-export async function fetchStoredShifts(request: FetchShiftsRequest = {}): Promise<FetchShiftsResponse> {
-  try {
-    // Use a raw query approach since the types file is out of sync
-    const { data, error } = await supabase
-      .from('supabase_shifts')
-      .select('*')
-      .gte('date_local', request.startDate || '1900-01-01')
-      .lte('date_local', request.endDate || '2099-12-31')
-      .order('date_local', { ascending: true })
-      .order('start_utc', { ascending: true });
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    // Apply additional filters client-side
-    let filteredData = data || [];
-    
-    if (request.department) {
-      filteredData = filteredData.filter((shift: any) => 
-        shift.department?.toLowerCase().includes(request.department!.toLowerCase())
-      );
-    }
-    
-    if (request.inspectorId) {
-      filteredData = filteredData.filter((shift: any) => 
-        shift.wf_employee_id === request.inspectorId
-      );
-    }
-    
-    if (request.status) {
-      filteredData = filteredData.filter((shift: any) => 
-        shift.status === request.status
-      );
-    }
-
-    return {
-      success: true,
-      shifts: filteredData as unknown as WorkfeedShift[],
-      total: filteredData.length,
-      filters: request
-    };
-
-  } catch (error) {
-    console.error('Error fetching stored shifts:', error);
+    console.error('Error fetching shifts:', error);
     return {
       success: false,
       shifts: [],
@@ -173,75 +59,26 @@ export async function fetchStoredShifts(request: FetchShiftsRequest = {}): Promi
 }
 
 /**
- * Fetches today's shifts from stored data
+ * Fetches shifts for today
  */
 export async function fetchTodayShifts(): Promise<FetchShiftsResponse> {
   const today = new Date().toISOString().split('T')[0];
   
-  return fetchStoredShifts({
+  return fetchWorkfeedShifts({
     startDate: today,
     endDate: today
   });
 }
 
 /**
- * Fetches shifts for the current week from stored data
+ * Fetches shifts for a date range
  */
-export async function fetchCurrentWeekShifts(): Promise<FetchShiftsResponse> {
-  const today = new Date();
-  const startOfWeek = new Date(today);
-  
-  // Get Monday of current week
-  const day = today.getDay();
-  const diff = today.getDate() - day + (day === 0 ? -6 : 1);
-  startOfWeek.setDate(diff);
-  
-  const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(startOfWeek.getDate() + 6);
-  
-  return fetchStoredShifts({
-    startDate: startOfWeek.toISOString().split('T')[0],
-    endDate: endOfWeek.toISOString().split('T')[0]
+export async function fetchShiftsByDateRange(from: Date, to: Date): Promise<FetchShiftsResponse> {
+  return fetchWorkfeedShifts({
+    startDate: from.toISOString().split('T')[0],
+    endDate: to.toISOString().split('T')[0]
   });
 }
-
-/**
- * Fetches upcoming shifts (next N days) from stored data
- */
-export async function fetchUpcomingShifts(days: number = 7): Promise<FetchShiftsResponse> {
-  const today = new Date();
-  const endDate = new Date(today);
-  endDate.setDate(today.getDate() + days);
-  
-  return fetchStoredShifts({
-    startDate: today.toISOString().split('T')[0],
-    endDate: endDate.toISOString().split('T')[0]
-  });
-}
-
-/**
- * Fetches shifts by department from stored data
- */
-export async function fetchShiftsByDepartment(department: string, startDate?: string, endDate?: string): Promise<FetchShiftsResponse> {
-  return fetchStoredShifts({
-    department,
-    startDate,
-    endDate
-  });
-}
-
-/**
- * Fetches shifts by inspector from stored data
- */
-export async function fetchShiftsByInspector(inspectorId: string, startDate?: string, endDate?: string): Promise<FetchShiftsResponse> {
-  return fetchStoredShifts({
-    inspectorId,
-    startDate,
-    endDate
-  });
-}
-
-// ===== UTILITY FUNCTIONS =====
 
 /**
  * Helper function to format date for API calls
@@ -257,13 +94,6 @@ export const DateRanges = {
   today: () => {
     const today = formatDateForAPI(new Date());
     return { startDate: today, endDate: today };
-  },
-  
-  tomorrow: () => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const date = formatDateForAPI(tomorrow);
-    return { startDate: date, endDate: date };
   },
   
   thisWeek: () => {
@@ -282,22 +112,6 @@ export const DateRanges = {
     };
   },
   
-  nextWeek: () => {
-    const today = new Date();
-    const startOfNextWeek = new Date(today);
-    const day = today.getDay();
-    const diff = today.getDate() - day + (day === 0 ? -6 : 1) + 7;
-    startOfNextWeek.setDate(diff);
-    
-    const endOfNextWeek = new Date(startOfNextWeek);
-    endOfNextWeek.setDate(startOfNextWeek.getDate() + 6);
-    
-    return {
-      startDate: formatDateForAPI(startOfNextWeek),
-      endDate: formatDateForAPI(endOfNextWeek)
-    };
-  },
-  
   next30Days: () => {
     const today = new Date();
     const endDate = new Date(today);
@@ -309,104 +123,3 @@ export const DateRanges = {
     };
   }
 };
-
-// ===== COMBINED FUNCTIONS (sync + fetch) =====
-
-/**
- * Ensures shifts are synced for a date range, then fetches them
- */
-export async function ensureAndFetchShifts(request: FetchShiftsRequest & { forceSync?: boolean } = {}): Promise<{
-  syncResult: SyncShiftsResponse;
-  shifts: FetchShiftsResponse;
-}> {
-  // First sync the data
-  const syncResult = await syncWorkfeedShifts({
-    startDate: request.startDate,
-    endDate: request.endDate,
-    forceSync: request.forceSync
-  });
-  
-  // Then fetch the stored data
-  const shifts = await fetchStoredShifts(request);
-  
-  return { syncResult, shifts };
-}
-
-/**
- * Get shifts for today (sync first, then fetch)
- */
-export async function getTodayShifts(): Promise<FetchShiftsResponse> {
-  const { shifts } = await ensureAndFetchShifts(DateRanges.today());
-  return shifts;
-}
-
-/**
- * Get shifts for current week (sync first, then fetch)
- */
-export async function getCurrentWeekShifts(): Promise<FetchShiftsResponse> {
-  const { shifts } = await ensureAndFetchShifts(DateRanges.thisWeek());
-  return shifts;
-}
-
-// ===== DEBUG/TEST FUNCTIONS =====
-
-/**
- * Test the sync functionality
- */
-export async function testSyncShifts(): Promise<void> {
-  console.log('=== TESTING SYNC FUNCTIONALITY ===');
-  
-  try {
-    // Test syncing specific date range (your Postman dates)
-    const syncResult = await syncWorkfeedShifts({
-      startDate: '2025-09-22',
-      endDate: '2025-09-26',
-      forceSync: false
-    });
-    
-    console.log('Sync result:', syncResult);
-    
-    if (syncResult.success) {
-      // Now fetch the synced data
-      const fetchResult = await fetchStoredShifts({
-        startDate: '2025-09-22',
-        endDate: '2025-09-26'
-      });
-      
-      console.log('Fetch result:', fetchResult);
-      
-      if (fetchResult.shifts.length > 0) {
-        console.log('Sample shift:', fetchResult.shifts[0]);
-      }
-    }
-    
-  } catch (error) {
-    console.error('Test failed:', error);
-  }
-}
-
-/**
- * Check what shifts are currently in the database
- */
-export async function checkStoredShifts(): Promise<void> {
-  console.log('=== CHECKING STORED SHIFTS ===');
-  
-  try {
-    const { data: shifts, error } = await supabase
-      .from('supabase_shifts')
-      .select('id, wf_shift_id, inspector_name, department, date_local, status')
-      .order('date_local', { ascending: true })
-      .limit(10);
-    
-    if (error) {
-      console.error('Error checking stored shifts:', error);
-      return;
-    }
-    
-    console.log(`Found ${shifts?.length || 0} stored shifts (showing first 10):`);
-    console.table(shifts);
-    
-  } catch (error) {
-    console.error('Check failed:', error);
-  }
-}
