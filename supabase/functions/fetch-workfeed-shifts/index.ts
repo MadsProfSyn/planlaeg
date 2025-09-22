@@ -46,12 +46,12 @@ serve(async (req) => {
       throw new Error('WORKFEED_API_KEY not configured');
     }
 
-    // Parse query parameters
-    const url = new URL(req.url);
-    const startDate = url.searchParams.get('startDate');
-    const endDate = url.searchParams.get('endDate');
-    const employeeId = url.searchParams.get('employeeId');
-    const department = url.searchParams.get('department');
+    // Parse request body for parameters
+    const requestBody = req.method === 'POST' ? await req.json() : {};
+    const startDate = requestBody.startDate;
+    const endDate = requestBody.endDate;
+    const employeeId = requestBody.employeeId;
+    const department = requestBody.department;
 
     // Default to today if no start date provided
     const today = new Date();
