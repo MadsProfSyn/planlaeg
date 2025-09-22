@@ -12,3 +12,9 @@ verify_jwt = false
 
 [functions.fetch-workfeed-shifts]
 verify_jwt = false
+
+[functions.fetch-departments]
+verify_jwt = false
+
+[functions.fetch-available-inspectors]
+verify_jwt = false

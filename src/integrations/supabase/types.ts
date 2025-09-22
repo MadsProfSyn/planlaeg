@@ -539,6 +539,21 @@ export type Database = {
         }
         Relationships: []
       }
+      v_available_inspectors: {
+        Row: {
+          adresse: string | null
+          afdeling: string | null
+          availability_id: string | null
+          dato: string | null
+          inspector_uuid: string | null
+          navn: string | null
+          slut_tid: string | null
+          start_tid: string | null
+          synstyper: string[] | null
+          tidspunkt_label: string | null
+        }
+        Relationships: []
+      }
       vw_shifts_ui: {
         Row: {
           canonical_code: string | null

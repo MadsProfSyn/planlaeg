@@ -34,20 +34,38 @@ export function SynsTypeMultiSelect({
 }: SynsTypeMultiSelectProps) {
   const [open, setOpen] = React.useState(false);
 
+  const allTypeCodes = synsTypes.map(t => t.code);
+  const isAllSelected = selectedTypes.length === synsTypes.length && 
+    allTypeCodes.every(code => selectedTypes.includes(code));
+
   const handleSelect = (typeCode: string) => {
-    const isSelected = selectedTypes.includes(typeCode);
-    if (isSelected) {
-      onSelectionChange(selectedTypes.filter((t) => t !== typeCode));
-    } else {
-      onSelectionChange([...selectedTypes, typeCode]);
+    if (typeCode === "ALLE") {
+      // Handle "Alle" selection
+      if (isAllSelected) {
+        onSelectionChange([]);
+      } else {
+        onSelectionChange(allTypeCodes);
+      }
+      return;
     }
+
+    const isSelected = selectedTypes.includes(typeCode);
+    let newSelection;
+    
+    if (isSelected) {
+      newSelection = selectedTypes.filter((t) => t !== typeCode);
+    } else {
+      newSelection = [...selectedTypes, typeCode];
+    }
+    
+    onSelectionChange(newSelection);
   };
 
   const handleSelectAll = () => {
-    if (selectedTypes.length === synsTypes.length) {
+    if (isAllSelected) {
       onSelectionChange([]);
     } else {
-      onSelectionChange(synsTypes.map(t => t.code));
+      onSelectionChange(allTypeCodes);
     }
   };
 
@@ -79,6 +97,8 @@ export function SynsTypeMultiSelect({
             <span className="truncate">
               {selectedTypes.length === 0
                 ? placeholder
+                : isAllSelected
+                ? "Alle synstyper"
                 : `${selectedTypes.length} synstype${
                     selectedTypes.length === 1 ? "" : "r"
                   } valgt`}
@@ -92,16 +112,14 @@ export function SynsTypeMultiSelect({
             <CommandList>
               <CommandEmpty>Ingen synstyper fundet.</CommandEmpty>
               <CommandGroup>
-                <CommandItem onSelect={handleSelectAll}>
+                <CommandItem onSelect={() => handleSelect("ALLE")}>
                   <Check
                     className={cn(
                       "mr-2 h-4 w-4",
-                      selectedTypes.length === synsTypes.length
-                        ? "opacity-100"
-                        : "opacity-0"
+                      isAllSelected ? "opacity-100" : "opacity-0"
                     )}
                   />
-                  Vælg alle ({synsTypes.length})
+                  Alle ({synsTypes.length})
                 </CommandItem>
                 {synsTypes.map((synsType) => (
                   <CommandItem
