@@ -31,6 +31,7 @@ export interface FetchShiftsResponse {
     department?: string;
   };
   error?: string;
+  debug?: any; // For debugging information
 }
 
 /**
@@ -157,7 +158,99 @@ export async function fetchUpcomingShifts(days: number = 7): Promise<FetchShifts
 export function formatDateForAPI(date: Date): string {
   return date.toISOString().split('T')[0];
 }
-// Add these test functions to your workfeed.ts file
+
+/**
+ * Helper function to get date ranges
+ */
+export const DateRanges = {
+  today: () => {
+    const today = formatDateForAPI(new Date());
+    return { startDate: today, endDate: today };
+  },
+  
+  tomorrow: () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const date = formatDateForAPI(tomorrow);
+    return { startDate: date, endDate: date };
+  },
+  
+  thisWeek: () => {
+    const today = new Date();
+    const startOfWeek = new Date(today);
+    const day = today.getDay();
+    const diff = today.getDate() - day + (day === 0 ? -6 : 1);
+    startOfWeek.setDate(diff);
+    
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    
+    return {
+      startDate: formatDateForAPI(startOfWeek),
+      endDate: formatDateForAPI(endOfWeek)
+    };
+  },
+  
+  nextWeek: () => {
+    const today = new Date();
+    const startOfNextWeek = new Date(today);
+    const day = today.getDay();
+    const diff = today.getDate() - day + (day === 0 ? -6 : 1) + 7;
+    startOfNextWeek.setDate(diff);
+    
+    const endOfNextWeek = new Date(startOfNextWeek);
+    endOfNextWeek.setDate(startOfNextWeek.getDate() + 6);
+    
+    return {
+      startDate: formatDateForAPI(startOfNextWeek),
+      endDate: formatDateForAPI(endOfNextWeek)
+    };
+  },
+  
+  next30Days: () => {
+    const today = new Date();
+    const endDate = new Date(today);
+    endDate.setDate(today.getDate() + 30);
+    
+    return {
+      startDate: formatDateForAPI(today),
+      endDate: formatDateForAPI(endDate)
+    };
+  }
+};
+
+// ===== DEBUG FUNCTIONS =====
+
+/**
+ * Debug version of fetchWorkfeedShifts with detailed logging
+ */
+export async function debugFetchWorkfeedShifts(request: FetchShiftsRequest = {}): Promise<any> {
+  try {
+    console.log('🧪 Debug: Calling edge function with request:', request);
+    
+    const { data, error } = await supabase.functions.invoke('fetch-workfeed-shifts', {
+      body: {
+        startDate: request.startDate,
+        endDate: request.endDate,
+        employeeId: request.employeeId,
+        department: request.department,
+      },
+    });
+
+    console.log('🧪 Debug: Edge function response data:', data);
+    console.log('🧪 Debug: Edge function response error:', error);
+
+    if (error) {
+      console.error('🧪 Debug: Supabase function error:', error);
+      throw new Error(error.message || 'Failed to fetch shifts');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('🧪 Debug: Full error details:', error);
+    throw error;
+  }
+}
 
 /**
  * Comprehensive test function to debug the entire flow
@@ -374,12 +467,97 @@ export async function testSupabaseConnection(): Promise<void> {
 }
 
 /**
+ * Test function - call this from your component to debug
+ */
+export async function testShiftsFetch(): Promise<void> {
+  console.log('=== Testing Shifts Fetch ===');
+  
+  try {
+    const result = await debugFetchWorkfeedShifts({
+      startDate: '2025-09-22',
+      endDate: '2025-09-26'
+    });
+    
+    console.log('Test result:', result);
+  } catch (error) {
+    console.error('Test failed:', error);
+  }
+}
+
+/**
+ * Quick test function for specific employee IDs from your Postman data
+ */
+export async function testSpecificEmployeeMapping(): Promise<void> {
+  console.log('👤 === TESTING SPECIFIC EMPLOYEE MAPPINGS ===');
+  
+  const testEmployeeIds = ['PtKzJ5x4Cfeut4KOyDGy54dTImg1', 'tUJvSyc62KzaMth3oFzf', 'yu4GsjDkxANUl3w5rqgL'];
+  const testRoleIds = ['ZfgNXIuTidlekazQJ8C8', 'kWUDQI8qFRsAkqRFBMPQ', 'lDPaGfi5087x1ncTKBZ0'];
+  const testDepartmentIds = ['h6MIG7yBlbUxpLXjqnZv', 'tje1JXcx8V7DDlRR4PWY'];
+
+  try {
+    // Test employee mappings
+    console.log('Testing employee mappings...');
+    for (const employeeId of testEmployeeIds) {
+      const { data, error } = await supabase
+        .from('inspectors_import_staging')
+        .select('wf_employee_id, full_name, department')
+        .eq('wf_employee_id', employeeId)
+        .single();
+      
+      if (error) {
+        console.log(`❌ Employee ${employeeId} not found:`, error.message);
+      } else {
+        console.log(`✅ Employee ${employeeId}:`, data);
+      }
+    }
+
+    // Test role mappings
+    console.log('\nTesting role mappings...');
+    for (const roleId of testRoleIds) {
+      const { data, error } = await supabase
+        .from('role_mappings')
+        .select('wf_role_id, wf_role_name, role_id')
+        .eq('wf_role_id', roleId)
+        .single();
+      
+      if (error) {
+        console.log(`❌ Role ${roleId} not found:`, error.message);
+      } else {
+        console.log(`✅ Role ${roleId}:`, data);
+      }
+    }
+
+    // Test department mappings
+    console.log('\nTesting department mappings...');
+    for (const deptId of testDepartmentIds) {
+      const { data, error } = await supabase
+        .from('inspectors_import_staging')
+        .select('wf_department_id_by_name, department')
+        .eq('wf_department_id_by_name', deptId)
+        .limit(1);
+      
+      if (error || !data || data.length === 0) {
+        console.log(`❌ Department ${deptId} not found`);
+      } else {
+        console.log(`✅ Department ${deptId}:`, data[0]);
+      }
+    }
+
+  } catch (error) {
+    console.error('💥 Employee mapping test failed:', error);
+  }
+}
+
+/**
  * Master test function - run all tests
  */
 export async function runAllTests(): Promise<void> {
   console.log('🚀 === RUNNING ALL WORKFEED TESTS ===\n');
   
   await testSupabaseConnection();
+  console.log('\n' + '='.repeat(50) + '\n');
+  
+  await testSpecificEmployeeMapping();
   console.log('\n' + '='.repeat(50) + '\n');
   
   await comprehensiveShiftsTest();
@@ -390,62 +568,3 @@ export async function runAllTests(): Promise<void> {
   console.log('\n✅ === ALL TESTS COMPLETED ===');
   console.log('Check the browser console and Supabase Edge Function logs for detailed information.');
 }
-/**
- * Helper function to get date ranges
- */
-export const DateRanges = {
-  today: () => {
-    const today = formatDateForAPI(new Date());
-    return { startDate: today, endDate: today };
-  },
-  
-  tomorrow: () => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const date = formatDateForAPI(tomorrow);
-    return { startDate: date, endDate: date };
-  },
-  
-  thisWeek: () => {
-    const today = new Date();
-    const startOfWeek = new Date(today);
-    const day = today.getDay();
-    const diff = today.getDate() - day + (day === 0 ? -6 : 1);
-    startOfWeek.setDate(diff);
-    
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
-    
-    return {
-      startDate: formatDateForAPI(startOfWeek),
-      endDate: formatDateForAPI(endOfWeek)
-    };
-  },
-  
-  nextWeek: () => {
-    const today = new Date();
-    const startOfNextWeek = new Date(today);
-    const day = today.getDay();
-    const diff = today.getDate() - day + (day === 0 ? -6 : 1) + 7;
-    startOfNextWeek.setDate(diff);
-    
-    const endOfNextWeek = new Date(startOfNextWeek);
-    endOfNextWeek.setDate(startOfNextWeek.getDate() + 6);
-    
-    return {
-      startDate: formatDateForAPI(startOfNextWeek),
-      endDate: formatDateForAPI(endOfNextWeek)
-    };
-  },
-  
-  next30Days: () => {
-    const today = new Date();
-    const endDate = new Date(today);
-    endDate.setDate(today.getDate() + 30);
-    
-    return {
-      startDate: formatDateForAPI(today),
-      endDate: formatDateForAPI(endDate)
-    };
-  }
-};
