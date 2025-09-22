@@ -115,7 +115,7 @@ export default function InspectionsPage() {
         <Building2 className="h-8 w-8 text-primary" />
         <div>
           <h1 className="text-3xl font-bold tracking-tight">
-            Inspections to be Scheduled
+            Syn til planlægning
           </h1>
           <p className="text-muted-foreground">
             Select and manage unscheduled property inspections
