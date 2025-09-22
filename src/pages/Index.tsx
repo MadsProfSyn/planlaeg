@@ -14,7 +14,7 @@ const Index = () => {
         </div>
         
         <p className="text-xl text-muted-foreground max-w-2xl">
-          Internal SaaS for scheduling property inspections across Denmark, 
+          Intern platform til at optimal planlægning af syn.
           efficiently assigning them to part-time inspectors.
         </p>
 

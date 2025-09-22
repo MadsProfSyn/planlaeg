@@ -14,7 +14,7 @@ Internal SaaS for scheduling property inspections across Denmark, assigning them
 ## Entities
 
 ### Inspection
-- **Address**: Property location
+- **Adresse**: Property location
 - **Type**: Proforma, Projektsyn, Indflytningssyn, Fraflytningssyn
 - **Date**: Scheduled date
 - **Department**: Responsible department
