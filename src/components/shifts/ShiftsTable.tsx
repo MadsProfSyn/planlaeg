@@ -97,7 +97,7 @@ export function ShiftsTable({
       );
     }
 
-    if (headerFilters.afdeling) {
+    if (headerFilters.afdeling && headerFilters.afdeling !== "ALL_DEPARTMENTS") {
       filtered = filtered.filter(shift => 
         shift.department === headerFilters.afdeling
       );
@@ -132,7 +132,7 @@ export function ShiftsTable({
       });
     }
 
-    if (headerFilters.status) {
+    if (headerFilters.status && headerFilters.status !== "ALL_STATUS") {
       filtered = filtered.filter(shift => 
         shift.status === headerFilters.status
       );
@@ -285,14 +285,14 @@ export function ShiftsTable({
             </TableHead>
             <TableHead className="p-2">
               <Select
-                value={headerFilters.afdeling || ""}
-                onValueChange={(value) => updateHeaderFilter("afdeling", value)}
+                value={headerFilters.afdeling || "ALL_DEPARTMENTS"}
+                onValueChange={(value) => updateHeaderFilter("afdeling", value === "ALL_DEPARTMENTS" ? "" : value)}
               >
                 <SelectTrigger className="h-8">
                   <SelectValue placeholder="Alle" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Alle afdelinger</SelectItem>
+                  <SelectItem value="ALL_DEPARTMENTS">Alle afdelinger</SelectItem>
                   {availableDepartments.map((dept) => (
                     <SelectItem key={dept} value={dept}>
                       {dept}
@@ -331,14 +331,14 @@ export function ShiftsTable({
             </TableHead>
             <TableHead className="p-2">
               <Select
-                value={headerFilters.status || ""}
-                onValueChange={(value) => updateHeaderFilter("status", value)}
+                value={headerFilters.status || "ALL_STATUS"}
+                onValueChange={(value) => updateHeaderFilter("status", value === "ALL_STATUS" ? "" : value)}
               >
                 <SelectTrigger className="h-8">
                   <SelectValue placeholder="Alle" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Alle status</SelectItem>
+                  <SelectItem value="ALL_STATUS">Alle status</SelectItem>
                   {STATUS_OPTIONS.map((status) => (
                     <SelectItem key={status} value={status}>
                       {status}
