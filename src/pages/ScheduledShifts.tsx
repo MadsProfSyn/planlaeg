@@ -8,7 +8,7 @@ import { ShiftsPagination } from "@/components/shifts/ShiftsPagination";
 import { ShiftDetailModal } from "@/components/shifts/ShiftDetailModal";
 import { getShiftDepartments, getCanonicalRoles, Shift, ShiftFilters } from "@/lib/shifts";
 import { getCurrentDateForInput } from "@/lib/date-utils";
-import { ensureAndFetchShifts, WorkfeedShift, DateRanges } from "@/lib/workfeed";
+import { fetchShifts, WorkfeedShift, DateRanges } from "@/lib/workfeed";
 import { useToast } from "@/components/ui/use-toast";
 
 export default function ScheduledShiftsPage() {
@@ -21,26 +21,26 @@ export default function ScheduledShiftsPage() {
   const [showDetailModal, setShowDetailModal] = React.useState(false);
   const { toast } = useToast();
 
-  // Fetch shifts from Workfeed API
+  // Fetch shifts from database
   const {
-    data: workfeedResponse,
+    data: shiftsResponse,
     isLoading: shiftsLoading,
     error: shiftsError,
     refetch: refetchShifts,
   } = useQuery({
-    queryKey: ["workfeed-shifts", filters],
+    queryKey: ["shifts", filters],
     queryFn: async () => {
-      const result = await ensureAndFetchShifts({
+      const result = await fetchShifts({
         startDate: filters.dateFrom,
         endDate: filters.dateTo,
         department: filters.department,
       });
       
-      if (!result.shifts.success) {
-        throw new Error(result.shifts.error || 'Failed to fetch shifts');
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to fetch shifts');
       }
       
-      return result.shifts.shifts;
+      return result.shifts;
     },
     retry: 1,
   });
@@ -58,8 +58,8 @@ export default function ScheduledShiftsPage() {
   const transformWorkfeedShift = (workfeedShift: WorkfeedShift): Shift => {
     return {
       id: workfeedShift.id,
-      wf_shift_id: workfeedShift.wf_shift_id,
-      wf_role_id: workfeedShift.wf_shift_id,
+      wf_shift_id: workfeedShift.id, // Use the database id as shift id
+      wf_role_id: workfeedShift.type,
       start_utc: workfeedShift.start_utc,
       end_utc: workfeedShift.end_utc,
       date_local: workfeedShift.date_local,
@@ -67,13 +67,13 @@ export default function ScheduledShiftsPage() {
       department: workfeedShift.department,
       type: workfeedShift.type,
       status: workfeedShift.status,
-      created_at: new Date().toISOString(),
+      created_at: workfeedShift.created_at || new Date().toISOString(),
       inspector_id: workfeedShift.inspector_id,
     };
   };
 
   // Process the data for pagination and client-side filtering
-  let allShifts = workfeedResponse?.map(transformWorkfeedShift) || [];
+  let allShifts = shiftsResponse?.map(transformWorkfeedShift) || [];
   
   // Apply client-side filters that aren't handled by the API
   if (filters.synsTypes && filters.synsTypes.length > 0) {
@@ -149,7 +149,7 @@ export default function ScheduledShiftsPage() {
       await refetchShifts();
       toast({
         title: "Data Refreshed",
-        description: "Shifts have been refreshed from Workfeed",
+        description: "Shifts have been refreshed from database",
       });
     } catch (error) {
       toast({
@@ -177,7 +177,7 @@ export default function ScheduledShiftsPage() {
       {shiftsError && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <p className="text-sm text-yellow-800">
-            Kunne ikke hente vagter fra Workfeed. Fejl: {shiftsError.message}
+            Kunne ikke hente vagter fra database. Fejl: {shiftsError.message}
           </p>
         </div>
       )}

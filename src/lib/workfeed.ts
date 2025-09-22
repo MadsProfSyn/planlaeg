@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 export interface WorkfeedShift {
   id: string;
+  inspection_id: string | null;
   inspector_id: string;
   inspector_name: string;
   department: string;
@@ -10,17 +11,13 @@ export interface WorkfeedShift {
   date_local: string;
   start_utc: string | null;
   end_utc: string | null;
-  address?: string;
-  wf_shift_id?: string;
-  wf_role_id?: string;
   created_at?: string;
-  inspection_id?: string | null;
 }
 
 export interface FetchShiftsRequest {
   startDate?: string;
   endDate?: string;
-  employeeId?: string;
+  inspectorId?: string;
   department?: string;
 }
 
@@ -35,17 +32,57 @@ export interface FetchShiftsResponse {
 /**
  * Fetches shifts from supabase_shifts table
  */
-export async function fetchWorkfeedShifts(request: FetchShiftsRequest = {}): Promise<FetchShiftsResponse> {
+export async function fetchShifts(request: FetchShiftsRequest = {}): Promise<FetchShiftsResponse> {
   try {
-    const { data, error } = await supabase.functions.invoke('fetch-shifts', {
-      body: request,
-    });
+    let query = supabase
+      .from('supabase_shifts')
+      .select('*')
+      .order('date_local', { ascending: true });
+
+    // Apply filters
+    if (request.startDate) {
+      query = query.gte('date_local', request.startDate);
+    }
+    
+    if (request.endDate) {
+      query = query.lte('date_local', request.endDate);
+    }
+    
+    if (request.department) {
+      query = query.eq('department', request.department);
+    }
+    
+    if (request.inspectorId) {
+      query = query.eq('inspector_id', request.inspectorId);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       throw new Error(error.message || 'Failed to fetch shifts');
     }
 
-    return data as FetchShiftsResponse;
+    // Transform data to match WorkfeedShift interface
+    const shifts = (data || []).map((shift: any) => ({
+      id: shift.id,
+      inspection_id: shift.inspection_id,
+      inspector_id: shift.inspector_id,
+      inspector_name: shift.inspector_name,
+      department: shift.department,
+      type: shift.type,
+      status: shift.status,
+      date_local: shift.date_local,
+      start_utc: shift.start_utc,
+      end_utc: shift.end_utc,
+      created_at: shift.created_at,
+    }));
+
+    return {
+      success: true,
+      shifts,
+      total: shifts.length,
+      filters: request
+    };
   } catch (error) {
     console.error('Error fetching shifts:', error);
     return {
@@ -64,7 +101,7 @@ export async function fetchWorkfeedShifts(request: FetchShiftsRequest = {}): Pro
 export async function fetchTodayShifts(): Promise<FetchShiftsResponse> {
   const today = new Date().toISOString().split('T')[0];
   
-  return fetchWorkfeedShifts({
+  return fetchShifts({
     startDate: today,
     endDate: today
   });
@@ -74,7 +111,7 @@ export async function fetchTodayShifts(): Promise<FetchShiftsResponse> {
  * Fetches shifts for a date range
  */
 export async function fetchShiftsByDateRange(from: Date, to: Date): Promise<FetchShiftsResponse> {
-  return fetchWorkfeedShifts({
+  return fetchShifts({
     startDate: from.toISOString().split('T')[0],
     endDate: to.toISOString().split('T')[0]
   });
