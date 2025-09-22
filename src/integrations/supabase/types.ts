@@ -198,7 +198,9 @@ export type Database = {
       }
       inspectors: {
         Row: {
+          capabilities: string[] | null
           created_at: string
+          department: string
           email: string | null
           end_address: string | null
           full_name: string
@@ -208,7 +210,9 @@ export type Database = {
           timezone: string
         }
         Insert: {
+          capabilities?: string[] | null
           created_at?: string
+          department?: string
           email?: string | null
           end_address?: string | null
           full_name: string
@@ -218,7 +222,9 @@ export type Database = {
           timezone?: string
         }
         Update: {
+          capabilities?: string[] | null
           created_at?: string
+          department?: string
           email?: string | null
           end_address?: string | null
           full_name?: string
@@ -226,6 +232,45 @@ export type Database = {
           max_work_hours?: number
           start_address?: string
           timezone?: string
+        }
+        Relationships: []
+      }
+      inspectors_import_staging: {
+        Row: {
+          address: string | null
+          department: string | null
+          email: string | null
+          full_name: string | null
+          id: string
+          types_csv: string | null
+          wf_department_id_by_name: string | null
+          wf_department_ids: string[] | null
+          wf_employee_id: string | null
+          wf_primary_department_id: string | null
+        }
+        Insert: {
+          address?: string | null
+          department?: string | null
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          types_csv?: string | null
+          wf_department_id_by_name?: string | null
+          wf_department_ids?: string[] | null
+          wf_employee_id?: string | null
+          wf_primary_department_id?: string | null
+        }
+        Update: {
+          address?: string | null
+          department?: string | null
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          types_csv?: string | null
+          wf_department_id_by_name?: string | null
+          wf_department_ids?: string[] | null
+          wf_employee_id?: string | null
+          wf_primary_department_id?: string | null
         }
         Relationships: []
       }
@@ -265,6 +310,95 @@ export type Database = {
           key?: string
           minutes?: number
           updated_at?: string
+        }
+        Relationships: []
+      }
+      monday_items_selected: {
+        Row: {
+          adresse: string | null
+          antal_vaerelser: number | null
+          board_id: number | null
+          dato_tid: string | null
+          id: number
+          inserted_at: string | null
+          item_id: number | null
+          Kunde: string | null
+          lejemalsnr: string | null
+          name: string | null
+          raw: Json | null
+          synstype: string | null
+        }
+        Insert: {
+          adresse?: string | null
+          antal_vaerelser?: number | null
+          board_id?: number | null
+          dato_tid?: string | null
+          id?: number
+          inserted_at?: string | null
+          item_id?: number | null
+          Kunde?: string | null
+          lejemalsnr?: string | null
+          name?: string | null
+          raw?: Json | null
+          synstype?: string | null
+        }
+        Update: {
+          adresse?: string | null
+          antal_vaerelser?: number | null
+          board_id?: number | null
+          dato_tid?: string | null
+          id?: number
+          inserted_at?: string | null
+          item_id?: number | null
+          Kunde?: string | null
+          lejemalsnr?: string | null
+          name?: string | null
+          raw?: Json | null
+          synstype?: string | null
+        }
+        Relationships: []
+      }
+      role_mappings: {
+        Row: {
+          role_id: string | null
+          wf_role_id: string
+          wf_role_name: string
+        }
+        Insert: {
+          role_id?: string | null
+          wf_role_id: string
+          wf_role_name: string
+        }
+        Update: {
+          role_id?: string | null
+          wf_role_id?: string
+          wf_role_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_mappings_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roles: {
+        Row: {
+          code: string
+          id: string
+          label: string
+        }
+        Insert: {
+          code: string
+          id?: string
+          label: string
+        }
+        Update: {
+          code?: string
+          id?: string
+          label?: string
         }
         Relationships: []
       }
@@ -336,37 +470,55 @@ export type Database = {
       }
       supabase_shifts: {
         Row: {
+          address: string | null
           created_at: string | null
           date_local: string
           department: string
+          end_utc: string | null
           id: string
           inspection_id: string | null
           inspector_id: string
           inspector_name: string
+          start_utc: string | null
           status: string
           type: string
+          wf_employee_id: string
+          wf_role_id: string | null
+          wf_shift_id: string | null
         }
         Insert: {
+          address?: string | null
           created_at?: string | null
           date_local: string
           department: string
+          end_utc?: string | null
           id?: string
           inspection_id?: string | null
           inspector_id: string
           inspector_name: string
+          start_utc?: string | null
           status?: string
           type: string
+          wf_employee_id: string
+          wf_role_id?: string | null
+          wf_shift_id?: string | null
         }
         Update: {
+          address?: string | null
           created_at?: string | null
           date_local?: string
           department?: string
+          end_utc?: string | null
           id?: string
           inspection_id?: string | null
           inspector_id?: string
           inspector_name?: string
+          start_utc?: string | null
           status?: string
           type?: string
+          wf_employee_id?: string
+          wf_role_id?: string | null
+          wf_shift_id?: string | null
         }
         Relationships: [
           {
@@ -387,8 +539,26 @@ export type Database = {
         }
         Relationships: []
       }
+      vw_shifts_ui: {
+        Row: {
+          canonical_code: string | null
+          canonical_label: string | null
+          canonical_type: string | null
+          date_local: string | null
+          department: string | null
+          id: string | null
+          inspector_name: string | null
+          wf_role_id: string | null
+          wf_role_name: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      get_or_create_inspector_uuid: {
+        Args: { emp_name: string; wf_emp_id: string }
+        Returns: string
+      }
       sync_workfeed_availability_stub: {
         Args: Record<PropertyKey, never>
         Returns: undefined
