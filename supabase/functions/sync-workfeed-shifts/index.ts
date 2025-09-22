@@ -65,7 +65,7 @@ serve(async (req) => {
     const workfeedResponse = await fetch(workfeedUrl, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${workfeedApiKey}`,
+        'Authorization': workfeedApiKey,
         'Content-Type': 'application/json',
       },
     });
