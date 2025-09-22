@@ -6,9 +6,9 @@ import { ShiftsFiltersBar } from "@/components/filters/ShiftsFiltersBar";
 import { ShiftsTable } from "@/components/shifts/ShiftsTable";
 import { ShiftsPagination } from "@/components/shifts/ShiftsPagination";
 import { ShiftDetailModal } from "@/components/shifts/ShiftDetailModal";
-import { getShifts, getShiftDepartments, getCanonicalRoles, Shift, ShiftFilters, SEED_SHIFTS } from "@/lib/shifts";
+import { getShiftDepartments, getCanonicalRoles, Shift, ShiftFilters } from "@/lib/shifts";
 import { getCurrentDateForInput } from "@/lib/date-utils";
-import { syncWorkfeedShifts, getTodayDateRange } from "@/lib/workfeed";
+import { fetchWorkfeedShifts, WorkfeedShift, DateRanges } from "@/lib/workfeed";
 import { useToast } from "@/components/ui/use-toast";
 
 export default function ScheduledShiftsPage() {
@@ -19,17 +19,22 @@ export default function ScheduledShiftsPage() {
   });
   const [selectedShift, setSelectedShift] = React.useState<Shift | null>(null);
   const [showDetailModal, setShowDetailModal] = React.useState(false);
-  const [isSyncing, setIsSyncing] = React.useState(false);
   const { toast } = useToast();
 
-  // Fetch shifts
+  // Fetch shifts from Workfeed API
   const {
-    data: shiftsResponse,
+    data: workfeedResponse,
     isLoading: shiftsLoading,
     error: shiftsError,
+    refetch: refetchShifts,
   } = useQuery({
-    queryKey: ["shifts", currentPage, filters],
-    queryFn: () => getShifts(currentPage, 25, filters),
+    queryKey: ["workfeed-shifts", filters],
+    queryFn: () => fetchWorkfeedShifts({
+      startDate: filters.dateFrom,
+      endDate: filters.dateTo,
+      department: filters.department,
+      employeeId: filters.inspectorId, // Assuming this maps to employeeId
+    }),
     retry: 1,
   });
 
@@ -42,8 +47,36 @@ export default function ScheduledShiftsPage() {
 
   const synsTypes = getCanonicalRoles();
 
+  // Transform Workfeed shifts to match your existing Shift interface
+  const transformWorkfeedShift = (workfeedShift: WorkfeedShift): Shift => {
+    return {
+      id: workfeedShift.id,
+      inspector_name: workfeedShift.inspector_name,
+      department: workfeedShift.department,
+      type: workfeedShift.type,
+      date_local: workfeedShift.date_local,
+      start_utc: workfeedShift.start_utc,
+      end_utc: workfeedShift.end_utc,
+      status: workfeedShift.status,
+      wf_role_id: workfeedShift.type, // Map type to wf_role_id for compatibility
+      // Add any other fields your Shift interface expects
+    } as Shift;
+  };
+
+  // Process the data for pagination and filtering
+  const allShifts = workfeedResponse?.shifts?.map(transformWorkfeedShift) || [];
+  
+  // Client-side pagination (since we're getting all data from API)
+  const pageSize = 25;
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const shifts = allShifts.slice(startIndex, endIndex);
+  const totalCount = allShifts.length;
+  const totalPages = Math.ceil(totalCount / pageSize);
+
   const handleSearch = () => {
     setCurrentPage(1);
+    // The query will automatically refetch when filters change
   };
 
   const handleClearAll = () => {
@@ -55,10 +88,9 @@ export default function ScheduledShiftsPage() {
   };
 
   const handleExportCSV = () => {
-    const data = shiftsResponse?.data || SEED_SHIFTS;
     const csvContent = [
       "Navn,Afdeling,Synstyper,Dato,Tidspunkt,Status",
-      ...data.map(shift => [
+      ...allShifts.map(shift => [
         shift.inspector_name,
         shift.department,
         shift.type || shift.wf_role_id,
@@ -84,63 +116,48 @@ export default function ScheduledShiftsPage() {
     setShowDetailModal(true);
   };
 
-  const handleSyncShifts = async () => {
-    setIsSyncing(true);
+  const handleRefreshShifts = async () => {
     try {
-      // Use current filter date range or default to today
-      const startFrom = filters.dateFrom ? `${filters.dateFrom}T00:00:00.000Z` : getTodayDateRange().startFrom;
-      const startTo = filters.dateTo ? `${filters.dateTo}T23:59:59.999Z` : getTodayDateRange().startTo;
-      
-      const result = await syncWorkfeedShifts({ startFrom, startTo });
-      
-      if (result.success) {
-        toast({
-          title: "Sync Completed",
-          description: `Successfully synced ${result.shifts} shifts from Workfeed`,
-        });
-        // Refetch data after successful sync
-        window.location.reload(); // Simple way to refresh data
-      } else {
-        toast({
-          title: "Sync Failed", 
-          description: result.error || "Failed to sync shifts",
-          variant: "destructive",
-        });
-      }
+      await refetchShifts();
+      toast({
+        title: "Data Refreshed",
+        description: "Shifts have been refreshed from Workfeed",
+      });
     } catch (error) {
       toast({
-        title: "Sync Error",
-        description: "An error occurred while syncing shifts",
-        variant: "destructive", 
+        title: "Refresh Failed",
+        description: "Failed to refresh shifts data",
+        variant: "destructive",
       });
-    } finally {
-      setIsSyncing(false);
     }
   };
-
-  // Use fallback data on error
-  const shifts = shiftsError ? SEED_SHIFTS : (shiftsResponse?.data || []);
-  const totalCount = shiftsError ? SEED_SHIFTS.length : (shiftsResponse?.count || 0);
-  const totalPages = shiftsError ? 1 : (shiftsResponse?.totalPages || 1);
 
   return (
     <div className="container mx-auto py-8 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold tracking-tight">Planlagte vagter</h1>
         <Button 
-          onClick={handleSyncShifts}
-          disabled={isSyncing}
+          onClick={handleRefreshShifts}
+          disabled={shiftsLoading}
           className="flex items-center gap-2"
         >
-          <RefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
-          {isSyncing ? 'Syncing...' : 'Sync Workfeed'}
+          <RefreshCw className={`h-4 w-4 ${shiftsLoading ? 'animate-spin' : ''}`} />
+          {shiftsLoading ? 'Loading...' : 'Refresh'}
         </Button>
       </div>
 
       {shiftsError && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <p className="text-sm text-yellow-800">
-            Kunne ikke hente vagter – viser eksempeldata. Fejl: {shiftsError.message}
+            Kunne ikke hente vagter fra Workfeed. Fejl: {shiftsError.message}
+          </p>
+        </div>
+      )}
+
+      {workfeedResponse && !workfeedResponse.success && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-sm text-red-800">
+            Workfeed API error: {workfeedResponse.error}
           </p>
         </div>
       )}
@@ -166,7 +183,7 @@ export default function ScheduledShiftsPage() {
         currentPage={currentPage}
         totalPages={totalPages}
         totalCount={totalCount}
-        pageSize={25}
+        pageSize={pageSize}
         onPageChange={setCurrentPage}
       />
 
