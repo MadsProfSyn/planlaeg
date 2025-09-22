@@ -157,7 +157,239 @@ export async function fetchUpcomingShifts(days: number = 7): Promise<FetchShifts
 export function formatDateForAPI(date: Date): string {
   return date.toISOString().split('T')[0];
 }
+// Add these test functions to your workfeed.ts file
 
+/**
+ * Comprehensive test function to debug the entire flow
+ */
+export async function comprehensiveShiftsTest(): Promise<void> {
+  console.log('🧪 === COMPREHENSIVE SHIFTS TEST ===');
+  console.log('Current time:', new Date().toISOString());
+  
+  try {
+    // Test 1: Basic function call
+    console.log('\n📋 Test 1: Basic function call with date range');
+    const testRequest = {
+      startDate: '2025-09-22',
+      endDate: '2025-09-26'
+    };
+    
+    console.log('Sending request:', testRequest);
+    
+    const { data, error } = await supabase.functions.invoke('fetch-workfeed-shifts', {
+      body: testRequest,
+    });
+
+    console.log('Raw response data:', data);
+    console.log('Raw response error:', error);
+    
+    if (error) {
+      console.error('❌ Supabase function error:', error);
+      return;
+    }
+    
+    if (data) {
+      console.log('✅ Response received:', {
+        success: data.success,
+        total: data.total,
+        shiftsCount: data.shifts?.length || 0,
+        filters: data.filters,
+        debug: data.debug
+      });
+      
+      if (data.shifts && data.shifts.length > 0) {
+        console.log('📄 First shift sample:', data.shifts[0]);
+        console.log('📊 All shift dates:', data.shifts.map((s: any) => ({ 
+          id: s.id, 
+          date: s.date_local, 
+          inspector: s.inspector_name,
+          department: s.department,
+          type: s.type
+        })));
+      } else {
+        console.log('⚠️ No shifts in response');
+        if (data.message) {
+          console.log('Message:', data.message);
+        }
+      }
+    }
+
+    // Test 2: Today's shifts
+    console.log('\n📋 Test 2: Today\'s shifts');
+    const todayResult = await fetchTodayShifts();
+    console.log('Today\'s shifts result:', {
+      success: todayResult.success,
+      total: todayResult.total,
+      error: todayResult.error
+    });
+
+    // Test 3: Current week shifts
+    console.log('\n📋 Test 3: Current week shifts');
+    const weekResult = await fetchCurrentWeekShifts();
+    console.log('Current week shifts result:', {
+      success: weekResult.success,
+      total: weekResult.total,
+      error: weekResult.error
+    });
+
+    // Test 4: Direct API test (simulate what Postman does)
+    console.log('\n📋 Test 4: Direct Workfeed API simulation');
+    await testDirectWorkfeedAPI();
+
+  } catch (error) {
+    console.error('💥 Test failed with error:', error);
+    console.error('Error details:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    });
+  }
+}
+
+/**
+ * Test the Workfeed API directly (similar to Postman)
+ */
+async function testDirectWorkfeedAPI(): Promise<void> {
+  try {
+    console.log('🌐 Testing direct Workfeed API call...');
+    
+    // This won't work from the browser due to CORS, but shows the format
+    const testUrl = 'https://europe-west1-production-eu-327a3.cloudfunctions.net/api/companies/KASqUqisoJTrzapASxwG/shifts?startFrom=2025-09-22T00:00:00.000Z&startTo=2025-09-26T23:59:59.999Z';
+    
+    console.log('Direct API URL would be:', testUrl);
+    console.log('⚠️ Direct API call will fail due to CORS - this is expected');
+    console.log('✅ But this shows the exact format our edge function should use');
+    
+  } catch (error) {
+    console.log('Expected CORS error for direct API call:', error.message);
+  }
+}
+
+/**
+ * Test with different date ranges
+ */
+export async function testDateRanges(): Promise<void> {
+  console.log('📅 === TESTING DIFFERENT DATE RANGES ===');
+  
+  const testCases = [
+    {
+      name: 'Today only',
+      ...DateRanges.today()
+    },
+    {
+      name: 'Tomorrow only', 
+      ...DateRanges.tomorrow()
+    },
+    {
+      name: 'This week',
+      ...DateRanges.thisWeek()
+    },
+    {
+      name: 'Next 7 days',
+      startDate: new Date().toISOString().split('T')[0],
+      endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    }
+  ];
+
+  for (const testCase of testCases) {
+    console.log(`\n🧪 Testing: ${testCase.name}`);
+    console.log(`Date range: ${testCase.startDate} to ${testCase.endDate}`);
+    
+    try {
+      const result = await fetchWorkfeedShifts({
+        startDate: testCase.startDate,
+        endDate: testCase.endDate
+      });
+      
+      console.log(`✅ ${testCase.name}:`, {
+        success: result.success,
+        total: result.total,
+        error: result.error
+      });
+      
+      if (result.shifts?.length > 0) {
+        console.log(`📊 Sample shifts for ${testCase.name}:`, 
+          result.shifts.slice(0, 2).map(s => ({
+            date: s.date_local,
+            inspector: s.inspector_name,
+            department: s.department
+          }))
+        );
+      }
+    } catch (error) {
+      console.error(`❌ ${testCase.name} failed:`, error.message);
+    }
+  }
+}
+
+/**
+ * Check Supabase connection and tables
+ */
+export async function testSupabaseConnection(): Promise<void> {
+  console.log('🗄️ === TESTING SUPABASE CONNECTION ===');
+  
+  try {
+    // Test inspectors table
+    console.log('Testing inspectors_import_staging table...');
+    const { data: inspectors, error: inspectorsError } = await supabase
+      .from('inspectors_import_staging')
+      .select('wf_employee_id, full_name, department')
+      .limit(5);
+    
+    if (inspectorsError) {
+      console.error('❌ Inspectors table error:', inspectorsError);
+    } else {
+      console.log('✅ Inspectors sample:', inspectors);
+    }
+
+    // Test roles table
+    console.log('Testing roles table...');
+    const { data: roles, error: rolesError } = await supabase
+      .from('roles')
+      .select('id, code, label')
+      .limit(5);
+    
+    if (rolesError) {
+      console.error('❌ Roles table error:', rolesError);
+    } else {
+      console.log('✅ Roles sample:', roles);
+    }
+
+    // Test role mappings table
+    console.log('Testing role_mappings table...');
+    const { data: roleMappings, error: roleMappingsError } = await supabase
+      .from('role_mappings')
+      .select('wf_role_id, wf_role_name, role_id')
+      .limit(5);
+    
+    if (roleMappingsError) {
+      console.error('❌ Role mappings table error:', roleMappingsError);
+    } else {
+      console.log('✅ Role mappings sample:', roleMappings);
+    }
+
+  } catch (error) {
+    console.error('💥 Supabase connection test failed:', error);
+  }
+}
+
+/**
+ * Master test function - run all tests
+ */
+export async function runAllTests(): Promise<void> {
+  console.log('🚀 === RUNNING ALL WORKFEED TESTS ===\n');
+  
+  await testSupabaseConnection();
+  console.log('\n' + '='.repeat(50) + '\n');
+  
+  await comprehensiveShiftsTest();
+  console.log('\n' + '='.repeat(50) + '\n');
+  
+  await testDateRanges();
+  
+  console.log('\n✅ === ALL TESTS COMPLETED ===');
+  console.log('Check the browser console and Supabase Edge Function logs for detailed information.');
+}
 /**
  * Helper function to get date ranges
  */
