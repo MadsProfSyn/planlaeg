@@ -73,6 +73,11 @@ serve(async (req) => {
       query = query.gte('date_local', from).lte('date_local', to);
     }
 
+    // Apply department filter directly on the department column
+    if (afdeling && Array.isArray(afdeling) && afdeling.length > 0) {
+      query = query.in('department', afdeling);
+    }
+
     // Apply search filter on inspector_name
     if (q && q.trim() !== '') {
       const searchTerm = q.trim();
@@ -101,7 +106,7 @@ serve(async (req) => {
     // Get all unique inspector IDs to fetch related data
     const inspectorIds = [...new Set(data?.map((row: any) => row.inspector_id) || [])];
     
-    // Fetch inspector details (address only - department derived from postcode)
+    // Fetch inspector details (address only)
     const { data: inspectorsData } = await supabase
       .from('inspectors')
       .select('id, address')
@@ -114,39 +119,11 @@ serve(async (req) => {
       .in('inspector_id', inspectorIds)
       .eq('is_active', true);
 
-    // Helper to extract 4-digit Danish postcode from address
-    const extractPostcode = (address: string): number | null => {
-      if (!address) return null;
-      const match = address.match(/\b(\d{4})\b/);
-      return match ? parseInt(match[1]) : null;
-    };
-
-    // Get all unique postcodes from inspector addresses
-    const postcodes = [...new Set(
-      inspectorsData?.map((inspector: any) => extractPostcode(inspector.address)).filter(Boolean) || []
-    )];
-
-    // Fetch department mappings for these postcodes
-    const { data: postcodeDepts } = await supabase
-      .from('vw_postcode_to_department')
-      .select('zip, department')
-      .in('zip', postcodes);
-
-    // Build postcode to department map
-    const postcodeToDepartment = new Map<number, string>();
-    postcodeDepts?.forEach((row: any) => {
-      postcodeToDepartment.set(row.zip, row.department);
-    });
-
-    // Build inspector details map with department derived from postcode
+    // Build inspector details map
     const inspectorMap = new Map<string, any>();
     inspectorsData?.forEach((inspector: any) => {
-      const postcode = extractPostcode(inspector.address);
-      const department = postcode ? postcodeToDepartment.get(postcode) : null;
-      
       inspectorMap.set(inspector.id, {
-        address: inspector.address || '',
-        department: department || null // null if postcode not in our mapping
+        address: inspector.address || ''
       });
     });
 
@@ -161,18 +138,8 @@ serve(async (req) => {
 
     // Transform data to match expected UI format
     const transformedData = (data || []).map((row: any) => {
-      const inspectorDetails = inspectorMap.get(row.inspector_id) || { address: '', department: '' };
+      const inspectorDetails = inspectorMap.get(row.inspector_id) || { address: '' };
       const skills = skillsMap.get(row.inspector_id) || [];
-      
-      // Apply department filter when active
-      if (afdeling && Array.isArray(afdeling) && afdeling.length > 0) {
-        // Only include if department is mapped AND matches selected departments
-        if (!inspectorDetails.department || !afdeling.includes(inspectorDetails.department)) {
-          return null;
-        }
-      }
-      // When no filter is active, show all inspectors (including those without mapped departments)
-      // The UI will show empty/null for unmapped departments
       
       // Apply synstyper filter
       if (!synstyper_all && synstyper && synstyper.length > 0) {
@@ -194,7 +161,7 @@ serve(async (req) => {
         availability_id: row.id,
         inspector_uuid: row.inspector_id,
         navn: row.inspector_name,
-        afdeling: inspectorDetails.department,
+        afdeling: row.department || '', // Use department directly from supabase_availability
         synstyper: skills,
         adresse: inspectorDetails.address,
         dato: row.date_local,
