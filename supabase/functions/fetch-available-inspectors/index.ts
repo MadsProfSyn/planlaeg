@@ -101,17 +101,10 @@ serve(async (req) => {
     // Get all unique inspector IDs to fetch related data
     const inspectorIds = [...new Set(data?.map((row: any) => row.inspector_id) || [])];
     
-    // Fetch inspector details (address and department)
+    // Fetch inspector details (address only - department derived from postcode)
     const { data: inspectorsData } = await supabase
       .from('inspectors')
-      .select(`
-        id,
-        address,
-        department_id,
-        departments (
-          name
-        )
-      `)
+      .select('id, address')
       .in('id', inspectorIds);
 
     // Fetch skills for all inspectors
@@ -171,19 +164,15 @@ serve(async (req) => {
       const inspectorDetails = inspectorMap.get(row.inspector_id) || { address: '', department: '' };
       const skills = skillsMap.get(row.inspector_id) || [];
       
-      // Apply department filter (support multiple departments)
-      // Only include if department is mapped AND matches selected filters
+      // Apply department filter when active
       if (afdeling && Array.isArray(afdeling) && afdeling.length > 0) {
+        // Only include if department is mapped AND matches selected departments
         if (!inspectorDetails.department || !afdeling.includes(inspectorDetails.department)) {
           return null;
         }
       }
-      
-      // If no filter active, still exclude unmapped departments (null)
-      // This ensures only inspectors with valid postcodes from our lists are shown
-      if ((!afdeling || afdeling.length === 0) && !inspectorDetails.department) {
-        return null;
-      }
+      // When no filter is active, show all inspectors (including those without mapped departments)
+      // The UI will show empty/null for unmapped departments
       
       // Apply synstyper filter
       if (!synstyper_all && synstyper && synstyper.length > 0) {
