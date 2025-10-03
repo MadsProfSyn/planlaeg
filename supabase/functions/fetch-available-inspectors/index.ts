@@ -62,25 +62,10 @@ serve(async (req) => {
       console.log('Falling back to supabase_aviliablity table');
     }
 
-    // Build query - get availability with inspector joins
+    // Build query - get availability data directly (no joins since no FK relationship)
     let query = supabase
       .from(tableName)
-      .select(`
-        id,
-        inspector_id,
-        inspector_name,
-        date_local,
-        start_time_local,
-        end_time_local,
-        is_available,
-        inspectors!inner (
-          full_name,
-          address,
-          departments (
-            name
-          )
-        )
-      `, { count: 'exact' })
+      .select('*', { count: 'exact' })
       .eq('is_available', true);
 
     // Apply date range filter
@@ -88,16 +73,15 @@ serve(async (req) => {
       query = query.gte('date_local', from).lte('date_local', to);
     }
 
-    // Apply search filter
+    // Apply search filter on inspector_name
     if (q && q.trim() !== '') {
       const searchTerm = q.trim();
-      query = query.or(`inspector_name.ilike.%${searchTerm}%,inspectors.address.ilike.%${searchTerm}%`);
+      query = query.ilike('inspector_name', `%${searchTerm}%`);
     }
 
     // Apply sorting
     const sortColumn = sortBy === 'navn' ? 'inspector_name' : 
-                       sortBy === 'dato' ? 'date_local' :
-                       sortBy === 'adresse' ? 'inspectors.address' : 'date_local';
+                       sortBy === 'dato' ? 'date_local' : 'date_local';
     const sortDirection = sortOrder === 'desc' ? false : true;
     query = query.order(sortColumn, { ascending: sortDirection });
     
@@ -114,15 +98,37 @@ serve(async (req) => {
       throw error;
     }
 
-    // Get all inspector IDs to fetch skills
+    // Get all unique inspector IDs to fetch related data
     const inspectorIds = [...new Set(data?.map((row: any) => row.inspector_id) || [])];
     
+    // Fetch inspector details (address and department)
+    const { data: inspectorsData } = await supabase
+      .from('inspectors')
+      .select(`
+        id,
+        address,
+        department_id,
+        departments (
+          name
+        )
+      `)
+      .in('id', inspectorIds);
+
     // Fetch skills for all inspectors
     const { data: skillsData } = await supabase
       .from('inspector_skills')
       .select('inspector_id, inspection_type')
       .in('inspector_id', inspectorIds)
       .eq('is_active', true);
+
+    // Build inspector details map
+    const inspectorMap = new Map<string, any>();
+    inspectorsData?.forEach((inspector: any) => {
+      inspectorMap.set(inspector.id, {
+        address: inspector.address || '',
+        department: inspector.departments?.name || ''
+      });
+    });
 
     // Build skills map
     const skillsMap = new Map<string, string[]>();
@@ -135,11 +141,11 @@ serve(async (req) => {
 
     // Transform data to match expected UI format
     const transformedData = (data || []).map((row: any) => {
+      const inspectorDetails = inspectorMap.get(row.inspector_id) || { address: '', department: '' };
       const skills = skillsMap.get(row.inspector_id) || [];
-      const department = row.inspectors?.departments?.name || '';
       
-      // Apply department filter in memory (since join filter is complex)
-      if (afdeling && afdeling !== '' && department !== afdeling) {
+      // Apply department filter
+      if (afdeling && afdeling !== '' && inspectorDetails.department !== afdeling) {
         return null;
       }
       
@@ -163,9 +169,9 @@ serve(async (req) => {
         availability_id: row.id,
         inspector_uuid: row.inspector_id,
         navn: row.inspector_name,
-        afdeling: department,
+        afdeling: inspectorDetails.department,
         synstyper: skills,
-        adresse: row.inspectors?.address || '',
+        adresse: inspectorDetails.address,
         dato: row.date_local,
         start_tid: row.start_time_local,
         slut_tid: row.end_time_local,
