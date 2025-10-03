@@ -10,7 +10,7 @@ const corsHeaders = {
 interface FilterParams {
   from: string;
   to: string;
-  afdeling: string | null;
+  afdeling: string[] | null;
   synstyper: string[];
   synstyper_all: boolean;
   q: string;
@@ -144,9 +144,10 @@ serve(async (req) => {
       const inspectorDetails = inspectorMap.get(row.inspector_id) || { address: '', department: '' };
       const skills = skillsMap.get(row.inspector_id) || [];
       
-      // Apply department filter
-      if (afdeling && afdeling !== '' && inspectorDetails.department !== afdeling) {
-        return null;
+      // Apply department filter (support multiple departments)
+      if (afdeling && Array.isArray(afdeling) && afdeling.length > 0) {
+        const departmentMatch = afdeling.includes(inspectorDetails.department);
+        if (!departmentMatch) return null;
       }
       
       // Apply synstyper filter

@@ -74,19 +74,19 @@ export function DepartmentMultiSelect({
           >
             <span className="truncate">
               {selectedDepartments.length === 0
-                ? "Vælg afdeling"
-                : `${selectedDepartments.length} department${
-                    selectedDepartments.length === 1 ? "" : "s"
-                  } selected`}
+                ? "Alle afdelinger"
+                : `${selectedDepartments.length} afdeling${
+                    selectedDepartments.length === 1 ? "" : "er"
+                  } valgt`}
             </span>
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-full p-0" align="start">
           <Command>
-            <CommandInput placeholder="Search departments..." />
+            <CommandInput placeholder="Søg afdelinger..." />
             <CommandList>
-              <CommandEmpty>No departments found.</CommandEmpty>
+              <CommandEmpty>Ingen afdelinger fundet.</CommandEmpty>
               <CommandGroup>
                 <CommandItem onSelect={handleSelectAll}>
                   <Check
@@ -97,7 +97,7 @@ export function DepartmentMultiSelect({
                         : "opacity-0"
                     )}
                   />
-                  Select All ({departments.length})
+                  Vælg alle ({departments.length})
                 </CommandItem>
                 {departments.map((department) => (
                   <CommandItem
@@ -154,7 +154,7 @@ export function DepartmentMultiSelect({
             onClick={handleClear}
             className="h-6 px-2 text-xs"
           >
-            Clear all
+            Ryd alle
           </Button>
         </div>
       )}

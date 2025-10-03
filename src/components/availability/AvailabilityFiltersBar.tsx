@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Button } from "@/components/ui/button";
-import { DepartmentSingleSelect } from "@/components/filters/DepartmentSingleSelect";
+import { DepartmentMultiSelect } from "@/components/filters/DepartmentMultiSelect";
 import { DateRangePicker } from "@/components/filters/DateRangePicker";
 import { SynsTypeMultiSelect } from "@/components/filters/SynsTypeMultiSelect";
 import { GlobalSearchInput } from "@/components/filters/GlobalSearchInput";
@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Search, RotateCcw } from "lucide-react";
 
 interface AvailabilityFilters {
-  afdeling: string | null;
+  afdeling: string[];
   from: string;
   to: string;
   synstyper: string[];
@@ -72,11 +72,10 @@ export function AvailabilityFiltersBar({
           <label className="text-sm font-medium text-foreground mb-2 block">
             Afdeling
           </label>
-          <DepartmentSingleSelect
+          <DepartmentMultiSelect
             departments={departments.map(d => d.value)}
-            selectedDepartment={filters.afdeling || ""}
-            onSelectionChange={(dept) => updateFilter("afdeling", dept === "" ? null : dept)}
-            placeholder="Alle afdelinger"
+            selectedDepartments={filters.afdeling}
+            onSelectionChange={(depts) => updateFilter("afdeling", depts)}
           />
         </div>
 

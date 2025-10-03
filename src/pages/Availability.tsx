@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
 interface AvailabilityFilters {
-  afdeling: string | null;
+  afdeling: string[];
   from: string;
   to: string;
   synstyper: string[];
@@ -23,7 +23,7 @@ interface AvailabilityData {
 }
 
 const DEFAULT_FILTERS: AvailabilityFilters = {
-  afdeling: null,
+  afdeling: [],
   from: new Date().toISOString().split('T')[0],
   to: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // today + 6 days
   synstyper: ["Proforma", "Projektsyn", "Indflytningssyn", "Fraflytningssyn"],
@@ -62,7 +62,14 @@ export default function AvailabilityPage() {
     const sort = searchParams.get("sort");
     const order = searchParams.get("order");
 
-    if (afdeling) urlFilters.afdeling = afdeling;
+    if (afdeling) {
+      try {
+        urlFilters.afdeling = JSON.parse(decodeURIComponent(afdeling));
+      } catch (e) {
+        // If not JSON, treat as single value for backwards compatibility
+        urlFilters.afdeling = [afdeling];
+      }
+    }
     if (from) urlFilters.from = from;
     if (to) urlFilters.to = to;
     if (q) urlFilters.q = q;
@@ -88,7 +95,7 @@ export default function AvailabilityPage() {
   React.useEffect(() => {
     const params = new URLSearchParams();
     
-    if (filters.afdeling) params.set("afdeling", filters.afdeling);
+    if (filters.afdeling.length > 0) params.set("afdeling", encodeURIComponent(JSON.stringify(filters.afdeling)));
     if (filters.from !== DEFAULT_FILTERS.from) params.set("from", filters.from);
     if (filters.to !== DEFAULT_FILTERS.to) params.set("to", filters.to);
     if (filters.q) params.set("q", filters.q);
