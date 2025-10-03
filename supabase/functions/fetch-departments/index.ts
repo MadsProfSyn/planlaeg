@@ -21,46 +21,27 @@ serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Query for distinct departments from both tables
-    const { data, error } = await supabase.rpc('exec_sql', {
-      query: `
-        SELECT DISTINCT department AS value, department AS label
-        FROM (
-          SELECT department FROM public.inspectors
-          UNION
-          SELECT department FROM public.inspectors_import_staging
-        ) d
-        WHERE department IS NOT NULL AND department <> ''
-        ORDER BY department;
-      `
-    });
+    // Query departments table directly
+    const { data, error } = await supabase
+      .from('departments')
+      .select('name')
+      .eq('is_active', true)
+      .order('name');
 
     if (error) {
       console.error('Error fetching departments:', error);
-      
-      // Fallback: Try direct query on inspectors table only
-      const { data: fallbackData, error: fallbackError } = await supabase
-        .from('inspectors')
-        .select('department')
-        .not('department', 'is', null)
-        .neq('department', '');
-        
-      if (fallbackError) {
-        throw fallbackError;
-      }
-      
-      // Extract unique departments
-      const uniqueDepts = [...new Set(fallbackData?.map(d => d.department) || [])];
-      const formattedDepts = uniqueDepts.map(dept => ({ value: dept, label: dept }));
-      
-      return new Response(JSON.stringify({ data: formattedDepts }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      throw error;
     }
 
-    console.log(`Found ${data?.length || 0} departments`);
+    // Format departments for dropdown
+    const formattedDepts = (data || []).map(dept => ({ 
+      value: dept.name, 
+      label: dept.name 
+    }));
 
-    return new Response(JSON.stringify({ data: data || [] }), {
+    console.log(`Found ${formattedDepts.length} departments`);
+
+    return new Response(JSON.stringify({ data: formattedDepts }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
