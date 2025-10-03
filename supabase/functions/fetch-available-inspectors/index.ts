@@ -121,12 +121,39 @@ serve(async (req) => {
       .in('inspector_id', inspectorIds)
       .eq('is_active', true);
 
-    // Build inspector details map
+    // Helper to extract 4-digit Danish postcode from address
+    const extractPostcode = (address: string): number | null => {
+      if (!address) return null;
+      const match = address.match(/\b(\d{4})\b/);
+      return match ? parseInt(match[1]) : null;
+    };
+
+    // Get all unique postcodes from inspector addresses
+    const postcodes = [...new Set(
+      inspectorsData?.map((inspector: any) => extractPostcode(inspector.address)).filter(Boolean) || []
+    )];
+
+    // Fetch department mappings for these postcodes
+    const { data: postcodeDepts } = await supabase
+      .from('vw_postcode_to_department')
+      .select('zip, department')
+      .in('zip', postcodes);
+
+    // Build postcode to department map
+    const postcodeToDepartment = new Map<number, string>();
+    postcodeDepts?.forEach((row: any) => {
+      postcodeToDepartment.set(row.zip, row.department);
+    });
+
+    // Build inspector details map with department derived from postcode
     const inspectorMap = new Map<string, any>();
     inspectorsData?.forEach((inspector: any) => {
+      const postcode = extractPostcode(inspector.address);
+      const department = postcode ? postcodeToDepartment.get(postcode) : null;
+      
       inspectorMap.set(inspector.id, {
         address: inspector.address || '',
-        department: inspector.departments?.name || ''
+        department: department || null // null if postcode not in our mapping
       });
     });
 
@@ -145,9 +172,17 @@ serve(async (req) => {
       const skills = skillsMap.get(row.inspector_id) || [];
       
       // Apply department filter (support multiple departments)
+      // Only include if department is mapped AND matches selected filters
       if (afdeling && Array.isArray(afdeling) && afdeling.length > 0) {
-        const departmentMatch = afdeling.includes(inspectorDetails.department);
-        if (!departmentMatch) return null;
+        if (!inspectorDetails.department || !afdeling.includes(inspectorDetails.department)) {
+          return null;
+        }
+      }
+      
+      // If no filter active, still exclude unmapped departments (null)
+      // This ensures only inspectors with valid postcodes from our lists are shown
+      if ((!afdeling || afdeling.length === 0) && !inspectorDetails.department) {
+        return null;
       }
       
       // Apply synstyper filter

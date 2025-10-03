@@ -21,22 +21,21 @@ serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Query departments table directly
+    // Query translated department names from afdeling_to_department
     const { data, error } = await supabase
-      .from('departments')
-      .select('name')
-      .eq('is_active', true)
-      .order('name');
+      .from('afdeling_to_department')
+      .select('department')
+      .order('department');
 
     if (error) {
       console.error('Error fetching departments:', error);
       throw error;
     }
 
-    // Format departments for dropdown
+    // Format departments for dropdown (these are the translated names)
     const formattedDepts = (data || []).map(dept => ({ 
-      value: dept.name, 
-      label: dept.name 
+      value: dept.department, 
+      label: dept.department 
     }));
 
     console.log(`Found ${formattedDepts.length} departments`);

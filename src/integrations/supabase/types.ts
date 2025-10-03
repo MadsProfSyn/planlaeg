@@ -14,6 +14,74 @@ export type Database = {
   }
   public: {
     Tables: {
+      afdeling_to_department: {
+        Row: {
+          afdeling: string
+          department: string
+        }
+        Insert: {
+          afdeling: string
+          department: string
+        }
+        Update: {
+          afdeling?: string
+          department?: string
+        }
+        Relationships: []
+      }
+      afdeling_zip: {
+        Row: {
+          afdeling: string
+          zip: number
+        }
+        Insert: {
+          afdeling: string
+          zip: number
+        }
+        Update: {
+          afdeling?: string
+          zip?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "afdeling_zip_afdeling_fkey"
+            columns: ["afdeling"]
+            isOneToOne: false
+            referencedRelation: "afdeling_to_department"
+            referencedColumns: ["afdeling"]
+          },
+        ]
+      }
+      departments: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          region: string | null
+          updated_at: string | null
+          wf_department_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          region?: string | null
+          updated_at?: string | null
+          wf_department_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          region?: string | null
+          updated_at?: string | null
+          wf_department_id?: string | null
+        }
+        Relationships: []
+      }
       inspection_durations: {
         Row: {
           inspection_type: Database["public"]["Enums"]["inspection_type_enum"]
@@ -29,6 +97,78 @@ export type Database = {
           inspection_type?: Database["public"]["Enums"]["inspection_type_enum"]
           minutes?: number
           rooms?: number
+        }
+        Relationships: []
+      }
+      inspection_queue: {
+        Row: {
+          address: string
+          created_at: string | null
+          created_by: string | null
+          customer_name: string | null
+          department: string
+          geocode_status: string | null
+          id: string
+          inspection_type: string
+          lat: number | null
+          lease_number: string | null
+          lng: number | null
+          monday_item_id: number | null
+          preferred_date: string
+          rooms: number
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          address: string
+          created_at?: string | null
+          created_by?: string | null
+          customer_name?: string | null
+          department: string
+          geocode_status?: string | null
+          id?: string
+          inspection_type: string
+          lat?: number | null
+          lease_number?: string | null
+          lng?: number | null
+          monday_item_id?: number | null
+          preferred_date: string
+          rooms: number
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          address?: string
+          created_at?: string | null
+          created_by?: string | null
+          customer_name?: string | null
+          department?: string
+          geocode_status?: string | null
+          id?: string
+          inspection_type?: string
+          lat?: number | null
+          lease_number?: string | null
+          lng?: number | null
+          monday_item_id?: number | null
+          preferred_date?: string
+          rooms?: number
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      inspection_type_mappings: {
+        Row: {
+          abbreviation: string
+          full_name: string
+        }
+        Insert: {
+          abbreviation: string
+          full_name: string
+        }
+        Update: {
+          abbreviation?: string
+          full_name?: string
         }
         Relationships: []
       }
@@ -72,22 +212,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["inspection_status_enum"]
           travel_time_min?: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "inspections_inspector_id_fkey"
-            columns: ["inspector_id"]
-            isOneToOne: false
-            referencedRelation: "inspector_availability_compat"
-            referencedColumns: ["inspector_id"]
-          },
-          {
-            foreignKeyName: "inspections_inspector_id_fkey"
-            columns: ["inspector_id"]
-            isOneToOne: false
-            referencedRelation: "inspectors"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       inspections_vrp: {
         Row: {
@@ -149,44 +274,37 @@ export type Database = {
           on_date?: string
           start_time_local?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "inspector_availability_inspector_id_fkey"
-            columns: ["inspector_id"]
-            isOneToOne: false
-            referencedRelation: "inspector_availability_compat"
-            referencedColumns: ["inspector_id"]
-          },
-          {
-            foreignKeyName: "inspector_availability_inspector_id_fkey"
-            columns: ["inspector_id"]
-            isOneToOne: false
-            referencedRelation: "inspectors"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       inspector_skills: {
         Row: {
-          inspection_type: Database["public"]["Enums"]["inspection_type_enum"]
-          inspector_id: number
+          certified_date: string | null
+          created_at: string | null
+          expires_date: string | null
+          id: string
+          inspection_type: string
+          inspector_id: string
+          is_active: boolean | null
         }
         Insert: {
-          inspection_type: Database["public"]["Enums"]["inspection_type_enum"]
-          inspector_id: number
+          certified_date?: string | null
+          created_at?: string | null
+          expires_date?: string | null
+          id?: string
+          inspection_type: string
+          inspector_id: string
+          is_active?: boolean | null
         }
         Update: {
-          inspection_type?: Database["public"]["Enums"]["inspection_type_enum"]
-          inspector_id?: number
+          certified_date?: string | null
+          created_at?: string | null
+          expires_date?: string | null
+          id?: string
+          inspection_type?: string
+          inspector_id?: string
+          is_active?: boolean | null
         }
         Relationships: [
-          {
-            foreignKeyName: "inspector_skills_inspector_id_fkey"
-            columns: ["inspector_id"]
-            isOneToOne: false
-            referencedRelation: "inspector_availability_compat"
-            referencedColumns: ["inspector_id"]
-          },
           {
             foreignKeyName: "inspector_skills_inspector_id_fkey"
             columns: ["inspector_id"]
@@ -198,42 +316,62 @@ export type Database = {
       }
       inspectors: {
         Row: {
-          capabilities: string[] | null
-          created_at: string
-          department: string
-          email: string | null
-          end_address: string | null
+          address: string | null
+          created_at: string | null
+          department_id: string | null
+          email: string
           full_name: string
-          id: number
-          max_work_hours: number
-          start_address: string
-          timezone: string
+          geocode_error: string | null
+          geocode_status: string | null
+          id: string
+          is_active: boolean | null
+          lat: number | null
+          lng: number | null
+          notes: string | null
+          updated_at: string | null
+          wf_employee_id: string | null
         }
         Insert: {
-          capabilities?: string[] | null
-          created_at?: string
-          department?: string
-          email?: string | null
-          end_address?: string | null
+          address?: string | null
+          created_at?: string | null
+          department_id?: string | null
+          email: string
           full_name: string
-          id?: number
-          max_work_hours?: number
-          start_address: string
-          timezone?: string
+          geocode_error?: string | null
+          geocode_status?: string | null
+          id?: string
+          is_active?: boolean | null
+          lat?: number | null
+          lng?: number | null
+          notes?: string | null
+          updated_at?: string | null
+          wf_employee_id?: string | null
         }
         Update: {
-          capabilities?: string[] | null
-          created_at?: string
-          department?: string
-          email?: string | null
-          end_address?: string | null
+          address?: string | null
+          created_at?: string | null
+          department_id?: string | null
+          email?: string
           full_name?: string
-          id?: number
-          max_work_hours?: number
-          start_address?: string
-          timezone?: string
+          geocode_error?: string | null
+          geocode_status?: string | null
+          id?: string
+          is_active?: boolean | null
+          lat?: number | null
+          lng?: number | null
+          notes?: string | null
+          updated_at?: string | null
+          wf_employee_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "inspectors_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       inspectors_import_staging: {
         Row: {
@@ -323,9 +461,11 @@ export type Database = {
           inserted_at: string | null
           item_id: number | null
           Kunde: string | null
+          landsdel: string | null
           lejemalsnr: string | null
           name: string | null
           raw: Json | null
+          region: string | null
           synstype: string | null
         }
         Insert: {
@@ -337,9 +477,11 @@ export type Database = {
           inserted_at?: string | null
           item_id?: number | null
           Kunde?: string | null
+          landsdel?: string | null
           lejemalsnr?: string | null
           name?: string | null
           raw?: Json | null
+          region?: string | null
           synstype?: string | null
         }
         Update: {
@@ -351,12 +493,78 @@ export type Database = {
           inserted_at?: string | null
           item_id?: number | null
           Kunde?: string | null
+          landsdel?: string | null
           lejemalsnr?: string | null
           name?: string | null
           raw?: Json | null
+          region?: string | null
           synstype?: string | null
         }
         Relationships: []
+      }
+      proposed_assignments: {
+        Row: {
+          created_at: string | null
+          end_time: string
+          id: string
+          inspection_id: string
+          inspector_id: string
+          scheduled_date: string
+          sequence_in_route: number | null
+          start_time: string
+          status: string | null
+          travel_from_previous_mins: number | null
+          vrp_run_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          end_time: string
+          id?: string
+          inspection_id: string
+          inspector_id: string
+          scheduled_date: string
+          sequence_in_route?: number | null
+          start_time: string
+          status?: string | null
+          travel_from_previous_mins?: number | null
+          vrp_run_id: string
+        }
+        Update: {
+          created_at?: string | null
+          end_time?: string
+          id?: string
+          inspection_id?: string
+          inspector_id?: string
+          scheduled_date?: string
+          sequence_in_route?: number | null
+          start_time?: string
+          status?: string | null
+          travel_from_previous_mins?: number | null
+          vrp_run_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposed_assignments_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "inspection_queue"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposed_assignments_inspector_id_fkey"
+            columns: ["inspector_id"]
+            isOneToOne: false
+            referencedRelation: "inspectors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposed_assignments_vrp_run_id_fkey"
+            columns: ["vrp_run_id"]
+            isOneToOne: false
+            referencedRelation: "vrp_runs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       role_mappings: {
         Row: {
@@ -405,6 +613,7 @@ export type Database = {
       supabase_availability: {
         Row: {
           date_local: string
+          end_time_local: string | null
           fetched_at: string | null
           id: string
           inspector_id: string
@@ -412,9 +621,11 @@ export type Database = {
           is_available: boolean
           raw_payload: Json | null
           source: string | null
+          start_time_local: string | null
         }
         Insert: {
           date_local: string
+          end_time_local?: string | null
           fetched_at?: string | null
           id?: string
           inspector_id: string
@@ -422,9 +633,11 @@ export type Database = {
           is_available?: boolean
           raw_payload?: Json | null
           source?: string | null
+          start_time_local?: string | null
         }
         Update: {
           date_local?: string
+          end_time_local?: string | null
           fetched_at?: string | null
           id?: string
           inspector_id?: string
@@ -432,6 +645,7 @@ export type Database = {
           is_available?: boolean
           raw_payload?: Json | null
           source?: string | null
+          start_time_local?: string | null
         }
         Relationships: []
       }
@@ -477,6 +691,7 @@ export type Database = {
           end_utc: string | null
           id: string
           inspection_id: string | null
+          inspection_queue_id: string | null
           inspector_id: string
           inspector_name: string
           start_utc: string | null
@@ -494,6 +709,7 @@ export type Database = {
           end_utc?: string | null
           id?: string
           inspection_id?: string | null
+          inspection_queue_id?: string | null
           inspector_id: string
           inspector_name: string
           start_utc?: string | null
@@ -511,6 +727,7 @@ export type Database = {
           end_utc?: string | null
           id?: string
           inspection_id?: string | null
+          inspection_queue_id?: string | null
           inspector_id?: string
           inspector_name?: string
           start_utc?: string | null
@@ -528,31 +745,77 @@ export type Database = {
             referencedRelation: "supabase_inspections"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "supabase_shifts_inspection_queue_id_fkey"
+            columns: ["inspection_queue_id"]
+            isOneToOne: false
+            referencedRelation: "inspection_queue"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      vrp_runs: {
+        Row: {
+          approved_at: string | null
+          created_at: string | null
+          execution_seconds: number | null
+          id: string
+          inspection_ids: string[]
+          num_inspections_scheduled: number | null
+          requested_by: string
+          reviewed_by: string | null
+          solution_json: Json | null
+          status: string | null
+          target_dates: string[]
+          total_travel_minutes: number | null
+        }
+        Insert: {
+          approved_at?: string | null
+          created_at?: string | null
+          execution_seconds?: number | null
+          id?: string
+          inspection_ids: string[]
+          num_inspections_scheduled?: number | null
+          requested_by: string
+          reviewed_by?: string | null
+          solution_json?: Json | null
+          status?: string | null
+          target_dates: string[]
+          total_travel_minutes?: number | null
+        }
+        Update: {
+          approved_at?: string | null
+          created_at?: string | null
+          execution_seconds?: number | null
+          id?: string
+          inspection_ids?: string[]
+          num_inspections_scheduled?: number | null
+          requested_by?: string
+          reviewed_by?: string | null
+          solution_json?: Json | null
+          status?: string | null
+          target_dates?: string[]
+          total_travel_minutes?: number | null
+        }
+        Relationships: []
       }
     }
     Views: {
-      inspector_availability_compat: {
+      vw_postcode_to_department: {
         Row: {
-          availability_str: string | null
-          inspector_id: number | null
-        }
-        Relationships: []
-      }
-      v_available_inspectors: {
-        Row: {
-          adresse: string | null
           afdeling: string | null
-          availability_id: string | null
-          dato: string | null
-          inspector_uuid: string | null
-          navn: string | null
-          slut_tid: string | null
-          start_tid: string | null
-          synstyper: string[] | null
-          tidspunkt_label: string | null
+          department: string | null
+          zip: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "afdeling_zip_afdeling_fkey"
+            columns: ["afdeling"]
+            isOneToOne: false
+            referencedRelation: "afdeling_to_department"
+            referencedColumns: ["afdeling"]
+          },
+        ]
       }
       vw_shifts_ui: {
         Row: {
@@ -572,6 +835,20 @@ export type Database = {
     Functions: {
       get_or_create_inspector_uuid: {
         Args: { emp_name: string; wf_emp_id: string }
+        Returns: string
+      }
+      get_vrp_input: {
+        Args: { p_inspection_ids: string[]; p_target_dates: string[] }
+        Returns: Json
+      }
+      save_vrp_solution: {
+        Args: {
+          p_assignments: Json
+          p_inspection_ids: string[]
+          p_metrics: Json
+          p_run_id: string
+          p_target_dates: string[]
+        }
         Returns: string
       }
       sync_workfeed_availability_stub: {
