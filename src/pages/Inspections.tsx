@@ -1,8 +1,10 @@
 import * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MondayItemsTable } from "@/components/inspections/MondayItemsTable";
 import { InspectionsPagination } from "@/components/inspections/InspectionsPagination";
+import { SearchBar } from "@/components/filters/SearchBar";
 import { getMondayItems, createMondayItem, updateMondayItem, deleteMondayItem, getRegions, type MondayItemFilters, type MondayItem } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -24,6 +26,7 @@ import {
 export default function InspectionsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [currentPage, setCurrentPage] = React.useState(1);
   const [selectedIds, setSelectedIds] = React.useState<number[]>([]);
   const [filters, setFilters] = React.useState<MondayItemFilters>({});
@@ -32,6 +35,32 @@ export default function InspectionsPage() {
   const [editingItem, setEditingItem] = React.useState<MondayItem | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = React.useState<number | null>(null);
   const pageSize = 50;
+  const abortControllerRef = React.useRef<AbortController | null>(null);
+
+  // Initialize search query from URL
+  const initialSearchQuery = searchParams.get("q") || "";
+  const [searchQuery, setSearchQuery] = React.useState(initialSearchQuery);
+
+  // Update filters when search query changes
+  React.useEffect(() => {
+    setFilters((prev) => ({
+      ...prev,
+      searchQuery: searchQuery || undefined,
+    }));
+    // Reset to first page when search changes
+    if (searchQuery !== initialSearchQuery) {
+      setCurrentPage(1);
+    }
+  }, [searchQuery]);
+
+  // Update URL when search query changes
+  React.useEffect(() => {
+    if (searchQuery) {
+      setSearchParams({ q: searchQuery });
+    } else {
+      setSearchParams({});
+    }
+  }, [searchQuery, setSearchParams]);
 
   // Fetch Monday items with filters and pagination
   const {
@@ -40,7 +69,21 @@ export default function InspectionsPage() {
     error,
   } = useQuery({
     queryKey: ["monday-items", currentPage, pageSize, filters],
-    queryFn: () => getMondayItems(currentPage, pageSize, filters),
+    queryFn: async () => {
+      // Cancel previous request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      // Create new abort controller
+      abortControllerRef.current = new AbortController();
+      
+      return getMondayItems(
+        currentPage,
+        pageSize,
+        filters,
+        abortControllerRef.current.signal
+      );
+    },
     staleTime: 30 * 1000, // 30 seconds
   });
 
@@ -160,9 +203,18 @@ export default function InspectionsPage() {
     });
   };
 
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+  };
+
+  const handleSearchClear = () => {
+    setSearchQuery("");
+  };
+
   const items = mondayData?.data || [];
   const totalCount = mondayData?.count || 0;
   const totalPages = mondayData?.totalPages || 1;
+  const isSearchActive = searchQuery.length >= 2;
 
   return (
     <div className="container mx-auto py-8 space-y-6">
@@ -195,11 +247,22 @@ export default function InspectionsPage() {
           <CardTitle className="flex items-center justify-between">
             <span>Monday.com syn</span>
             <span className="text-sm font-normal text-muted-foreground">
-              {totalCount} syn i alt
+              {isSearchActive && !isLoading
+                ? `${totalCount} resultat${totalCount !== 1 ? "er" : ""}`
+                : `${totalCount} syn i alt`}
             </span>
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          <SearchBar
+            value={searchQuery}
+            onChange={handleSearchChange}
+            onClear={handleSearchClear}
+            placeholder="Søg (kunde, reg.nr., adresse)"
+            isLoading={isLoading && isSearchActive}
+            resultCount={isSearchActive ? totalCount : undefined}
+          />
+          
           <MondayItemsTable
             items={items}
             selectedIds={selectedIds}
@@ -209,6 +272,7 @@ export default function InspectionsPage() {
             isLoading={isLoading}
             totalCount={totalCount}
           />
+          
           <InspectionsPagination
             currentPage={currentPage}
             totalPages={totalPages}

@@ -52,14 +52,16 @@ export interface PaginatedResponse<T> {
 export async function getMondayItems(
   page: number = 1,
   pageSize: number = 50,
-  filters: MondayItemFilters = {}
+  filters: MondayItemFilters = {},
+  signal?: AbortSignal
 ): Promise<PaginatedResponse<MondayItem>> {
   const start = (page - 1) * pageSize;
   const end = start + pageSize - 1;
 
   let query = supabase
     .from("monday_items_selected")
-    .select("*", { count: "exact" });
+    .select("*", { count: "exact" })
+    .abortSignal(signal || new AbortController().signal);
 
   // Apply filters
   if (filters.regions && filters.regions.length > 0) {
@@ -74,8 +76,19 @@ export async function getMondayItems(
     query = query.lte("dato_tid", filters.dateTo);
   }
 
+  // Enhanced search: min 2 characters, searches Kunde, lejemalsnr, and adresse
   if (filters.searchQuery) {
-    query = query.or(`name.ilike.%${filters.searchQuery}%,adresse.ilike.%${filters.searchQuery}%,Kunde.ilike.%${filters.searchQuery}%`);
+    const q = filters.searchQuery.trim();
+    if (q.length >= 2) {
+      // Use trigram indexes for fast partial matching
+      query = query.or(
+        [
+          `Kunde.ilike.%${q}%`,
+          `lejemalsnr.ilike.%${q}%`,
+          `adresse.ilike.%${q}%`,
+        ].join(',')
+      );
+    }
   }
 
   // Order by dato_tid, then inserted_at for consistent pagination
