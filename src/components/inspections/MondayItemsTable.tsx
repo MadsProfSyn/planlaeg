@@ -10,10 +10,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { MondayItem } from "@/lib/supabase";
 import { format } from "date-fns";
 import { da } from "date-fns/locale";
+import { useState } from "react";
 
 interface MondayItemsTableProps {
   items: MondayItem[];
@@ -25,6 +26,9 @@ interface MondayItemsTableProps {
   totalCount?: number;
 }
 
+type SortColumn = 'adresse' | 'synstype' | 'dato_tid' | 'antal_vaerelser' | 'Kunde' | 'landsdel';
+type SortDirection = 'asc' | 'desc' | null;
+
 export function MondayItemsTable({
   items,
   selectedIds,
@@ -34,6 +38,33 @@ export function MondayItemsTable({
   isLoading = false,
   totalCount = 0,
 }: MondayItemsTableProps) {
+  const [sortColumn, setSortColumn] = useState<SortColumn | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+
+  const handleSort = (column: SortColumn) => {
+    if (sortColumn === column) {
+      // Cycle through: asc -> desc -> null
+      if (sortDirection === 'asc') {
+        setSortDirection('desc');
+      } else if (sortDirection === 'desc') {
+        setSortColumn(null);
+        setSortDirection(null);
+      }
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  const getSortIcon = (column: SortColumn) => {
+    if (sortColumn !== column) {
+      return <ArrowUpDown className="h-4 w-4 ml-2" />;
+    }
+    return sortDirection === 'asc' ? 
+      <ArrowUp className="h-4 w-4 ml-2" /> : 
+      <ArrowDown className="h-4 w-4 ml-2" />;
+  };
+
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
       onSelectionChange(items.map((item) => item.id));
@@ -86,6 +117,40 @@ export function MondayItemsTable({
   const allSelected = items.length > 0 && selectedIds.length === items.length;
   const someSelected = selectedIds.length > 0 && selectedIds.length < items.length;
 
+  // Sort items
+  const sortedItems = [...items].sort((a, b) => {
+    if (!sortColumn || !sortDirection) return 0;
+
+    let aValue: any = a[sortColumn];
+    let bValue: any = b[sortColumn];
+
+    // Handle null/undefined values
+    if (aValue === null || aValue === undefined) return 1;
+    if (bValue === null || bValue === undefined) return -1;
+
+    // Special handling for dates
+    if (sortColumn === 'dato_tid') {
+      aValue = new Date(aValue).getTime();
+      bValue = new Date(bValue).getTime();
+    }
+
+    // Special handling for numbers
+    if (sortColumn === 'antal_vaerelser') {
+      aValue = Number(aValue) || 0;
+      bValue = Number(bValue) || 0;
+    }
+
+    // String comparison for other fields
+    if (typeof aValue === 'string') {
+      aValue = aValue.toLowerCase();
+      bValue = bValue.toLowerCase();
+    }
+
+    if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+    if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+    return 0;
+  });
+
   return (
     <div className="rounded-md border">
       <Table>
@@ -99,17 +164,71 @@ export function MondayItemsTable({
                 className={someSelected ? "data-[state=checked]:bg-primary" : ""}
               />
             </TableHead>
-            <TableHead>Adresse</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Dato</TableHead>
-            <TableHead>Værelser</TableHead>
-            <TableHead>Kunde</TableHead>
-            <TableHead>Landsdel</TableHead>
+            <TableHead>
+              <Button
+                variant="ghost"
+                onClick={() => handleSort('adresse')}
+                className="h-8 px-2 lg:px-3 hover:bg-transparent"
+              >
+                Adresse
+                {getSortIcon('adresse')}
+              </Button>
+            </TableHead>
+            <TableHead>
+              <Button
+                variant="ghost"
+                onClick={() => handleSort('synstype')}
+                className="h-8 px-2 lg:px-3 hover:bg-transparent"
+              >
+                Type
+                {getSortIcon('synstype')}
+              </Button>
+            </TableHead>
+            <TableHead>
+              <Button
+                variant="ghost"
+                onClick={() => handleSort('dato_tid')}
+                className="h-8 px-2 lg:px-3 hover:bg-transparent"
+              >
+                Dato
+                {getSortIcon('dato_tid')}
+              </Button>
+            </TableHead>
+            <TableHead>
+              <Button
+                variant="ghost"
+                onClick={() => handleSort('antal_vaerelser')}
+                className="h-8 px-2 lg:px-3 hover:bg-transparent"
+              >
+                Værelser
+                {getSortIcon('antal_vaerelser')}
+              </Button>
+            </TableHead>
+            <TableHead>
+              <Button
+                variant="ghost"
+                onClick={() => handleSort('Kunde')}
+                className="h-8 px-2 lg:px-3 hover:bg-transparent"
+              >
+                Kunde
+                {getSortIcon('Kunde')}
+              </Button>
+            </TableHead>
+            <TableHead>
+              <Button
+                variant="ghost"
+                onClick={() => handleSort('landsdel')}
+                className="h-8 px-2 lg:px-3 hover:bg-transparent"
+              >
+                Landsdel
+                {getSortIcon('landsdel')}
+              </Button>
+            </TableHead>
             <TableHead className="w-24">Handlinger</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {items.map((item) => (
+          {sortedItems.map((item) => (
             <TableRow
               key={item.id}
               className={selectedIds.includes(item.id) ? "bg-muted/50" : ""}
