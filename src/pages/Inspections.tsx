@@ -1,117 +1,146 @@
 import * as React from "react";
-import { useQuery } from "@tanstack/react-query";
-import { FiltersBar } from "@/components/filters/FiltersBar";
-import { InspectionsTable } from "@/components/inspections/InspectionsTable";
-import { InspectionsPagination } from "@/components/inspections/InspectionsPagination";
-import { PlanlaegSynModal } from "@/components/inspections/PlanlaegSynModal";
-import { getInspections, getDepartments, InspectionFilters } from "@/lib/supabase";
-import { useToast } from "@/components/ui/use-toast";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { MondayItemsTable } from "@/components/inspections/MondayItemsTable";
+import { InspectionsPagination } from "@/components/inspections/InspectionsPagination";
+import { getMondayItems, createMondayItem, updateMondayItem, deleteMondayItem, getRegions, type MondayItemFilters, type MondayItem } from "@/lib/supabase";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Building2, CalendarCheck } from "lucide-react";
-
-// Custom hook for debounced value
-function useDebounced<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = React.useState<T>(value);
-
-  React.useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-
-  return debouncedValue;
-}
+import { CalendarCheck, Plus, Building2 } from "lucide-react";
+import { PlanlaegSynModal } from "@/components/inspections/PlanlaegSynModal";
+import { MondayItemDialog } from "@/components/inspections/MondayItemDialog";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function InspectionsPage() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [currentPage, setCurrentPage] = React.useState(1);
-  const [pageSize, setPageSize] = React.useState(50);
-  const [filters, setFilters] = React.useState<InspectionFilters>({});
-  const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
+  const [selectedIds, setSelectedIds] = React.useState<number[]>([]);
+  const [filters, setFilters] = React.useState<MondayItemFilters>({});
   const [isPlanningModalOpen, setIsPlanningModalOpen] = React.useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false);
+  const [editingItem, setEditingItem] = React.useState<MondayItem | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = React.useState<number | null>(null);
+  const pageSize = 50;
 
-  // Debounce filters to avoid excessive API calls
-  const debouncedFilters = useDebounced(filters, 300);
-
-  // Reset to first page when filters change
-  React.useEffect(() => {
-    setCurrentPage(1);
-  }, [debouncedFilters]);
-
-  // Reset to first page when page size changes
-  React.useEffect(() => {
-    setCurrentPage(1);
-  }, [pageSize]);
-
-  // Fetch departments for filter
+  // Fetch Monday items with filters and pagination
   const {
-    data: departments = [],
-    isLoading: isDepartmentsLoading,
-    error: departmentsError,
+    data: mondayData,
+    isLoading,
+    error,
   } = useQuery({
-    queryKey: ["departments"],
-    queryFn: getDepartments,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-
-  // Fetch inspections
-  const {
-    data: inspectionsData,
-    isLoading: isInspectionsLoading,
-    error: inspectionsError,
-  } = useQuery({
-    queryKey: ["inspections", currentPage, pageSize, debouncedFilters],
-    queryFn: () => getInspections(currentPage, pageSize, debouncedFilters),
+    queryKey: ["monday-items", currentPage, pageSize, filters],
+    queryFn: () => getMondayItems(currentPage, pageSize, filters),
     staleTime: 30 * 1000, // 30 seconds
   });
 
+  // Setup real-time subscription
+  React.useEffect(() => {
+    const channel = supabase
+      .channel('monday-items-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'monday_items_selected'
+        },
+        () => {
+          // Refetch data when changes occur
+          queryClient.invalidateQueries({ queryKey: ["monday-items"] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
   // Handle errors
   React.useEffect(() => {
-    if (departmentsError) {
+    if (error) {
       toast({
-        title: "Error loading departments",
-        description: "Failed to load department list. Please try again.",
+        title: "Fejl ved indlæsning",
+        description: "Kunne ikke hente syn. Prøv at genindlæse siden.",
         variant: "destructive",
       });
     }
-  }, [departmentsError, toast]);
+  }, [error, toast]);
 
-  React.useEffect(() => {
-    if (inspectionsError) {
+  const handleCreate = () => {
+    setEditingItem(null);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleEdit = (item: MondayItem) => {
+    setEditingItem(item);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleSave = async (itemData: Partial<MondayItem>) => {
+    try {
+      if (editingItem) {
+        await updateMondayItem(editingItem.id, itemData);
+        toast({
+          title: "Syn opdateret",
+          description: "Synet er blevet opdateret.",
+        });
+      } else {
+        await createMondayItem(itemData);
+        toast({
+          title: "Syn oprettet",
+          description: "Nyt syn er blevet oprettet.",
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ["monday-items"] });
+      setIsEditDialogOpen(false);
+    } catch (error) {
       toast({
-        title: "Error loading inspections",
-        description: "Failed to load inspections. Please try refresh the page.",
+        title: "Fejl",
+        description: `Kunne ikke ${editingItem ? "opdatere" : "oprette"} syn.`,
         variant: "destructive",
       });
     }
-  }, [inspectionsError, toast]);
-
-  const handleFiltersChange = (newFilters: InspectionFilters) => {
-    setFilters(newFilters);
   };
 
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-  };
-
-  const handlePageSizeChange = (newPageSize: number) => {
-    setPageSize(newPageSize);
-  };
-
-  const handleSelectionChange = (ids: string[]) => {
-    setSelectedIds(ids);
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirmId) return;
+    
+    try {
+      await deleteMondayItem(deleteConfirmId);
+      toast({
+        title: "Syn slettet",
+        description: "Synet er blevet slettet.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["monday-items"] });
+      setSelectedIds(prev => prev.filter(id => id !== deleteConfirmId));
+    } catch (error) {
+      toast({
+        title: "Fejl",
+        description: "Kunne ikke slette syn.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleteConfirmId(null);
+    }
   };
 
   const handleOpenPlanningModal = () => {
     if (selectedIds.length === 0) {
       toast({
         title: "Ingen syn valgt",
-        description: "Vælg mindst ét syn for at planlægge",
+        description: "Vælg mindst ét syn for at planlægge.",
         variant: "destructive",
       });
       return;
@@ -120,16 +149,20 @@ export default function InspectionsPage() {
   };
 
   const handlePlanningApproved = () => {
-    // Clear selection and refetch data
+    // Clear selections after approval
     setSelectedIds([]);
-    // Trigger refetch of inspections to update the list
-    window.location.reload(); // Simple approach for MVP
+    setIsPlanningModalOpen(false);
+    queryClient.invalidateQueries({ queryKey: ["monday-items"] });
+    
+    toast({
+      title: "Syn planlagt",
+      description: `${selectedIds.length} syn er blevet planlagt.`,
+    });
   };
 
-  const isLoading = isInspectionsLoading || isDepartmentsLoading;
-  const inspections = inspectionsData?.data || [];
-  const totalCount = inspectionsData?.count || 0;
-  const totalPages = inspectionsData?.totalPages || 1;
+  const items = mondayData?.data || [];
+  const totalCount = mondayData?.count || 0;
+  const totalPages = mondayData?.totalPages || 1;
 
   return (
     <div className="container mx-auto py-8 space-y-6">
@@ -137,70 +170,85 @@ export default function InspectionsPage() {
         <div className="flex items-center gap-3">
           <Building2 className="h-8 w-8 text-primary" />
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">
-              Syn til planlægning
-            </h1>
+            <h1 className="text-3xl font-bold tracking-tight">Syn Ikke Planlagt</h1>
             <p className="text-muted-foreground">
-              Planlæg fremtidige syn automatisk
+              Monday.com syn der venter på planlægning
             </p>
           </div>
         </div>
-
-        {selectedIds.length > 0 && (
-          <Button
-            onClick={handleOpenPlanningModal}
-            size="lg"
-            className="gap-2"
-          >
-            <CalendarCheck className="h-5 w-5" />
-            Planlæg Syn ({selectedIds.length})
+        <div className="flex items-center gap-2">
+          <Button onClick={handleCreate} variant="outline" size="lg">
+            <Plus className="mr-2 h-5 w-5" />
+            Tilføj Syn
           </Button>
-        )}
+          {selectedIds.length > 0 && (
+            <Button onClick={handleOpenPlanningModal} size="lg">
+              <CalendarCheck className="mr-2 h-5 w-5" />
+              Planlæg Syn ({selectedIds.length})
+            </Button>
+          )}
+        </div>
       </div>
-
-      <FiltersBar
-        departments={departments}
-        filters={filters}
-        onFiltersChange={handleFiltersChange}
-        isLoading={isLoading}
-      />
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Ikke planlagte syn</span>
+            <span>Monday.com syn</span>
             <span className="text-sm font-normal text-muted-foreground">
-              {totalCount} total
+              {totalCount} syn i alt
             </span>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <InspectionsTable
-            inspections={inspections}
+          <MondayItemsTable
+            items={items}
             selectedIds={selectedIds}
-            onSelectionChange={handleSelectionChange}
+            onSelectionChange={setSelectedIds}
+            onEdit={handleEdit}
+            onDelete={(id) => setDeleteConfirmId(id)}
             isLoading={isLoading}
             totalCount={totalCount}
+          />
+          <InspectionsPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalCount={totalCount}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={() => {}}
+            isLoading={isLoading}
           />
         </CardContent>
       </Card>
 
-      <InspectionsPagination
-        currentPage={currentPage}
-        totalPages={totalPages}
-        totalCount={totalCount}
-        pageSize={pageSize}
-        onPageChange={handlePageChange}
-        onPageSizeChange={handlePageSizeChange}
-        isLoading={isLoading}
-      />
-
       <PlanlaegSynModal
         open={isPlanningModalOpen}
         onClose={() => setIsPlanningModalOpen(false)}
-        selectedInspectionIds={selectedIds}
+        selectedInspectionIds={selectedIds.map(id => id.toString())}
         onApproved={handlePlanningApproved}
       />
+
+      <MondayItemDialog
+        open={isEditDialogOpen}
+        onClose={() => setIsEditDialogOpen(false)}
+        onSave={handleSave}
+        item={editingItem}
+      />
+
+      <AlertDialog open={deleteConfirmId !== null} onOpenChange={() => setDeleteConfirmId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Bekræft sletning</AlertDialogTitle>
+            <AlertDialogDescription>
+              Er du sikker på, at du vil slette dette syn? Denne handling kan ikke fortrydes.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuller</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm}>Slet</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -1,12 +1,37 @@
 import { supabase } from "@/integrations/supabase/client";
 
+export interface MondayItem {
+  id: number;
+  item_id: number | null;
+  board_id: number | null;
+  name: string | null;
+  adresse: string | null;
+  synstype: string | null;
+  dato_tid: string | null;
+  antal_vaerelser: number | null;
+  Kunde: string | null;
+  lejemalsnr: string | null;
+  region: string | null;
+  landsdel: string | null;
+  inserted_at: string | null;
+  raw: any | null;
+}
+
+export interface MondayItemFilters {
+  regions?: string[];
+  dateFrom?: string;
+  dateTo?: string;
+  searchQuery?: string;
+}
+
+// Legacy types for backward compatibility
 export interface Inspection {
   id: string;
   address: string;
-  type: "Proforma" | "Projektsyn" | "Indflytningssyn" | "Fraflytningssyn";
+  type: string;
   date_local: string;
   department: string;
-  status: "UNSCHEDULED" | "SCHEDULED" | "CANCELLED";
+  status: string;
   created_at: string;
   updated_at: string;
 }
@@ -24,68 +49,110 @@ export interface PaginatedResponse<T> {
   currentPage: number;
 }
 
-export async function getInspections(
+export async function getMondayItems(
   page: number = 1,
   pageSize: number = 50,
-  filters: InspectionFilters = {}
-): Promise<PaginatedResponse<Inspection>> {
+  filters: MondayItemFilters = {}
+): Promise<PaginatedResponse<MondayItem>> {
   const start = (page - 1) * pageSize;
   const end = start + pageSize - 1;
 
   let query = supabase
-    .from("supabase_inspections")
-    .select("*", { count: "exact" })
-    .eq("status", "UNSCHEDULED");
+    .from("monday_items_selected")
+    .select("*", { count: "exact" });
 
   // Apply filters
-  if (filters.departments && filters.departments.length > 0) {
-    query = query.in("department", filters.departments);
+  if (filters.regions && filters.regions.length > 0) {
+    query = query.in("landsdel", filters.regions);
   }
 
   if (filters.dateFrom) {
-    query = query.gte("date_local", filters.dateFrom);
+    query = query.gte("dato_tid", filters.dateFrom);
   }
 
   if (filters.dateTo) {
-    query = query.lte("date_local", filters.dateTo);
+    query = query.lte("dato_tid", filters.dateTo);
   }
 
-  // Order by date_local, then created_at for consistent pagination
+  if (filters.searchQuery) {
+    query = query.or(`name.ilike.%${filters.searchQuery}%,adresse.ilike.%${filters.searchQuery}%,Kunde.ilike.%${filters.searchQuery}%`);
+  }
+
+  // Order by dato_tid, then inserted_at for consistent pagination
   query = query
-    .order("date_local", { ascending: true })
-    .order("created_at", { ascending: true })
+    .order("dato_tid", { ascending: true, nullsFirst: false })
+    .order("inserted_at", { ascending: true })
     .range(start, end);
 
   const { data, error, count } = await query;
 
   if (error) {
-    throw new Error(`Failed to fetch inspections: ${error.message}`);
+    throw new Error(`Failed to fetch Monday items: ${error.message}`);
   }
 
   const totalPages = Math.ceil((count || 0) / pageSize);
 
   return {
-    data: (data || []) as Inspection[],
+    data: (data || []) as MondayItem[],
     count: count || 0,
     totalPages,
     currentPage: page,
   };
 }
 
-export async function getDepartments(): Promise<string[]> {
+export async function createMondayItem(item: Partial<MondayItem>): Promise<MondayItem> {
   const { data, error } = await supabase
-    .from("supabase_inspections")
-    .select("department")
-    .eq("status", "UNSCHEDULED");
+    .from("monday_items_selected")
+    .insert(item)
+    .select()
+    .single();
 
   if (error) {
-    throw new Error(`Failed to fetch departments: ${error.message}`);
+    throw new Error(`Failed to create Monday item: ${error.message}`);
   }
 
-  // Get unique departments
-  const departments = Array.from(
-    new Set(data?.map((item) => item.department) || [])
+  return data as MondayItem;
+}
+
+export async function updateMondayItem(id: number, updates: Partial<MondayItem>): Promise<MondayItem> {
+  const { data, error } = await supabase
+    .from("monday_items_selected")
+    .update(updates)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to update Monday item: ${error.message}`);
+  }
+
+  return data as MondayItem;
+}
+
+export async function deleteMondayItem(id: number): Promise<void> {
+  const { error } = await supabase
+    .from("monday_items_selected")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    throw new Error(`Failed to delete Monday item: ${error.message}`);
+  }
+}
+
+export async function getRegions(): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("monday_items_selected")
+    .select("landsdel");
+
+  if (error) {
+    throw new Error(`Failed to fetch regions: ${error.message}`);
+  }
+
+  // Get unique regions
+  const regions = Array.from(
+    new Set(data?.map((item) => item.landsdel).filter(Boolean) || [])
   ).sort();
 
-  return departments;
+  return regions as string[];
 }
