@@ -502,6 +502,30 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles: {
+        Row: {
+          created_at: string | null
+          email: string
+          full_name: string | null
+          id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          full_name?: string | null
+          id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       proposed_assignments: {
         Row: {
           created_at: string | null
@@ -757,6 +781,30 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          granted_at: string | null
+          granted_by: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          granted_at?: string | null
+          granted_by?: string | null
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          granted_at?: string | null
+          granted_by?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
       vrp_runs: {
         Row: {
           approved_at: string | null
@@ -844,6 +892,13 @@ export type Database = {
         Args: { p_inspection_ids: string[]; p_target_dates: string[] }
         Returns: Json
       }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
       save_vrp_solution: {
         Args: {
           p_assignments: Json
@@ -860,6 +915,7 @@ export type Database = {
       }
     }
     Enums: {
+      app_role: "user" | "admin"
       inspection_status_enum:
         | "unscheduled"
         | "scheduled"
@@ -993,6 +1049,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["user", "admin"],
       inspection_status_enum: [
         "unscheduled",
         "scheduled",
