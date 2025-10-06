@@ -3,10 +3,12 @@ import { useQuery } from "@tanstack/react-query";
 import { FiltersBar } from "@/components/filters/FiltersBar";
 import { InspectionsTable } from "@/components/inspections/InspectionsTable";
 import { InspectionsPagination } from "@/components/inspections/InspectionsPagination";
+import { PlanlaegSynModal } from "@/components/inspections/PlanlaegSynModal";
 import { getInspections, getDepartments, InspectionFilters } from "@/lib/supabase";
 import { useToast } from "@/components/ui/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Building2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Building2, CalendarCheck } from "lucide-react";
 
 // Custom hook for debounced value
 function useDebounced<T>(value: T, delay: number): T {
@@ -31,6 +33,7 @@ export default function InspectionsPage() {
   const [pageSize, setPageSize] = React.useState(50);
   const [filters, setFilters] = React.useState<InspectionFilters>({});
   const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
+  const [isPlanningModalOpen, setIsPlanningModalOpen] = React.useState(false);
 
   // Debounce filters to avoid excessive API calls
   const debouncedFilters = useDebounced(filters, 300);
@@ -104,6 +107,25 @@ export default function InspectionsPage() {
     setSelectedIds(ids);
   };
 
+  const handleOpenPlanningModal = () => {
+    if (selectedIds.length === 0) {
+      toast({
+        title: "Ingen syn valgt",
+        description: "Vælg mindst ét syn for at planlægge",
+        variant: "destructive",
+      });
+      return;
+    }
+    setIsPlanningModalOpen(true);
+  };
+
+  const handlePlanningApproved = () => {
+    // Clear selection and refetch data
+    setSelectedIds([]);
+    // Trigger refetch of inspections to update the list
+    window.location.reload(); // Simple approach for MVP
+  };
+
   const isLoading = isInspectionsLoading || isDepartmentsLoading;
   const inspections = inspectionsData?.data || [];
   const totalCount = inspectionsData?.count || 0;
@@ -111,16 +133,29 @@ export default function InspectionsPage() {
 
   return (
     <div className="container mx-auto py-8 space-y-6">
-      <div className="flex items-center gap-3">
-        <Building2 className="h-8 w-8 text-primary" />
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            Syn til planlægning
-          </h1>
-          <p className="text-muted-foreground">
-            Planlæg fremtidige syn automatisk
-          </p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Building2 className="h-8 w-8 text-primary" />
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">
+              Syn til planlægning
+            </h1>
+            <p className="text-muted-foreground">
+              Planlæg fremtidige syn automatisk
+            </p>
+          </div>
         </div>
+
+        {selectedIds.length > 0 && (
+          <Button
+            onClick={handleOpenPlanningModal}
+            size="lg"
+            className="gap-2"
+          >
+            <CalendarCheck className="h-5 w-5" />
+            Planlæg Syn ({selectedIds.length})
+          </Button>
+        )}
       </div>
 
       <FiltersBar
@@ -158,6 +193,13 @@ export default function InspectionsPage() {
         onPageChange={handlePageChange}
         onPageSizeChange={handlePageSizeChange}
         isLoading={isLoading}
+      />
+
+      <PlanlaegSynModal
+        open={isPlanningModalOpen}
+        onClose={() => setIsPlanningModalOpen(false)}
+        selectedInspectionIds={selectedIds}
+        onApproved={handlePlanningApproved}
       />
     </div>
   );

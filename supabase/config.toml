@@ -18,3 +18,9 @@ verify_jwt = false
 
 [functions.fetch-available-inspectors]
 verify_jwt = false
+
+[functions.compute-vrp-routes]
+verify_jwt = false
+
+[functions.approve-vrp-assignments]
+verify_jwt = false
