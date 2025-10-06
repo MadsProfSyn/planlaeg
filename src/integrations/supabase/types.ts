@@ -114,6 +114,7 @@ export type Database = {
           lease_number: string | null
           lng: number | null
           monday_item_id: number | null
+          planned_at: string | null
           planned_by: string | null
           preferred_date: string
           rooms: number
@@ -133,6 +134,7 @@ export type Database = {
           lease_number?: string | null
           lng?: number | null
           monday_item_id?: number | null
+          planned_at?: string | null
           planned_by?: string | null
           preferred_date: string
           rooms: number
@@ -152,6 +154,7 @@ export type Database = {
           lease_number?: string | null
           lng?: number | null
           monday_item_id?: number | null
+          planned_at?: string | null
           planned_by?: string | null
           preferred_date?: string
           rooms?: number
@@ -798,6 +801,45 @@ export type Database = {
           },
         ]
       }
+      user_activity_daily: {
+        Row: {
+          active_minutes: number
+          activity_date: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active_minutes?: number
+          activity_date: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active_minutes?: number
+          activity_date?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_activity_pings: {
+        Row: {
+          id: string
+          pinged_at: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          pinged_at?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          pinged_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           granted_at: string | null
@@ -884,6 +926,7 @@ export type Database = {
           lng: number | null
           monday_item_id: number | null
           planned_at: string | null
+          planned_at_resolved: string | null
           planned_by: string | null
           planner_email: string | null
           planner_name: string | null
@@ -947,6 +990,10 @@ export type Database = {
       }
       promote_user: {
         Args: { target_email: string }
+        Returns: undefined
+      }
+      record_heartbeat: {
+        Args: Record<PropertyKey, never>
         Returns: undefined
       }
       save_vrp_solution: {

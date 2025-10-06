@@ -68,7 +68,23 @@ export const adminStrings = {
     error: 'Der opstod en fejl',
     confirmPromote: 'Er du sikker på, at du vil gøre denne bruger til admin?',
     confirmDemote: 'Er du sikker på, at du vil fjerne admin-rettigheder fra denne bruger?',
-    noUsers: 'Ingen brugere fundet'
+    noUsers: 'Ingen brugere fundet',
+    filters: {
+      dateFrom: 'Dato fra',
+      dateTo: 'Dato til',
+      role: 'Rolle',
+      allRoles: 'Alle roller',
+      admins: 'Kun admins',
+      regularUsers: 'Kun brugere',
+      apply: 'Anvend',
+      reset: 'Nulstil'
+    },
+    metrics: {
+      activeMinutes: 'Aktive minutter',
+      synPlanned: 'Syn planlagt',
+      lastActive: 'Senest aktiv',
+      noActivity: 'Ingen aktivitet'
+    }
   },
   common: {
     loading: 'Indlæser...',
