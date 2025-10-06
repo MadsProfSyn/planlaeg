@@ -114,6 +114,7 @@ export type Database = {
           lease_number: string | null
           lng: number | null
           monday_item_id: number | null
+          planned_by: string | null
           preferred_date: string
           rooms: number
           status: string | null
@@ -132,6 +133,7 @@ export type Database = {
           lease_number?: string | null
           lng?: number | null
           monday_item_id?: number | null
+          planned_by?: string | null
           preferred_date: string
           rooms: number
           status?: string | null
@@ -150,6 +152,7 @@ export type Database = {
           lease_number?: string | null
           lng?: number | null
           monday_item_id?: number | null
+          planned_by?: string | null
           preferred_date?: string
           rooms?: number
           status?: string | null
@@ -575,6 +578,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "proposed_assignments_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "inspections_with_planner"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "proposed_assignments_inspector_id_fkey"
             columns: ["inspector_id"]
             isOneToOne: false
@@ -779,6 +789,13 @@ export type Database = {
             referencedRelation: "inspection_queue"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "supabase_shifts_inspection_queue_id_fkey"
+            columns: ["inspection_queue_id"]
+            isOneToOne: false
+            referencedRelation: "inspections_with_planner"
+            referencedColumns: ["id"]
+          },
         ]
       }
       user_roles: {
@@ -852,6 +869,31 @@ export type Database = {
       }
     }
     Views: {
+      inspections_with_planner: {
+        Row: {
+          address: string | null
+          created_at: string | null
+          created_by: string | null
+          customer_name: string | null
+          department: string | null
+          geocode_status: string | null
+          id: string | null
+          inspection_type: string | null
+          lat: number | null
+          lease_number: string | null
+          lng: number | null
+          monday_item_id: number | null
+          planned_at: string | null
+          planned_by: string | null
+          planner_email: string | null
+          planner_name: string | null
+          preferred_date: string | null
+          rooms: number | null
+          status: string | null
+          updated_at: string | null
+        }
+        Relationships: []
+      }
       vw_postcode_to_department: {
         Row: {
           afdeling: string | null
@@ -884,6 +926,10 @@ export type Database = {
       }
     }
     Functions: {
+      demote_admin: {
+        Args: { target_email: string }
+        Returns: undefined
+      }
       get_or_create_inspector_uuid: {
         Args: { emp_name: string; wf_emp_id: string }
         Returns: string
@@ -898,6 +944,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      promote_user: {
+        Args: { target_email: string }
+        Returns: undefined
       }
       save_vrp_solution: {
         Args: {
