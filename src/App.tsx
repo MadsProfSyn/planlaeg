@@ -17,12 +17,10 @@ import Account from "./pages/admin/Account";
 import MySyn from "./pages/admin/MySyn";
 import Users from "./pages/admin/Users";
 import NotFound from "./pages/NotFound";
-import { useActivityHeartbeat } from "@/hooks/useActivityHeartbeat";
 
 const queryClient = new QueryClient();
 
 const App = () => {
-  useActivityHeartbeat();
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>

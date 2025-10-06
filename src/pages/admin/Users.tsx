@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,13 +24,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Search, UserPlus, UserMinus, Loader2 } from 'lucide-react';
+import { Search, UserPlus, UserMinus } from 'lucide-react';
 import { format } from 'date-fns';
 import { da } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
-import { DateRangePicker } from '@/components/filters/DateRangePicker';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface UserWithRoles {
   id: string;
@@ -48,10 +46,6 @@ export default function Users() {
   } | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
-
-  const [dateFrom, setDateFrom] = useState<string | undefined>();
-  const [dateTo, setDateTo] = useState<string | undefined>();
-  const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'user'>('all');
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['admin-users', searchQuery],
@@ -88,86 +82,6 @@ export default function Users() {
       return usersWithRoles;
     }
   });
-
-  // Activity minutes within date range
-  const { data: activityRows } = useQuery({
-    queryKey: ['admin-user-activity', dateFrom, dateTo],
-    queryFn: async () => {
-      let q = supabase
-        .from('user_activity_daily')
-        .select('user_id, active_minutes, activity_date');
-      if (dateFrom) q = q.gte('activity_date', dateFrom);
-      if (dateTo) q = q.lte('activity_date', dateTo);
-      const { data, error } = await q;
-      if (error) throw error;
-      return data || [];
-    }
-  });
-
-  const activeMinutesByUser = useMemo(() => {
-    const map = new Map<string, number>();
-    (activityRows || []).forEach((r: any) => {
-      map.set(r.user_id, (map.get(r.user_id) || 0) + (r.active_minutes || 0));
-    });
-    return map;
-  }, [activityRows]);
-
-  // Planned inspections within date range
-  const { data: plannedRows } = useQuery({
-    queryKey: ['admin-user-planned', dateFrom, dateTo],
-    queryFn: async () => {
-      let q = supabase
-        .from('inspections_with_planner')
-        .select('planned_by, id, planned_at_resolved');
-      if (dateFrom) q = q.gte('planned_at_resolved', dateFrom);
-      if (dateTo) q = q.lte('planned_at_resolved', dateTo);
-      q = q.not('planned_by', 'is', null);
-      const { data, error } = await q;
-      if (error) throw error;
-      return data || [];
-    }
-  });
-
-  const synCountByUser = useMemo(() => {
-    const map = new Map<string, number>();
-    (plannedRows || []).forEach((r: any) => {
-      const uid = r.planned_by as string | null;
-      if (!uid) return;
-      map.set(uid, (map.get(uid) || 0) + 1);
-    });
-    return map;
-  }, [plannedRows]);
-
-  // Last active ping in date range
-  const { data: pingRows } = useQuery({
-    queryKey: ['admin-user-pings', dateFrom, dateTo],
-    queryFn: async () => {
-      let q = supabase
-        .from('user_activity_pings')
-        .select('user_id, pinged_at')
-        .order('pinged_at', { ascending: false });
-      if (dateFrom) q = q.gte('pinged_at', `${dateFrom}T00:00:00Z`);
-      if (dateTo) q = q.lte('pinged_at', `${dateTo}T23:59:59Z`);
-      const { data, error } = await q;
-      if (error) throw error;
-      return data || [];
-    }
-  });
-
-  const lastPingByUser = useMemo(() => {
-    const map = new Map<string, string>();
-    (pingRows || []).forEach((r: any) => {
-      if (!map.has(r.user_id)) map.set(r.user_id, r.pinged_at);
-    });
-    return map;
-  }, [pingRows]);
-
-  const filteredUsers = useMemo(() => {
-    if (!users) return [] as UserWithRoles[];
-    if (roleFilter === 'admin') return users.filter(u => u.roles.includes('admin'));
-    if (roleFilter === 'user') return users.filter(u => !u.roles.includes('admin'));
-    return users;
-  }, [users, roleFilter]);
 
   const handlePromote = async (email: string) => {
     try {
@@ -239,36 +153,6 @@ export default function Users() {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9"
             />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Filters */}
-      <Card className="rounded-2xl shadow-sm">
-        <CardContent className="pt-6">
-          <div className="flex flex-col md:flex-row gap-3 md:items-center">
-            <div className="w-full md:w-auto">
-              <DateRangePicker
-                dateFrom={dateFrom}
-                dateTo={dateTo}
-                onDateChange={(from, to) => {
-                  setDateFrom(from);
-                  setDateTo(to);
-                }}
-              />
-            </div>
-            <div className="w-full md:w-56">
-              <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v as 'all' | 'admin' | 'user')}>
-                <SelectTrigger>
-                  <SelectValue placeholder={adminStrings.users.filters.role} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{adminStrings.users.filters.allRoles}</SelectItem>
-                  <SelectItem value="admin">{adminStrings.users.filters.admins}</SelectItem>
-                  <SelectItem value="user">{adminStrings.users.filters.regularUsers}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
         </CardContent>
       </Card>
