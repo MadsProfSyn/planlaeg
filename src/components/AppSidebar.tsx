@@ -1,5 +1,5 @@
-import { CalendarCheck, ClipboardList, Users, Shield } from "lucide-react";
-import { NavLink } from "react-router-dom";
+import { CalendarCheck, ClipboardList, Users, Shield, LayoutDashboard, User, FileText } from "lucide-react";
+import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   Sidebar,
@@ -31,8 +31,34 @@ const navigationItems = [
   },
 ];
 
+const adminNavigationItems = [
+  {
+    title: "Oversigt",
+    url: "/admin/overview",
+    icon: LayoutDashboard,
+  },
+  {
+    title: "Min konto",
+    url: "/admin/account",
+    icon: User,
+  },
+  {
+    title: "Mine syn",
+    url: "/admin/my-syn",
+    icon: FileText,
+  },
+  {
+    title: "Brugere",
+    url: "/admin/users",
+    icon: Users,
+    adminOnly: true,
+  },
+];
+
 export function AppSidebar() {
   const { hasRole } = useAuth();
+  const location = useLocation();
+  const isOnAdminRoute = location.pathname.startsWith('/admin');
   
   return (
     <Sidebar>
@@ -77,21 +103,27 @@ export function AppSidebar() {
             <SidebarGroupLabel>Admin</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild>
-                    <NavLink
-                      to="/admin/overview"
-                      className={({ isActive }) =>
-                        isActive
-                          ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                          : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                      }
-                    >
-                      <Shield className="h-4 w-4" />
-                      <span>Admin Panel</span>
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                {adminNavigationItems.map((item) => {
+                  if (item.adminOnly && !hasRole('admin')) return null;
+                  
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild>
+                        <NavLink
+                          to={item.url}
+                          className={({ isActive }) =>
+                            isActive
+                              ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                              : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                          }
+                        >
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.title}</span>
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

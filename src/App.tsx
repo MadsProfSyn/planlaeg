@@ -11,7 +11,6 @@ import Auth from "./pages/Auth";
 import Inspections from "./pages/Inspections";
 import Scheduled from "./pages/Scheduled";
 import Availability from "./pages/Availability";
-import AdminLayout from "./pages/admin/AdminLayout";
 import Overview from "./pages/admin/Overview";
 import Account from "./pages/admin/Account";
 import MySyn from "./pages/admin/MySyn";
@@ -35,13 +34,11 @@ const App = () => {
               <Route path="/availability" element={<ProtectedRoute><AppLayout><Availability /></AppLayout></ProtectedRoute>} />
               
               {/* Admin Routes */}
-              <Route path="/admin" element={<ProtectedRoute><AdminLayout /></ProtectedRoute>}>
-                <Route index element={<Navigate to="/admin/overview" replace />} />
-                <Route path="overview" element={<Overview />} />
-                <Route path="account" element={<Account />} />
-                <Route path="my-syn" element={<MySyn />} />
-                <Route path="users" element={<AdminRoute><Users /></AdminRoute>} />
-              </Route>
+              <Route path="/admin" element={<ProtectedRoute><AppLayout><Navigate to="/admin/overview" replace /></AppLayout></ProtectedRoute>} />
+              <Route path="/admin/overview" element={<ProtectedRoute><AppLayout><Overview /></AppLayout></ProtectedRoute>} />
+              <Route path="/admin/account" element={<ProtectedRoute><AppLayout><Account /></AppLayout></ProtectedRoute>} />
+              <Route path="/admin/my-syn" element={<ProtectedRoute><AppLayout><MySyn /></AppLayout></ProtectedRoute>} />
+              <Route path="/admin/users" element={<ProtectedRoute><AdminRoute><AppLayout><Users /></AppLayout></AdminRoute></ProtectedRoute>} />
               
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
