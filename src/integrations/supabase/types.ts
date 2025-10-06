@@ -613,6 +613,7 @@ export type Database = {
       supabase_availability: {
         Row: {
           date_local: string
+          department: string | null
           end_time_local: string | null
           fetched_at: string | null
           id: string
@@ -625,6 +626,7 @@ export type Database = {
         }
         Insert: {
           date_local: string
+          department?: string | null
           end_time_local?: string | null
           fetched_at?: string | null
           id?: string
@@ -637,6 +639,7 @@ export type Database = {
         }
         Update: {
           date_local?: string
+          department?: string | null
           end_time_local?: string | null
           fetched_at?: string | null
           id?: string
