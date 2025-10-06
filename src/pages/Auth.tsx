@@ -28,7 +28,7 @@ export default function Auth() {
 
   useEffect(() => {
     if (user && !loading) {
-      navigate('/inspections');
+      navigate('/admin/overview');
     }
   }, [user, loading, navigate]);
 
@@ -48,7 +48,7 @@ export default function Auth() {
     const { error } = await signIn(signInEmail, signInPassword);
     
     if (!error) {
-      navigate('/inspections');
+      navigate('/admin/overview');
     }
     
     setIsSubmitting(false);
