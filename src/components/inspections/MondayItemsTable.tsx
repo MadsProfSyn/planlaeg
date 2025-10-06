@@ -54,15 +54,7 @@ export function MondayItemsTable({
     if (!dateStr) return "Ikke angivet";
     try {
       const date = new Date(dateStr);
-      // Check if the date string includes time (contains 'T' or has time components)
-      const hasTime = dateStr.includes('T') || dateStr.includes(':');
-      
-      if (hasTime) {
-        return format(date, "dd-MM-yyyy HH:mm", { locale: da });
-      } else {
-        // Date only, no time
-        return format(date, "dd-MM-yyyy", { locale: da });
-      }
+      return format(date, "dd-MM-yyyy", { locale: da });
     } catch {
       return dateStr;
     }
@@ -107,10 +99,9 @@ export function MondayItemsTable({
                 className={someSelected ? "data-[state=checked]:bg-primary" : ""}
               />
             </TableHead>
-            <TableHead>Navn</TableHead>
             <TableHead>Adresse</TableHead>
             <TableHead>Type</TableHead>
-            <TableHead>Dato & Tid</TableHead>
+            <TableHead>Dato</TableHead>
             <TableHead>Værelser</TableHead>
             <TableHead>Kunde</TableHead>
             <TableHead>Landsdel</TableHead>
@@ -132,7 +123,6 @@ export function MondayItemsTable({
                   aria-label={`Vælg syn ${item.name || item.adresse}`}
                 />
               </TableCell>
-              <TableCell className="font-medium">{item.name || "-"}</TableCell>
               <TableCell>{item.adresse || "-"}</TableCell>
               <TableCell>
                 {item.synstype ? (
