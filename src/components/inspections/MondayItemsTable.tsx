@@ -53,7 +53,16 @@ export function MondayItemsTable({
   const formatDateTime = (dateStr: string | null) => {
     if (!dateStr) return "Ikke angivet";
     try {
-      return format(new Date(dateStr), "dd-MM-yyyy HH:mm", { locale: da });
+      const date = new Date(dateStr);
+      // Check if the date string includes time (contains 'T' or has time components)
+      const hasTime = dateStr.includes('T') || dateStr.includes(':');
+      
+      if (hasTime) {
+        return format(date, "dd-MM-yyyy HH:mm", { locale: da });
+      } else {
+        // Date only, no time
+        return format(date, "dd-MM-yyyy", { locale: da });
+      }
     } catch {
       return dateStr;
     }
