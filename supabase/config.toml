@@ -24,3 +24,6 @@ verify_jwt = false
 
 [functions.approve-vrp-assignments]
 verify_jwt = false
+
+[functions.profsyn-ai-query]
+verify_jwt = false
