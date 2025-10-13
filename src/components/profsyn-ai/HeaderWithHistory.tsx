@@ -34,11 +34,11 @@ export function HeaderWithHistory({
   onNewChat,
 }: HeaderWithHistoryProps) {
   return (
-    <header className="sticky top-0 z-10 bg-background border-b">
+    <header className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">
       <div className="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Brain className="h-6 w-6 text-primary" />
-          <h1 className="text-xl font-bold">ProfSyn AI</h1>
+          <h1 className="text-lg sm:text-xl font-bold">ProfSyn AI</h1>
         </div>
         
         <DropdownMenu>
@@ -48,14 +48,14 @@ export function HeaderWithHistory({
               Seneste samtaler
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-72">
+          <DropdownMenuContent align="end" className="w-72 md:w-80">
             {sessions.length === 0 ? (
               <DropdownMenuItem disabled>
                 Ingen gemte samtaler
               </DropdownMenuItem>
             ) : (
               sessions.map(session => (
-                <DropdownMenuItem key={session.id} className="cursor-default">
+                <DropdownMenuItem key={session.id} className="cursor-default hover:bg-muted/50 transition-colors">
                   <div className="flex items-center justify-between w-full gap-2">
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate">{session.title}</p>

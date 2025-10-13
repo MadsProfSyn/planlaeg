@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Card } from '@/components/ui/card';
 import { Send, Sparkles, BookOpen, Mail, AlertCircle, Trash2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import type { Message } from '@/lib/chatHistory';
 
 interface ComposerProps {
@@ -44,8 +44,8 @@ export function Composer({ onSend, onClearChat, isLoading, messages }: ComposerP
   };
 
   return (
-    <Card className="sticky bottom-0 bg-background border-t shadow-lg">
-      <div className="max-w-3xl mx-auto p-4 space-y-3">
+    <div className="sticky bottom-0 bg-card border-t shadow-md">
+      <div className="max-w-3xl mx-auto p-3 space-y-2">
         {/* Textarea */}
         <Textarea
           ref={textareaRef}
@@ -53,78 +53,83 @@ export function Composer({ onSend, onClearChat, isLoading, messages }: ComposerP
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Skriv din besked…"
-          className="min-h-[80px] max-h-[200px] resize-none"
+          className="w-full resize-none border rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary min-h-[60px] max-h-[200px]"
           disabled={isLoading}
         />
         
         {/* Action Buttons Row */}
-        <div className="flex flex-wrap gap-2">
-          <Button 
-            onClick={() => handleSend('text')}
-            disabled={!input.trim() || isLoading}
-          >
-            <Send className="h-4 w-4 mr-2" />
-            Send
-          </Button>
-          
-          <Button 
-            variant="outline"
-            onClick={() => handleSend('text')}
-            disabled={!input.trim() || isLoading}
-          >
-            <Sparkles className="h-4 w-4 mr-2" />
-            Forbedr dette
-          </Button>
-          
-          <Button 
-            variant="outline"
-            onClick={() => handleQuickPrompt('Forklar det her som til et barn')}
-            disabled={isLoading}
-          >
-            <BookOpen className="h-4 w-4 mr-2" />
-            Forklar simpelt
-          </Button>
-          
-          <Button 
-            variant="outline"
-            onClick={() => handleSend('email')}
-            disabled={!input.trim() || isLoading}
-          >
-            <Mail className="h-4 w-4 mr-2" />
-            Forbedr og klargør til mail
-          </Button>
-          
-          <Button 
-            variant="outline"
-            onClick={() => handleSend('objection')}
-            disabled={!input.trim() || isLoading}
-          >
-            <AlertCircle className="h-4 w-4 mr-2" />
-            Gennemgå som indsigelse
-          </Button>
+        <div className="flex flex-wrap gap-2 items-center">
+          <div className="flex flex-wrap gap-2 flex-1">
+            <Button 
+              onClick={() => handleSend('text')}
+              disabled={!input.trim() || isLoading}
+            >
+              <Send className="h-4 w-4 mr-2" />
+              Send
+            </Button>
+            
+            <Button 
+              variant="outline"
+              onClick={() => handleSend('text')}
+              disabled={!input.trim() || isLoading}
+            >
+              <Sparkles className="h-4 w-4 mr-2" />
+              Forbedr dette
+            </Button>
+            
+            <Button 
+              variant="outline"
+              onClick={() => handleQuickPrompt('Forklar det her som til et barn')}
+              disabled={isLoading}
+            >
+              <BookOpen className="h-4 w-4 mr-2" />
+              Forklar simpelt
+            </Button>
+            
+            <Button 
+              variant="outline"
+              onClick={() => handleSend('email')}
+              disabled={!input.trim() || isLoading}
+            >
+              <Mail className="h-4 w-4 mr-2" />
+              Forbedr og klargør til mail
+            </Button>
+            
+            <Button 
+              variant="outline"
+              onClick={() => handleSend('objection')}
+              disabled={!input.trim() || isLoading}
+            >
+              <AlertCircle className="h-4 w-4 mr-2" />
+              Gennemgå som indsigelse
+            </Button>
+          </div>
           
           <Button 
             variant="ghost"
             size="sm"
             onClick={onClearChat}
             disabled={messages.length === 0}
-            className="ml-auto"
+            className="text-muted-foreground"
           >
-            <Trash2 className="h-4 w-4 mr-2" />
-            Ryd samtale
+            <Trash2 className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Ryd samtale</span>
           </Button>
         </div>
         
         {/* Footer hints */}
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>
-            <kbd className="px-1 bg-muted rounded">Ctrl/Cmd + Enter</kbd> for at sende
+          <span className="flex items-center gap-1">
+            <kbd className="px-1.5 py-0.5 bg-muted rounded text-xs">Ctrl/Cmd + Enter</kbd>
+            <span>for at sende</span>
           </span>
-          <span className={input.length > 4000 ? 'text-destructive' : ''}>
+          <span className={cn(
+            input.length > 4000 && 'text-destructive font-medium'
+          )}>
             {input.length} / 4000
           </span>
         </div>
       </div>
-    </Card>
+    </div>
   );
 }
