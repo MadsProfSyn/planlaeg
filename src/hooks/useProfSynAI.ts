@@ -1,163 +1,114 @@
-import { useState, useCallback } from 'react';
-import { useToast } from '@/hooks/use-toast';
-import { queryProfSynAI, parseCSVFile, CSVData } from '@/lib/profsyn-ai';
-
-interface Message {
-  role: 'user' | 'assistant';
-  content: string;
-}
+import { useState, useCallback, useEffect } from "react";
+import { queryProfSynAI } from "@/lib/profsyn-ai";
+import { 
+  getAllSessions, 
+  saveSession, 
+  deleteSession, 
+  createNewSession, 
+  generateTitle,
+  type ChatSession,
+  type Message 
+} from "@/lib/chatHistory";
 
 export function useProfSynAI() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [currentSession, setCurrentSession] = useState<ChatSession>(createNewSession());
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [streaming, setStreaming] = useState(true);
-  const [csvData, setCsvData] = useState<CSVData | null>(null);
-  const { toast } = useToast();
+
+  useEffect(() => {
+    setSessions(getAllSessions());
+  }, []);
 
   const sendMessage = useCallback(
-    async (content: string, mode: 'text' | 'data' | 'actions') => {
+    async (content: string, mode: 'text' | 'email' | 'objection') => {
       if (!content.trim()) return;
 
       const userMessage: Message = { role: 'user', content };
-      setMessages((prev) => [...prev, userMessage]);
+      const newMessages = [...currentSession.messages, userMessage];
+      
+      // Update session with user message
+      const updatedSession = {
+        ...currentSession,
+        messages: newMessages,
+        lastUpdated: Date.now(),
+        // Generate title from first user message
+        title: currentSession.messages.length === 0 ? generateTitle(content) : currentSession.title
+      };
+      setCurrentSession(updatedSession);
       setIsLoading(true);
 
       try {
-        const csvPreview = csvData
-          ? {
-              headers: csvData.headers,
-              rowCount: csvData.rowCount,
-            }
-          : undefined;
-
-        const response = await queryProfSynAI({
-          messages: [...messages, userMessage],
+        const assistantMessage = await queryProfSynAI(
+          newMessages,
           mode,
-          csvPreview,
-          streaming,
-        });
+          streaming
+        );
 
-        if (streaming && response.body) {
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder();
-          let assistantContent = '';
-
-          setMessages((prev) => [
-            ...prev,
-            { role: 'assistant', content: '' },
-          ]);
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            const chunk = decoder.decode(value);
-            const lines = chunk.split('\n');
-
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                const data = line.slice(6);
-                if (data === '[DONE]') continue;
-
-                try {
-                  const parsed = JSON.parse(data);
-                  const delta = parsed.choices?.[0]?.delta?.content;
-                  if (delta) {
-                    assistantContent += delta;
-                    setMessages((prev) => {
-                      const newMessages = [...prev];
-                      newMessages[newMessages.length - 1].content = assistantContent;
-                      return newMessages;
-                    });
-                  }
-                } catch (e) {
-                  // Skip invalid JSON
-                }
-              }
-            }
-          }
-        } else {
-          const data = await response.json();
-          const assistantMessage: Message = {
-            role: 'assistant',
-            content: data.choices[0].message.content,
-          };
-          setMessages((prev) => [...prev, assistantMessage]);
-        }
+        const finalMessages: Message[] = [...newMessages, { role: 'assistant' as const, content: assistantMessage }];
+        const finalSession: ChatSession = {
+          ...updatedSession,
+          messages: finalMessages,
+          lastUpdated: Date.now()
+        };
+        
+        setCurrentSession(finalSession);
+        saveSession(finalSession);
+        setSessions(getAllSessions());
       } catch (error) {
-        console.error('Error sending message:', error);
-        toast({
-          title: 'Fejl',
-          description: 'Der opstod en fejl. Prøv igen senere.',
-          variant: 'destructive',
-        });
+        console.error("Error querying AI:", error);
+        const errorMessages: Message[] = [
+          ...newMessages,
+          { role: 'assistant' as const, content: 'Der opstod en fejl. Prøv igen.' }
+        ];
+        const errorSession: ChatSession = {
+          ...updatedSession,
+          messages: errorMessages,
+          lastUpdated: Date.now()
+        };
+        setCurrentSession(errorSession);
       } finally {
         setIsLoading(false);
       }
     },
-    [messages, csvData, streaming, toast]
+    [currentSession, streaming]
   );
 
-  const uploadCSV = useCallback(
-    async (file: File) => {
-      try {
-        const data = await parseCSVFile(file);
-        setCsvData(data);
-        toast({
-          title: 'CSV uploadet',
-          description: `${data.rowCount} rækker og ${data.headers.length} kolonner indlæst`,
-        });
-      } catch (error) {
-        console.error('Error parsing CSV:', error);
-        toast({
-          title: 'Fejl',
-          description: 'Kunne ikke læse CSV-filen. Tjek formatet.',
-          variant: 'destructive',
-        });
-      }
-    },
-    [toast]
-  );
+  const loadSession = useCallback((sessionId: string) => {
+    const session = sessions.find(s => s.id === sessionId);
+    if (session) {
+      setCurrentSession(session);
+    }
+  }, [sessions]);
 
-  const clearCSV = useCallback(() => {
-    setCsvData(null);
-    toast({
-      title: 'Data ryddet',
-      description: 'CSV-data er blevet fjernet',
-    });
-  }, [toast]);
+  const startNewChat = useCallback(() => {
+    if (currentSession.messages.length > 0) {
+      saveSession(currentSession);
+      setSessions(getAllSessions());
+    }
+    const newSession = createNewSession();
+    setCurrentSession(newSession);
+  }, [currentSession]);
 
-  const clearConversation = useCallback(() => {
-    setMessages([]);
-    toast({
-      title: 'Samtale ryddet',
-      description: 'Alle beskeder er blevet slettet',
-    });
-  }, [toast]);
-
-  const executeAction = useCallback(
-    async (action: 'summarize' | 'extract' | 'plan') => {
-      const actionPrompts = {
-        summarize: 'Lav en kort opsummering af vores samtale indtil nu.',
-        extract: 'Udtræk de vigtigste punkter fra vores samtale i punktform.',
-        plan: 'Baseret på vores samtale, lav en handlingsplan med konkrete trin.',
-      };
-
-      await sendMessage(actionPrompts[action], 'actions');
-    },
-    [sendMessage]
-  );
+  const deleteSessionById = useCallback((sessionId: string) => {
+    deleteSession(sessionId);
+    setSessions(getAllSessions());
+    if (currentSession.id === sessionId) {
+      setCurrentSession(createNewSession());
+    }
+  }, [currentSession]);
 
   return {
-    messages,
+    messages: currentSession.messages,
     isLoading,
     streaming,
     setStreaming,
-    csvData,
     sendMessage,
-    uploadCSV,
-    clearCSV,
-    clearConversation,
-    executeAction,
+    clearConversation: startNewChat,
+    sessions,
+    currentSession,
+    loadSession,
+    startNewChat,
+    deleteSessionById,
   };
 }

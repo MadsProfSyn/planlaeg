@@ -14,7 +14,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, mode, csvPreview, streaming } = await req.json();
+    const { messages, mode, streaming } = await req.json();
 
     // Validation
     if (!messages || !Array.isArray(messages)) {
@@ -24,20 +24,62 @@ serve(async (req) => {
       );
     }
 
+    // Validate message length
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage?.content && lastMessage.content.length > 4000) {
+      return new Response(
+        JSON.stringify({ error: 'Beskeden er for lang. Max 4000 tegn.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     if (!openAIApiKey) {
       return new Response(
-        JSON.stringify({ error: 'API-nøgle mangler' }),
+        JSON.stringify({ error: 'API-nøgle mangler. Kontakt administratoren.' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     // Build system prompt based on mode
-    let systemPrompt = 'Du er ProfSyn AI, en hjælpsom assistent. Svar på dansk med mindre andet er angivet.';
+    let systemPrompt = 'Du er ProfSyn AI, en hjælpsom dansk AI-assistent.';
     
-    if (mode === 'data' && csvPreview) {
-      systemPrompt += `\n\nBrugeren har uploadet CSV-data med følgende struktur:\nKolonner: ${csvPreview.headers.join(', ')}\nAntal rækker: ${csvPreview.rowCount}\n\nBesvar spørgsmål om disse data.`;
-    } else if (mode === 'actions') {
-      systemPrompt += '\n\nUdfør den anmodede handling: opsummer samtalen, udtræk punkter, eller lav en handlingsplan.';
+    if (mode === 'email') {
+      systemPrompt = `Du er en professionel emailassistent. Din opgave er at forbedre brugerens tekst og formatere den som en klar, høflig dansk email.
+
+Returner altid i dette format:
+Emne: [kort, beskrivende emnelinje, max 8 ord]
+Mail:
+[Professionel, venlig og handlingsorienteret tekst. Brug korrekt dansk emailformat med hilsen, klar besked, og høflig afslutning]
+Underskrift: —
+
+Regler:
+- Brug "du" medmindre bruger specifikt beder om "De"
+- Vær præcis, men venlig
+- Undgå unødvendige fraser
+- Brug dansk etikette`;
+    } else if (mode === 'objection') {
+      systemPrompt = `Du er en juridisk assistent der hjælper med at strukturere indsigelser og klager.
+
+Returner altid i dette format:
+Titel: [max 8 ord, beskrivende]
+Baggrund: [2-3 sætninger om situationen]
+Problem: [Konkret beskrivelse af hvad der er galt]
+Argumenter:
+- [Hovedargument 1]
+- [Hovedargument 2]
+- [Hovedargument 3]
+Anmodning: [Hvad ønskes konkret ændret eller opnået]
+Næste skridt:
+- [Praktisk handling 1]
+- [Praktisk handling 2]
+
+Regler:
+- Brug faktuel, høflig tone
+- Vær præcis og konkret
+- Undgå juridisk jargon
+- Fokuser på løsninger`;
+    } else {
+      systemPrompt += ' Svar på dansk med mindre andet er angivet.';
     }
 
     const apiMessages = [
@@ -54,10 +96,10 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4.1-mini-2025-04-14',
+        model: 'gpt-4o-mini',
         messages: apiMessages,
-        temperature: 0.7,
-        max_completion_tokens: 2000,
+        temperature: 0.3,
+        max_completion_tokens: 900,
         stream: streaming,
       }),
     });

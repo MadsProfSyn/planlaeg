@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { Brain } from 'lucide-react';
-import { ChatInterface } from '@/components/profsyn-ai/ChatInterface';
-import { ChatInput } from '@/components/profsyn-ai/ChatInput';
-import { QuickPrompts } from '@/components/profsyn-ai/QuickPrompts';
-import { ToolsPanel } from '@/components/profsyn-ai/ToolsPanel';
+import { HeaderWithHistory } from '@/components/profsyn-ai/HeaderWithHistory';
+import { ChatMessage } from '@/components/profsyn-ai/ChatMessage';
+import { Composer } from '@/components/profsyn-ai/Composer';
 import { ClearChatDialog } from '@/components/profsyn-ai/ClearChatDialog';
 import { useProfSynAI } from '@/hooks/useProfSynAI';
 
@@ -14,88 +13,76 @@ const ProfSynAI = () => {
     isLoading,
     streaming,
     setStreaming,
-    csvData,
     sendMessage,
-    uploadCSV,
-    clearCSV,
-    clearConversation,
-    executeAction,
+    sessions,
+    currentSession,
+    loadSession,
+    startNewChat,
+    deleteSessionById,
   } = useProfSynAI();
 
-  const handleSend = async (content: string) => {
-    await sendMessage(content, csvData ? 'data' : 'text');
-  };
-
-  const handleQuickPrompt = (prompt: string) => {
-    sendMessage(prompt, 'text');
-  };
-
-  const handleAction = async (action: 'summarize' | 'extract' | 'plan') => {
-    await executeAction(action);
+  const handleSend = async (content: string, mode: 'text' | 'email' | 'objection') => {
+    await sendMessage(content, mode);
   };
 
   const handleClearChat = () => {
-    clearConversation();
+    startNewChat();
     setShowClearDialog(false);
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Hero Section */}
-      <div className="bg-gradient-to-br from-primary/10 via-background to-primary/5 border-b">
-        <div className="container mx-auto px-4 py-12">
-          <div className="flex items-center gap-3 justify-center mb-4">
-            <Brain className="h-12 w-12 text-primary" />
-            <h1 className="text-4xl font-bold">ProfSyn AI</h1>
-          </div>
-          <p className="text-xl font-semibold text-center mb-2">
-            Spørg. Analyser. Handl.
-          </p>
-          <p className="text-center text-muted-foreground max-w-2xl mx-auto">
-            Din AI-assistent drevet af OpenAI – klar til at hjælpe dig med tekst, data og indsigt.
-          </p>
-        </div>
-      </div>
+    <div className="min-h-screen bg-background flex flex-col">
+      {/* Fixed Header */}
+      <HeaderWithHistory
+        sessions={sessions}
+        onLoadSession={loadSession}
+        onDeleteSession={deleteSessionById}
+        onNewChat={startNewChat}
+      />
 
-      {/* Main Content */}
-      <div className="container mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Chat Section - 2/3 width */}
-          <div className="lg:col-span-2 space-y-4">
-            <ChatInterface 
-              messages={messages} 
-              isLoading={isLoading}
-              onClearChat={() => setShowClearDialog(true)}
-            />
-            
-            <QuickPrompts onSelectPrompt={handleQuickPrompt} />
-            
-            <ChatInput
-              onSend={handleSend}
-              isLoading={isLoading}
-              streaming={streaming}
-              onStreamingChange={setStreaming}
-            />
-          </div>
-
-          {/* Tools Panel - 1/3 width */}
-          <div className="lg:col-span-1">
-            <ToolsPanel
-              csvData={csvData}
-              onUploadCSV={uploadCSV}
-              onClearCSV={clearCSV}
-              onExecuteAction={handleAction}
-              hasMessages={messages.length > 0}
-              isLoading={isLoading}
-            />
-          </div>
+      {/* Scrollable Chat Area */}
+      <main className="flex-1 overflow-y-auto">
+        <div className="max-w-3xl mx-auto px-4 py-8 space-y-4">
+          {messages.length === 0 ? (
+            <div className="text-center py-16">
+              <Brain className="h-16 w-16 text-primary mx-auto mb-4" />
+              <h2 className="text-2xl font-bold mb-2">Velkommen til ProfSyn AI</h2>
+              <p className="text-muted-foreground">
+                Stil et spørgsmål, forbedr en tekst, eller forbered en email.
+              </p>
+            </div>
+          ) : (
+            messages.map((message, index) => (
+              <ChatMessage key={index} message={message} />
+            ))
+          )}
+          
+          {isLoading && (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <div className="flex gap-1">
+                <span className="animate-bounce">●</span>
+                <span className="animate-bounce" style={{ animationDelay: '0.1s' }}>●</span>
+                <span className="animate-bounce" style={{ animationDelay: '0.2s' }}>●</span>
+              </div>
+              <span className="text-sm">Skriver...</span>
+            </div>
+          )}
         </div>
-      </div>
+      </main>
+
+      {/* Sticky Composer */}
+      <Composer
+        onSend={handleSend}
+        onClearChat={() => setShowClearDialog(true)}
+        isLoading={isLoading}
+        messages={messages}
+      />
 
       {/* Footer */}
-      <footer className="border-t mt-16 py-6">
-        <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
+      <footer className="bg-muted/50 border-t py-3">
+        <div className="max-w-3xl mx-auto px-4 text-center text-xs text-muted-foreground space-y-1">
           <p>ProfSyn AI bruger OpenAI's teknologi. Brug ansvarligt.</p>
+          <p>Indholdet er genereret af AI og udgør ikke juridisk rådgivning.</p>
         </div>
       </footer>
 
