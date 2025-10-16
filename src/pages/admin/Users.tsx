@@ -134,24 +134,24 @@ export default function Users() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold">{adminStrings.users.title}</h1>
-        <p className="text-muted-foreground mt-2">
+        <h1 className="page-title">{adminStrings.users.title}</h1>
+        <p className="text-caption mt-2">
           Administrer brugere og deres roller
         </p>
       </div>
 
       {/* Search */}
       <Card className="rounded-2xl shadow-sm">
-        <CardContent className="pt-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+        <CardContent className="p-6 bg-muted/20">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
               placeholder={adminStrings.users.search}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
+              className="pl-10 h-11"
             />
           </div>
         </CardContent>
@@ -159,47 +159,53 @@ export default function Users() {
 
       {/* Users Table */}
       <Card className="rounded-2xl shadow-sm">
-        <CardHeader>
-          <CardTitle>
+        <CardHeader className="border-b">
+          <CardTitle className="text-lg">
             {users ? `${users.length} brugere` : adminStrings.common.loading}
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="rounded-md border">
+        <CardContent className="p-6">
+          <div className="rounded-lg border overflow-x-auto">
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{adminStrings.users.name}</TableHead>
-                  <TableHead>{adminStrings.users.email}</TableHead>
-                  <TableHead>{adminStrings.users.roles}</TableHead>
-                  <TableHead>{adminStrings.users.created}</TableHead>
-                  <TableHead className="text-right">{adminStrings.users.actions}</TableHead>
+              <TableHeader className="bg-muted/50">
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="h-12 font-semibold">{adminStrings.users.name}</TableHead>
+                  <TableHead className="h-12 font-semibold">{adminStrings.users.email}</TableHead>
+                  <TableHead className="h-12 font-semibold">{adminStrings.users.roles}</TableHead>
+                  <TableHead className="h-12 font-semibold">{adminStrings.users.created}</TableHead>
+                  <TableHead className="text-right h-12 font-semibold">{adminStrings.users.actions}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   Array.from({ length: 5 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell><Skeleton className="h-4 w-[150px]" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-[200px]" /></TableCell>
-                      <TableCell><Skeleton className="h-6 w-[80px]" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-[100px]" /></TableCell>
-                      <TableCell><Skeleton className="h-8 w-[100px] ml-auto" /></TableCell>
+                    <TableRow key={i} className="hover:bg-transparent">
+                      <TableCell className="h-14"><Skeleton className="h-4 w-[150px]" /></TableCell>
+                      <TableCell className="h-14"><Skeleton className="h-4 w-[200px]" /></TableCell>
+                      <TableCell className="h-14"><Skeleton className="h-6 w-[80px]" /></TableCell>
+                      <TableCell className="h-14"><Skeleton className="h-4 w-[100px]" /></TableCell>
+                      <TableCell className="h-14"><Skeleton className="h-8 w-[100px] ml-auto" /></TableCell>
                     </TableRow>
                   ))
                 ) : users && users.length > 0 ? (
                   users.map((user) => {
                     const isAdmin = user.roles.includes('admin');
                     return (
-                      <TableRow key={user.id}>
+                      <TableRow key={user.id} className="h-14 hover:bg-muted/30 transition-colors">
                         <TableCell className="font-medium">
                           {user.full_name || '-'}
                         </TableCell>
                         <TableCell>{user.email}</TableCell>
                         <TableCell>
-                          <div className="flex gap-1">
-                            {isAdmin && <UserRoleBadge role="admin" />}
-                            <UserRoleBadge role="user" />
+                          <div className="flex gap-2">
+                            {isAdmin && (
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20">
+                                Admin
+                              </span>
+                            )}
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-muted border border-muted-foreground/30">
+                              Bruger
+                            </span>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -211,20 +217,20 @@ export default function Users() {
                               variant="outline"
                               size="sm"
                               onClick={() => setConfirmAction({ type: 'demote', email: user.email })}
-                              className="gap-2"
+                              className="gap-2 border-2"
                             >
                               <UserMinus className="h-4 w-4" />
-                              {adminStrings.users.removeAdmin}
+                              <span className="hidden sm:inline">{adminStrings.users.removeAdmin}</span>
                             </Button>
                           ) : (
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => setConfirmAction({ type: 'promote', email: user.email })}
-                              className="gap-2"
+                              className="gap-2 border-2"
                             >
                               <UserPlus className="h-4 w-4" />
-                              {adminStrings.users.makeAdmin}
+                              <span className="hidden sm:inline">{adminStrings.users.makeAdmin}</span>
                             </Button>
                           )}
                         </TableCell>
@@ -233,7 +239,7 @@ export default function Users() {
                   })
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={5} className="text-center py-16 text-muted-foreground">
                       {adminStrings.users.noUsers}
                     </TableCell>
                   </TableRow>

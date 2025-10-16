@@ -4,6 +4,7 @@ import { AvailabilityFiltersBar } from "@/components/availability/AvailabilityFi
 import { AvailabilityTable, type AvailableInspector } from "@/components/availability/AvailabilityTable";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { Users } from "lucide-react";
 
 interface AvailabilityFilters {
   afdeling: string[];
@@ -202,9 +203,14 @@ export default function AvailabilityPage() {
 
   return (
     <div className="container mx-auto py-8">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold tracking-tight">Tilgængelige synskonsulenter</h1>
-        <p className="text-muted-foreground mt-2">
+      <div className="mb-8">
+        <div className="flex items-center gap-4 mb-2">
+          <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
+            <Users className="h-6 w-6 text-primary" />
+          </div>
+          <h1 className="page-title">Tilgængelige synskonsulenter</h1>
+        </div>
+        <p className="text-caption ml-16">
           Oversigt over tilgængelige synskonsulenter og deres kompetencer
         </p>
       </div>

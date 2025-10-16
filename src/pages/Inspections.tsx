@@ -218,33 +218,49 @@ export default function InspectionsPage() {
 
   return (
     <div className="container mx-auto py-8 space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Building2 className="h-8 w-8 text-primary" />
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+        <div className="flex items-center gap-4">
+          <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
+            <Building2 className="h-6 w-6 text-primary" />
+          </div>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Syn Ikke Planlagt</h1>
-            <p className="text-muted-foreground">
+            <h1 className="page-title">Syn Ikke Planlagt</h1>
+            <p className="text-caption mt-1">
               Monday.com syn der venter på planlægning
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={handleCreate} variant="outline" size="lg">
-            <Plus className="mr-2 h-5 w-5" />
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+          <Button onClick={handleCreate} variant="outline" size="lg" className="gap-2 border-2">
+            <Plus className="h-5 w-5" />
             Tilføj Syn
           </Button>
           {selectedIds.length > 0 && (
-            <Button onClick={handleOpenPlanningModal} size="lg">
-              <CalendarCheck className="mr-2 h-5 w-5" />
+            <Button onClick={handleOpenPlanningModal} size="lg" className="gap-2 shadow-md">
+              <CalendarCheck className="h-5 w-5" />
               Planlæg Syn ({selectedIds.length})
             </Button>
           )}
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
+      <Card className="rounded-2xl shadow-sm mb-6">
+        <CardContent className="p-6 bg-muted/20">
+          <SearchBar
+            value={searchQuery}
+            onChange={handleSearchChange}
+            onClear={handleSearchClear}
+            placeholder="Søg (kunde, reg.nr., adresse)"
+            isLoading={isLoading && isSearchActive}
+            resultCount={isSearchActive ? totalCount : undefined}
+            className="max-w-md"
+          />
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-2xl shadow-sm">
+        <CardHeader className="border-b">
+          <CardTitle className="flex items-center justify-between text-lg">
             <span>Monday.com syn</span>
             <span className="text-sm font-normal text-muted-foreground">
               {isSearchActive && !isLoading
@@ -253,16 +269,7 @@ export default function InspectionsPage() {
             </span>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <SearchBar
-            value={searchQuery}
-            onChange={handleSearchChange}
-            onClear={handleSearchClear}
-            placeholder="Søg (kunde, reg.nr., adresse)"
-            isLoading={isLoading && isSearchActive}
-            resultCount={isSearchActive ? totalCount : undefined}
-          />
-          
+        <CardContent className="p-6">
           <MondayItemsTable
             items={items}
             selectedIds={selectedIds}
@@ -273,15 +280,17 @@ export default function InspectionsPage() {
             totalCount={totalCount}
           />
           
-          <InspectionsPagination
-            currentPage={currentPage}
-            totalPages={totalPages}
-            totalCount={totalCount}
-            pageSize={pageSize}
-            onPageChange={setCurrentPage}
-            onPageSizeChange={() => {}}
-            isLoading={isLoading}
-          />
+          <div className="mt-4">
+            <InspectionsPagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalCount={totalCount}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={() => {}}
+              isLoading={isLoading}
+            />
+          </div>
         </CardContent>
       </Card>
 

@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CalendarCheck } from "lucide-react";
 import { formatDateForDisplay } from "@/lib/date-utils";
 import type { ProposedAssignment } from "@/lib/scheduled";
 
@@ -66,41 +67,48 @@ export function ScheduledTable({
 
   if (assignments.length === 0) {
     return (
-      <div className="text-center py-12">
-        <div className="text-muted-foreground">
-          <p className="text-lg font-medium">Ingen planlagte syn</p>
-          <p className="text-sm mt-1">
-            Planlagte syn vises her efter godkendelse
-          </p>
+      <div className="flex flex-col items-center justify-center py-24 text-center">
+        <div className="h-24 w-24 rounded-full bg-primary/10 flex items-center justify-center mb-6">
+          <CalendarCheck className="h-12 w-12 text-primary/60" />
         </div>
+        <h3 className="text-2xl font-bold mb-3">Ingen planlagte syn</h3>
+        <p className="text-muted-foreground max-w-md text-lg">
+          Planlagte syn vises her efter godkendelse
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-md border">
+    <div className="rounded-lg border overflow-x-auto">
       <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Tildelt</TableHead>
-            <TableHead>Adresse</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Dato</TableHead>
-            <TableHead>Tidspunkt</TableHead>
-            <TableHead>Afdeling</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="text-center">Sekv.</TableHead>
+        <TableHeader className="bg-muted/50 sticky top-0 z-10">
+          <TableRow className="hover:bg-transparent">
+            <TableHead className="h-12 font-semibold">Tildelt</TableHead>
+            <TableHead className="h-12 font-semibold">Adresse</TableHead>
+            <TableHead className="h-12 font-semibold">Type</TableHead>
+            <TableHead className="h-12 font-semibold">Dato</TableHead>
+            <TableHead className="h-12 font-semibold">Tidspunkt</TableHead>
+            <TableHead className="h-12 font-semibold">Afdeling</TableHead>
+            <TableHead className="h-12 font-semibold">Status</TableHead>
+            <TableHead className="text-center h-12 font-semibold">Sekv.</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {assignments.map((assignment) => (
-            <TableRow key={assignment.id}>
+          {assignments.map((assignment, index) => (
+            <TableRow 
+              key={assignment.id}
+              className={`h-14 hover:bg-muted/30 transition-colors ${index % 2 === 0 ? 'bg-muted/10' : ''}`}
+            >
               <TableCell className="font-medium">
                 {assignment.inspector_name || "Ikke tildelt"}
               </TableCell>
               <TableCell>{assignment.inspection_address}</TableCell>
               <TableCell>
-                <Badge variant={getTypeVariant(assignment.inspection_type || "")}>
+                <Badge 
+                  variant={getTypeVariant(assignment.inspection_type || "")}
+                  className="border"
+                >
                   {assignment.inspection_type}
                 </Badge>
               </TableCell>

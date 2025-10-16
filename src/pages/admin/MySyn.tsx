@@ -117,22 +117,22 @@ export default function MySyn() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-8">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">{adminStrings.mySyn.title}</h1>
-          <p className="text-muted-foreground mt-2">
+          <h1 className="page-title">{adminStrings.mySyn.title}</h1>
+          <p className="text-caption mt-2">
             Se og administrer dine planlagte syn
           </p>
         </div>
-        <Button onClick={exportToCSV} variant="outline" className="gap-2">
-          <Download className="h-4 w-4" />
+        <Button onClick={exportToCSV} variant="outline" size="lg" className="gap-2 border-2 w-full sm:w-auto">
+          <Download className="h-5 w-5" />
           {adminStrings.mySyn.export}
         </Button>
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <StatCard
           title={adminStrings.mySyn.totalFound}
           value={stats.total}
@@ -155,17 +155,20 @@ export default function MySyn() {
 
       {/* Filters */}
       <Card className="rounded-2xl shadow-sm">
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <CardHeader className="border-b bg-muted/20">
+          <CardTitle className="text-lg">Filtrer syn</CardTitle>
+        </CardHeader>
+        <CardContent className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2">
               <label className="text-sm font-medium">{adminStrings.mySyn.search}</label>
               <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                 <Input
                   placeholder="Søg efter kunde eller adresse..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
+                  className="pl-10 h-11"
                 />
               </div>
             </div>
@@ -175,6 +178,7 @@ export default function MySyn() {
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
+                className="h-11"
               />
             </div>
             <div className="space-y-2">
@@ -183,6 +187,7 @@ export default function MySyn() {
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
+                className="h-11"
               />
             </div>
           </div>
@@ -191,51 +196,60 @@ export default function MySyn() {
 
       {/* Table */}
       <Card className="rounded-2xl shadow-sm">
-        <CardHeader>
-          <CardTitle>{adminStrings.mySyn.inspections}</CardTitle>
+        <CardHeader className="border-b">
+          <CardTitle className="text-lg">{adminStrings.mySyn.inspections}</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="rounded-md border">
+        <CardContent className="p-6">
+          <div className="rounded-lg border overflow-x-auto">
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{adminStrings.mySyn.date}</TableHead>
-                  <TableHead>{adminStrings.mySyn.customer}</TableHead>
-                  <TableHead>{adminStrings.mySyn.address}</TableHead>
-                  <TableHead>{adminStrings.mySyn.status}</TableHead>
+              <TableHeader className="bg-muted/50">
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="h-12 font-semibold">{adminStrings.mySyn.date}</TableHead>
+                  <TableHead className="h-12 font-semibold">{adminStrings.mySyn.customer}</TableHead>
+                  <TableHead className="h-12 font-semibold">{adminStrings.mySyn.address}</TableHead>
+                  <TableHead className="h-12 font-semibold">{adminStrings.mySyn.status}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   Array.from({ length: 5 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell><Skeleton className="h-4 w-[100px]" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-[150px]" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-[200px]" /></TableCell>
-                      <TableCell><Skeleton className="h-4 w-[80px]" /></TableCell>
+                    <TableRow key={i} className="hover:bg-transparent">
+                      <TableCell className="h-14"><Skeleton className="h-4 w-[100px]" /></TableCell>
+                      <TableCell className="h-14"><Skeleton className="h-4 w-[150px]" /></TableCell>
+                      <TableCell className="h-14"><Skeleton className="h-4 w-[200px]" /></TableCell>
+                      <TableCell className="h-14"><Skeleton className="h-4 w-[80px]" /></TableCell>
                     </TableRow>
                   ))
                 ) : mySyn && mySyn.length > 0 ? (
                   mySyn.flatMap((run) =>
                     run.inspections.map((inspection, idx) => (
-                      <TableRow key={`${run.id}-${idx}`}>
+                      <TableRow key={`${run.id}-${idx}`} className="h-14 hover:bg-muted/30 transition-colors">
                         <TableCell>
                           {format(new Date(run.created_at), 'dd/MM/yyyy', { locale: da })}
                         </TableCell>
                         <TableCell>{inspection.customer_name || '-'}</TableCell>
                         <TableCell>{inspection.address || '-'}</TableCell>
                         <TableCell>
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                            {run.status}
-                          </span>
+                          {run.status === 'COMPLETED' ? (
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-[hsl(var(--success))]/10 text-[hsl(var(--success))] border border-[hsl(var(--success))]/20">
+                              Fuldført
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20">
+                              {run.status}
+                            </span>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))
                   )
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                      {adminStrings.mySyn.noResults}
+                    <TableCell colSpan={4} className="text-center py-16 text-muted-foreground">
+                      <div className="flex flex-col items-center">
+                        <FileText className="h-12 w-12 text-muted-foreground/50 mb-3" />
+                        <p className="text-base font-medium">{adminStrings.mySyn.noResults}</p>
+                      </div>
                     </TableCell>
                   </TableRow>
                 )}

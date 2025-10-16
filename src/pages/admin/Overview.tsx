@@ -80,19 +80,19 @@ export default function Overview() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* User Status Card */}
-      <Card className="rounded-2xl shadow-sm">
-        <CardHeader>
+      <Card className="rounded-2xl shadow-sm border-2">
+        <CardHeader className="border-b bg-muted/20">
           <CardTitle className="text-lg">{adminStrings.overview.loggedInAs}</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-6">
           <div className="flex items-center gap-4">
-            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-              <User className="h-6 w-6 text-primary" />
+            <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center ring-2 ring-primary/20">
+              <User className="h-7 w-7 text-primary" />
             </div>
             <div className="flex-1">
-              <p className="font-medium">{profile?.full_name}</p>
+              <p className="font-semibold text-base">{profile?.full_name}</p>
               <p className="text-sm text-muted-foreground">{user?.email}</p>
             </div>
             <div className="flex gap-2">
@@ -104,7 +104,7 @@ export default function Overview() {
       </Card>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title={adminStrings.overview.synToday}
           value={vrpStats?.today || 0}
@@ -134,10 +134,10 @@ export default function Overview() {
 
       {/* Weekly Chart */}
       <Card className="rounded-2xl shadow-sm">
-        <CardHeader>
-          <CardTitle>{adminStrings.overview.synPerWeek}</CardTitle>
+        <CardHeader className="border-b">
+          <CardTitle className="text-lg">{adminStrings.overview.synPerWeek}</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-6">
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={vrpStats?.weeklyData || []}>
@@ -167,30 +167,53 @@ export default function Overview() {
 
       {/* Quick Links */}
       <Card className="rounded-2xl shadow-sm">
-        <CardHeader>
-          <CardTitle>{adminStrings.overview.quickLinks}</CardTitle>
+        <CardHeader className="border-b">
+          <CardTitle className="text-lg">{adminStrings.overview.quickLinks}</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Link to="/admin/my-syn">
-            <Button variant="outline" className="w-full justify-between">
-              {adminStrings.overview.mySyn}
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          </Link>
-          <Link to="/admin/account">
-            <Button variant="outline" className="w-full justify-between">
-              {adminStrings.overview.changePassword}
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          </Link>
-          {hasRole('admin') && (
-            <Link to="/admin/users">
-              <Button variant="outline" className="w-full justify-between">
-                {adminStrings.overview.users}
-                <ArrowRight className="h-4 w-4" />
+        <CardContent className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Link to="/admin/my-syn">
+              <Button 
+                variant="outline" 
+                size="lg"
+                className="w-full justify-between border-2 hover:bg-primary/5 hover:border-primary transition-all"
+              >
+                <span className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  {adminStrings.overview.mySyn}
+                </span>
+                <ArrowRight className="h-5 w-5" />
               </Button>
             </Link>
-          )}
+            <Link to="/admin/account">
+              <Button 
+                variant="outline" 
+                size="lg"
+                className="w-full justify-between border-2 hover:bg-primary/5 hover:border-primary transition-all"
+              >
+                <span className="flex items-center gap-2">
+                  <User className="h-5 w-5" />
+                  {adminStrings.overview.changePassword}
+                </span>
+                <ArrowRight className="h-5 w-5" />
+              </Button>
+            </Link>
+            {hasRole('admin') && (
+              <Link to="/admin/users">
+                <Button 
+                  variant="outline" 
+                  size="lg"
+                  className="w-full justify-between border-2 hover:bg-primary/5 hover:border-primary transition-all"
+                >
+                  <span className="flex items-center gap-2">
+                    <User className="h-5 w-5" />
+                    {adminStrings.overview.users}
+                  </span>
+                  <ArrowRight className="h-5 w-5" />
+                </Button>
+              </Link>
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>

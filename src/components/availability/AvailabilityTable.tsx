@@ -66,138 +66,146 @@ export function AvailabilityTable({
   };
 
   return (
-    <div className="space-y-4">
-      <Card className="p-6">
-        <div className="flex items-center gap-4 mb-4">
-          <h3 className="text-lg font-semibold">
-            Tilgængelige synskonsulenter
-          </h3>
-          <Badge variant="secondary">
-            {total} resultater
-          </Badge>
-        </div>
-
-        <div className="border rounded-lg">
-          <Table>
-            <TableHeader className="sticky top-0 bg-background border-b">
-              <TableRow>
-                <TableHead className="p-2 font-medium text-foreground">
-                  <Button 
-                    variant="ghost" 
-                    onClick={() => handleSort('navn')}
-                    className="h-auto p-0 font-medium text-foreground hover:text-foreground hover:bg-muted"
-                  >
-                    Navn
-                    {getSortIcon('navn')}
-                  </Button>
-                </TableHead>
-                <TableHead className="p-2 font-medium text-foreground">
-                  <Button 
-                    variant="ghost" 
-                    onClick={() => handleSort('afdeling')}
-                    className="h-auto p-0 font-medium text-foreground hover:text-foreground hover:bg-muted"
-                  >
-                    Afdeling
-                    {getSortIcon('afdeling')}
-                  </Button>
-                </TableHead>
-                <TableHead className="p-2 font-medium text-foreground">Synstyper</TableHead>
-                <TableHead className="p-2 font-medium text-foreground">
-                  <Button 
-                    variant="ghost" 
-                    onClick={() => handleSort('adresse')}
-                    className="h-auto p-0 font-medium text-foreground hover:text-foreground hover:bg-muted"
-                  >
-                    Adresse
-                    {getSortIcon('adresse')}
-                  </Button>
-                </TableHead>
-                <TableHead className="p-2 font-medium text-foreground">
-                  <Button 
-                    variant="ghost" 
-                    onClick={() => handleSort('dato')}
-                    className="h-auto p-0 font-medium text-foreground hover:text-foreground hover:bg-muted"
-                  >
-                    Dato
-                    {getSortIcon('dato')}
-                  </Button>
-                </TableHead>
-                <TableHead className="p-2 font-medium text-foreground">Tidspunkt</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
-                    Indlæser...
-                  </TableCell>
+    <div className="space-y-6">
+      <Card className="rounded-2xl shadow-sm">
+        <CardHeader className="border-b">
+          <div className="flex items-center gap-4">
+            <h3 className="section-title">
+              Tilgængelige synskonsulenter
+            </h3>
+            <Badge variant="secondary" className="text-base px-3 py-1">
+              {total} resultater
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="p-6">
+          <div className="rounded-lg border overflow-x-auto">
+            <Table>
+              <TableHeader className="sticky top-0 bg-muted/50 z-10">
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="h-12 font-semibold">
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => handleSort('navn')}
+                      className="h-auto p-0 font-semibold hover:bg-transparent"
+                    >
+                      Navn
+                      {getSortIcon('navn')}
+                    </Button>
+                  </TableHead>
+                  <TableHead className="h-12 font-semibold">
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => handleSort('afdeling')}
+                      className="h-auto p-0 font-semibold hover:bg-transparent"
+                    >
+                      Afdeling
+                      {getSortIcon('afdeling')}
+                    </Button>
+                  </TableHead>
+                  <TableHead className="h-12 font-semibold">Synstyper</TableHead>
+                  <TableHead className="h-12 font-semibold">
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => handleSort('adresse')}
+                      className="h-auto p-0 font-semibold hover:bg-transparent"
+                    >
+                      Adresse
+                      {getSortIcon('adresse')}
+                    </Button>
+                  </TableHead>
+                  <TableHead className="h-12 font-semibold">
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => handleSort('dato')}
+                      className="h-auto p-0 font-semibold hover:bg-transparent"
+                    >
+                      Dato
+                      {getSortIcon('dato')}
+                    </Button>
+                  </TableHead>
+                  <TableHead className="h-12 font-semibold">Tidspunkt</TableHead>
                 </TableRow>
-              ) : data.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                    Ingen resultater. Justér filtre eller søgning.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                data.map((inspector, index) => (
-                  <TableRow 
-                    key={inspector.availability_id} 
-                    className={index % 2 === 0 ? "bg-muted/50" : "bg-background"}
-                  >
-                    <TableCell className="p-3 font-medium">
-                      {inspector.navn}
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8">
+                      Indlæser...
                     </TableCell>
-                    <TableCell className="p-3">{inspector.afdeling}</TableCell>
-                    <TableCell className="p-3">
-                      <div className="flex flex-wrap gap-1">
-                        {inspector.synstyper.map((type) => (
-                          <Badge key={type} variant="secondary" className="text-xs">
-                            {type}
-                          </Badge>
-                        ))}
+                  </TableRow>
+                ) : data.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-16 text-muted-foreground">
+                      <div className="flex flex-col items-center">
+                        <p className="text-base font-medium mb-1">Ingen resultater</p>
+                        <p className="text-sm">Justér filtre eller søgning</p>
                       </div>
                     </TableCell>
-                    <TableCell className="p-3">{inspector.adresse}</TableCell>
-                    <TableCell className="p-3">
-                      {formatDateForDisplay(inspector.dato)}
-                    </TableCell>
-                    <TableCell className="p-3">{inspector.tidspunkt_label}</TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between mt-4">
-            <div className="text-sm text-muted-foreground">
-              Viser {((page - 1) * pageSize) + 1} til {Math.min(page * pageSize, total)} af {total} resultater
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onPageChange(page - 1)}
-                disabled={page <= 1}
-              >
-                Forrige
-              </Button>
-              <span className="text-sm">
-                Side {page} af {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onPageChange(page + 1)}
-                disabled={page >= totalPages}
-              >
-                Næste
-              </Button>
-            </div>
+                ) : (
+                  data.map((inspector, index) => (
+                    <TableRow 
+                      key={inspector.availability_id} 
+                      className={`h-14 hover:bg-muted/30 transition-colors ${index % 2 === 0 ? "bg-muted/10" : ""}`}
+                    >
+                      <TableCell className="font-medium">
+                        {inspector.navn}
+                      </TableCell>
+                      <TableCell>{inspector.afdeling}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {inspector.synstyper.map((type) => (
+                            <Badge key={type} variant="secondary" className="text-xs">
+                              {type}
+                            </Badge>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell>{inspector.adresse}</TableCell>
+                      <TableCell>
+                        {formatDateForDisplay(inspector.dato)}
+                      </TableCell>
+                      <TableCell>{inspector.tidspunkt_label}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
           </div>
-        )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-6 border-t">
+              <div className="text-sm text-muted-foreground">
+                Viser {((page - 1) * pageSize) + 1} til {Math.min(page * pageSize, total)} af {total} resultater
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onPageChange(page - 1)}
+                  disabled={page <= 1}
+                  className="border-2"
+                >
+                  Forrige
+                </Button>
+                <span className="text-sm font-medium px-3">
+                  Side {page} af {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onPageChange(page + 1)}
+                  disabled={page >= totalPages}
+                  className="border-2"
+                >
+                  Næste
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
       </Card>
     </div>
   );

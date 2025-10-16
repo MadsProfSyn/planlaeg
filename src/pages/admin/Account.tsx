@@ -111,39 +111,45 @@ export default function Account() {
   };
 
   return (
-    <div className="space-y-6 max-w-2xl">
+    <div className="space-y-8 max-w-2xl">
       <div>
-        <h1 className="text-3xl font-bold">{adminStrings.account.title}</h1>
-        <p className="text-muted-foreground mt-2">
+        <h1 className="page-title">{adminStrings.account.title}</h1>
+        <p className="text-caption mt-2">
           Administrer din konto og sikkerhedsindstillinger
         </p>
       </div>
 
       {/* Profile Info */}
-      <Card className="rounded-2xl shadow-sm">
-        <CardHeader>
-          <CardTitle>{adminStrings.account.profileInfo}</CardTitle>
+      <Card className="rounded-2xl shadow-sm border-2">
+        <CardHeader className="border-b bg-muted/20">
+          <CardTitle className="text-lg">{adminStrings.account.profileInfo}</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center gap-3">
-            <User className="h-5 w-5 text-muted-foreground" />
+        <CardContent className="p-6 space-y-6">
+          <div className="flex items-center gap-4">
+            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+              <User className="h-6 w-6 text-primary" />
+            </div>
             <div>
-              <p className="text-sm font-medium">{profile?.full_name}</p>
+              <p className="font-semibold text-base">{profile?.full_name}</p>
               <p className="text-xs text-muted-foreground">Navn</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <Mail className="h-5 w-5 text-muted-foreground" />
+          <div className="flex items-center gap-4">
+            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+              <Mail className="h-6 w-6 text-primary" />
+            </div>
             <div>
-              <p className="text-sm font-medium">{user?.email}</p>
+              <p className="font-semibold text-base">{user?.email}</p>
               <p className="text-xs text-muted-foreground">Email</p>
             </div>
           </div>
           {user?.last_sign_in_at && (
-            <div className="flex items-center gap-3">
-              <Clock className="h-5 w-5 text-muted-foreground" />
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                <Clock className="h-6 w-6 text-primary" />
+              </div>
               <div>
-                <p className="text-sm font-medium">
+                <p className="font-semibold text-base">
                   {format(new Date(user.last_sign_in_at), 'dd. MMMM yyyy HH:mm', { locale: da })}
                 </p>
                 <p className="text-xs text-muted-foreground">{adminStrings.account.lastSignIn}</p>
@@ -154,46 +160,49 @@ export default function Account() {
       </Card>
 
       {/* Change Password */}
-      <Card className="rounded-2xl shadow-sm">
-        <CardHeader>
-          <CardTitle>{adminStrings.account.changePassword}</CardTitle>
+      <Card className="rounded-2xl shadow-sm border-2">
+        <CardHeader className="border-b bg-muted/20">
+          <CardTitle className="text-lg">{adminStrings.account.changePassword}</CardTitle>
           <CardDescription>
             Sørg for at din adgangskode er mindst 8 tegn lang
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handlePasswordChange} className="space-y-4">
+        <CardContent className="p-6">
+          <form onSubmit={handlePasswordChange} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="current">{adminStrings.account.currentPassword}</Label>
+              <Label htmlFor="current" className="text-sm font-medium">{adminStrings.account.currentPassword}</Label>
               <Input
                 id="current"
                 type="password"
                 value={passwordForm.current}
                 onChange={(e) => setPasswordForm({ ...passwordForm, current: e.target.value })}
+                className="h-11"
                 required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="new">{adminStrings.account.newPassword}</Label>
+              <Label htmlFor="new" className="text-sm font-medium">{adminStrings.account.newPassword}</Label>
               <Input
                 id="new"
                 type="password"
                 value={passwordForm.new}
                 onChange={(e) => setPasswordForm({ ...passwordForm, new: e.target.value })}
+                className="h-11"
                 required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="confirm">{adminStrings.account.confirmPassword}</Label>
+              <Label htmlFor="confirm" className="text-sm font-medium">{adminStrings.account.confirmPassword}</Label>
               <Input
                 id="confirm"
                 type="password"
                 value={passwordForm.confirm}
                 onChange={(e) => setPasswordForm({ ...passwordForm, confirm: e.target.value })}
+                className="h-11"
                 required
               />
             </div>
-            <Button type="submit" disabled={isUpdatingPassword}>
+            <Button type="submit" size="lg" disabled={isUpdatingPassword} className="w-full md:w-auto">
               {isUpdatingPassword && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {adminStrings.account.changePassword}
             </Button>
@@ -202,27 +211,28 @@ export default function Account() {
       </Card>
 
       {/* Change Email */}
-      <Card className="rounded-2xl shadow-sm">
-        <CardHeader>
-          <CardTitle>{adminStrings.account.changeEmail}</CardTitle>
+      <Card className="rounded-2xl shadow-sm border-2">
+        <CardHeader className="border-b bg-muted/20">
+          <CardTitle className="text-lg">{adminStrings.account.changeEmail}</CardTitle>
           <CardDescription>
             Du skal bekræfte din nye email efter ændringen
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleEmailChange} className="space-y-4">
+        <CardContent className="p-6">
+          <form onSubmit={handleEmailChange} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="email">{adminStrings.account.newEmail}</Label>
+              <Label htmlFor="email" className="text-sm font-medium">{adminStrings.account.newEmail}</Label>
               <Input
                 id="email"
                 type="email"
                 value={emailForm.email}
                 onChange={(e) => setEmailForm({ email: e.target.value })}
                 placeholder={user?.email}
+                className="h-11"
                 required
               />
             </div>
-            <Button type="submit" disabled={isUpdatingEmail}>
+            <Button type="submit" size="lg" disabled={isUpdatingEmail} className="w-full md:w-auto">
               {isUpdatingEmail && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {adminStrings.account.changeEmail}
             </Button>

@@ -152,11 +152,11 @@ export function MondayItemsTable({
   });
 
   return (
-    <div className="rounded-md border">
+    <div className="rounded-lg border overflow-x-auto">
       <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-12">
+        <TableHeader className="bg-muted/50 sticky top-0 z-10">
+          <TableRow className="hover:bg-transparent">
+            <TableHead className="w-12 h-12">
               <Checkbox
                 checked={allSelected}
                 onCheckedChange={handleSelectAll}
@@ -164,74 +164,76 @@ export function MondayItemsTable({
                 className={someSelected ? "data-[state=checked]:bg-primary" : ""}
               />
             </TableHead>
-            <TableHead>
+            <TableHead className="h-12 font-semibold">
               <Button
                 variant="ghost"
                 onClick={() => handleSort('adresse')}
-                className="h-8 px-2 lg:px-3 hover:bg-transparent"
+                className="h-8 px-2 lg:px-3 hover:bg-transparent font-semibold"
               >
                 Adresse
                 {getSortIcon('adresse')}
               </Button>
             </TableHead>
-            <TableHead>
+            <TableHead className="h-12 font-semibold">
               <Button
                 variant="ghost"
                 onClick={() => handleSort('synstype')}
-                className="h-8 px-2 lg:px-3 hover:bg-transparent"
+                className="h-8 px-2 lg:px-3 hover:bg-transparent font-semibold"
               >
                 Type
                 {getSortIcon('synstype')}
               </Button>
             </TableHead>
-            <TableHead>
+            <TableHead className="h-12 font-semibold">
               <Button
                 variant="ghost"
                 onClick={() => handleSort('dato_tid')}
-                className="h-8 px-2 lg:px-3 hover:bg-transparent"
+                className="h-8 px-2 lg:px-3 hover:bg-transparent font-semibold"
               >
                 Dato
                 {getSortIcon('dato_tid')}
               </Button>
             </TableHead>
-            <TableHead>
+            <TableHead className="h-12 font-semibold">
               <Button
                 variant="ghost"
                 onClick={() => handleSort('antal_vaerelser')}
-                className="h-8 px-2 lg:px-3 hover:bg-transparent"
+                className="h-8 px-2 lg:px-3 hover:bg-transparent font-semibold"
               >
                 Værelser
                 {getSortIcon('antal_vaerelser')}
               </Button>
             </TableHead>
-            <TableHead>
+            <TableHead className="h-12 font-semibold">
               <Button
                 variant="ghost"
                 onClick={() => handleSort('Kunde')}
-                className="h-8 px-2 lg:px-3 hover:bg-transparent"
+                className="h-8 px-2 lg:px-3 hover:bg-transparent font-semibold"
               >
                 Kunde
                 {getSortIcon('Kunde')}
               </Button>
             </TableHead>
-            <TableHead>
+            <TableHead className="h-12 font-semibold">
               <Button
                 variant="ghost"
                 onClick={() => handleSort('landsdel')}
-                className="h-8 px-2 lg:px-3 hover:bg-transparent"
+                className="h-8 px-2 lg:px-3 hover:bg-transparent font-semibold"
               >
                 Landsdel
                 {getSortIcon('landsdel')}
               </Button>
             </TableHead>
-            <TableHead className="w-24">Handlinger</TableHead>
+            <TableHead className="w-24 h-12 font-semibold">Handlinger</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {sortedItems.map((item) => (
+          {sortedItems.map((item, index) => (
             <TableRow
               key={item.id}
-              className={selectedIds.includes(item.id) ? "bg-muted/50" : ""}
+              className={`h-14 hover:bg-muted/30 transition-colors ${
+                selectedIds.includes(item.id) ? "bg-muted/50" : index % 2 === 0 ? "bg-muted/10" : ""
+              }`}
             >
               <TableCell>
                 <Checkbox
@@ -242,10 +244,12 @@ export function MondayItemsTable({
                   aria-label={`Vælg syn ${item.name || item.adresse}`}
                 />
               </TableCell>
-              <TableCell>{item.adresse || "-"}</TableCell>
+              <TableCell className="font-medium">{item.adresse || "-"}</TableCell>
               <TableCell>
                 {item.synstype ? (
-                  <Badge variant="outline">{item.synstype}</Badge>
+                  <Badge variant="outline" className="border-primary/30 text-primary bg-primary/5">
+                    {item.synstype}
+                  </Badge>
                 ) : (
                   "-"
                 )}
@@ -267,6 +271,7 @@ export function MondayItemsTable({
                     size="icon"
                     onClick={() => onEdit(item)}
                     aria-label="Rediger syn"
+                    className="hover:bg-muted"
                   >
                     <Pencil className="h-4 w-4" />
                   </Button>
@@ -275,6 +280,7 @@ export function MondayItemsTable({
                     size="icon"
                     onClick={() => onDelete(item.id)}
                     aria-label="Slet syn"
+                    className="hover:bg-destructive/10"
                   >
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>

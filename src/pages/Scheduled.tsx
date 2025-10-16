@@ -33,26 +33,28 @@ export default function ScheduledPage() {
 
   return (
     <div className="container mx-auto py-8 space-y-6">
-      <div className="flex items-center gap-3">
-        <CalendarCheck className="h-8 w-8 text-primary" />
+      <div className="flex items-center gap-4 mb-8">
+        <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
+          <CalendarCheck className="h-6 w-6 text-primary" />
+        </div>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Planlagte Syn</h1>
-          <p className="text-muted-foreground">
+          <h1 className="page-title">Planlagte Syn</h1>
+          <p className="text-caption mt-1">
             Godkendte og planlagte syn
           </p>
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
+      <Card className="rounded-2xl shadow-sm">
+        <CardHeader className="border-b">
+          <CardTitle className="flex items-center justify-between text-lg">
             <span>Planlagte syn</span>
             <span className="text-sm font-normal text-muted-foreground">
               {assignments.length} planlagte
             </span>
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-6">
           <ScheduledTable assignments={assignments} isLoading={isLoading} />
         </CardContent>
       </Card>
