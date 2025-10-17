@@ -263,6 +263,7 @@ export type Database = {
           end_time_local: string
           id: number
           inspector_id: number
+          inspector_uuid: string
           on_date: string
           start_time_local: string
         }
@@ -270,6 +271,7 @@ export type Database = {
           end_time_local: string
           id?: number
           inspector_id: number
+          inspector_uuid: string
           on_date: string
           start_time_local: string
         }
@@ -277,10 +279,19 @@ export type Database = {
           end_time_local?: string
           id?: number
           inspector_id?: number
+          inspector_uuid?: string
           on_date?: string
           start_time_local?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "inspector_availability_inspector_fk"
+            columns: ["inspector_uuid"]
+            isOneToOne: false
+            referencedRelation: "inspectors"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       inspector_skills: {
         Row: {
