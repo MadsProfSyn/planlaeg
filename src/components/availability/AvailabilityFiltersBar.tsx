@@ -5,7 +5,7 @@ import { DateRangePicker } from "@/components/filters/DateRangePicker";
 import { SynsTypeMultiSelect } from "@/components/filters/SynsTypeMultiSelect";
 import { GlobalSearchInput } from "@/components/filters/GlobalSearchInput";
 import { Card } from "@/components/ui/card";
-import { Search, RotateCcw } from "lucide-react";
+import { Search, RotateCcw, RefreshCw } from "lucide-react";
 
 interface AvailabilityFilters {
   afdeling: string[];
@@ -22,6 +22,7 @@ interface AvailabilityFiltersBarProps {
   departments: { value: string; label: string }[];
   onSearch: () => void;
   onReset: () => void;
+  onSync: () => void;
   isLoading?: boolean;
 }
 
@@ -38,6 +39,7 @@ export function AvailabilityFiltersBar({
   departments,
   onSearch,
   onReset,
+  onSync,
   isLoading = false,
 }: AvailabilityFiltersBarProps) {
   const updateFilter = (key: keyof AvailabilityFilters, value: any) => {
@@ -114,6 +116,15 @@ export function AvailabilityFiltersBar({
         </div>
 
         <div className="flex items-end gap-2">
+          <Button
+            onClick={onSync}
+            disabled={isLoading}
+            variant="secondary"
+            size="default"
+            title="Synkroniser tilgængelighed fra WorkFeed"
+          >
+            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+          </Button>
           <Button
             onClick={onSearch}
             disabled={isLoading}

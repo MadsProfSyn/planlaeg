@@ -201,6 +201,56 @@ export default function AvailabilityPage() {
     setSortOrder(direction);
   };
 
+  const handleSyncAvailability = async () => {
+    setIsLoading(true);
+    try {
+      // Convert date strings to ISO format for the edge function
+      const fromISO = new Date(filters.from).toISOString();
+      const toISO = new Date(filters.to + 'T23:59:59').toISOString();
+
+      toast({
+        title: "Synkroniserer tilgængelighed",
+        description: "Henter data fra WorkFeed...",
+      });
+
+      // Call the edge function with query parameters
+      const url = `https://wtkyxxfeubpadivllowr.supabase.co/functions/v1/workfeed-ingest-availability?from=${fromISO}&to=${toISO}`;
+      const session = await supabase.auth.getSession();
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.data.session?.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to sync availability: ${response.statusText} - ${errorText}`);
+      }
+
+      const result = await response.json();
+
+      toast({
+        title: "Synkronisering gennemført",
+        description: `${result.upserted || 0} tilgængelighedsposter opdateret`,
+      });
+
+      // Refresh the availability data
+      await fetchAvailability();
+    } catch (error) {
+      console.error("Failed to sync availability:", error);
+      toast({
+        title: "Fejl",
+        description: "Kunne ikke synkronisere tilgængelighed fra WorkFeed",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="container mx-auto py-8">
       <div className="mb-8">
@@ -221,6 +271,7 @@ export default function AvailabilityPage() {
         departments={departments}
         onSearch={handleSearch}
         onReset={handleReset}
+        onSync={handleSyncAvailability}
         isLoading={isLoading}
       />
 
