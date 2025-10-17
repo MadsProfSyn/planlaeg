@@ -28,5 +28,8 @@ verify_jwt = false
 [functions.profsyn-ai-query]
 verify_jwt = false
 
+[functions.sync-availability-cron]
+verify_jwt = false
+
 [functions.workfeed-ingest-availability]
 verify_jwt = false

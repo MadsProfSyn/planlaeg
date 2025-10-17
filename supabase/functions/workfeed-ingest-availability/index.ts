@@ -262,6 +262,31 @@ serve(async (req) => {
     const items = (await resp.json()) as WorkfeedAvailability[];
     console.log(`[workfeed-ingest-availability] Received ${items.length} WORK availability items from WorkFeed`);
 
+    // CLEAN-SLATE: Delete existing records for this date range and source
+    // This ensures that if someone removes their WORK availability in WorkFeed,
+    // it will also be removed from our database
+    const fromDate = new Date(from).toISOString().split('T')[0];
+    const toDate = new Date(to).toISOString().split('T')[0];
+
+    console.log(`[workfeed-ingest-availability] Cleaning existing records from ${fromDate} to ${toDate} for source ${SOURCE}`);
+
+    const { error: deleteError } = await supabase
+      .from(TABLE)
+      .delete()
+      .eq('source', SOURCE)
+      .gte('date_local', fromDate)
+      .lte('date_local', toDate);
+
+    if (deleteError) {
+      console.error('[workfeed-ingest-availability] Failed to delete existing records:', deleteError);
+      return new Response(JSON.stringify({ error: "Failed to delete existing records", details: deleteError }), {
+        status: 500,
+        headers: { ...corsHeaders, "content-type": "application/json" },
+      });
+    }
+
+    console.log(`[workfeed-ingest-availability] Successfully cleaned existing records for date range`);
+
     if (items.length === 0) {
       return new Response(
         JSON.stringify({
