@@ -51,6 +51,11 @@ export function AvailabilityTable({
   sortOrder,
   isLoading = false,
 }: AvailabilityTableProps) {
+  const uniqueInspectorCount = React.useMemo(() => {
+    const uniqueUuids = new Set(data.map(inspector => inspector.inspector_uuid));
+    return uniqueUuids.size;
+  }, [data]);
+
   const handleSort = (column: string) => {
     const newDirection = sortBy === column && sortOrder === 'asc' ? 'desc' : 'asc';
     onSortChange(column, newDirection);
@@ -75,6 +80,9 @@ export function AvailabilityTable({
             </h3>
             <Badge variant="secondary" className="text-base px-3 py-1">
               {total} resultater
+            </Badge>
+            <Badge className="text-base px-3 py-1 bg-black text-white hover:bg-black/90 border-transparent">
+              {uniqueInspectorCount} SK'er
             </Badge>
           </div>
         </CardHeader>
