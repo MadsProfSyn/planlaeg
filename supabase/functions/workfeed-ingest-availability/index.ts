@@ -35,7 +35,7 @@ type Inspector = {
   id: string;
   wf_employee_id: string;
   full_name: string;
-  department: string;
+  department_name: string; // Joined from departments table
 };
 
 type Slice = {
@@ -162,7 +162,7 @@ function collapseSlicesForDate(slices: Slice[], inspectorMap: Map<string, Inspec
       is_available: true,
       start_time_local: ALL_DAY_START,
       end_time_local: ALL_DAY_END,
-      department: inspector.department,
+      department: inspector.department_name,
       source: SOURCE,
       fetched_at: nowIso,
       raw_payload: {
@@ -186,7 +186,7 @@ function collapseSlicesForDate(slices: Slice[], inspectorMap: Map<string, Inspec
     is_available: true,
     start_time_local: minStart,
     end_time_local: maxEnd,
-    department: inspector.department,
+    department: inspector.department_name,
     source: SOURCE,
     fetched_at: nowIso,
     raw_payload: {
@@ -279,15 +279,23 @@ serve(async (req) => {
     const items = (await resp.json()) as WorkfeedAvailability[];
     console.log(`[workfeed-ingest-availability] Received ${items.length} WORK availability items from WorkFeed`);
 
-    // Extract unique employee IDs and fetch inspector details with names and departments
+    // Extract unique employee IDs and fetch inspector details with JOIN to departments
     const employeeIds = [...new Set(items.map((item) => item.employeeID))];
     console.log(`[workfeed-ingest-availability] Looking up ${employeeIds.length} unique employee IDs`);
 
+    // Join with departments table to get department name
     const { data: inspectors, error: inspectorError } = await supabase
       .from("inspectors")
-      .select("id, wf_employee_id, full_name, department")
+      .select(
+        `
+        id,
+        wf_employee_id,
+        full_name,
+        departments!inner(name)
+      `,
+      )
       .in("wf_employee_id", employeeIds)
-      .eq("is_active", true); // Only active inspectors
+      .eq("is_active", true);
 
     if (inspectorError) {
       console.error("[workfeed-ingest-availability] Failed to fetch inspector mappings:", inspectorError);
@@ -298,7 +306,17 @@ serve(async (req) => {
     }
 
     // Create lookup map: wf_employee_id → Inspector object
-    const inspectorMap = new Map<string, Inspector>(inspectors?.map((i) => [i.wf_employee_id, i as Inspector]) ?? []);
+    const inspectorMap = new Map<string, Inspector>(
+      inspectors?.map((i) => [
+        i.wf_employee_id,
+        {
+          id: i.id,
+          wf_employee_id: i.wf_employee_id,
+          full_name: i.full_name,
+          department_name: i.departments?.name || "Unknown",
+        },
+      ]) ?? [],
+    );
     console.log(`[workfeed-ingest-availability] Mapped ${inspectorMap.size} active inspectors`);
 
     // Normalize → slices → group → collapse → rows
