@@ -16,8 +16,8 @@ const corsHeaders = {
 const TZ = "Europe/Copenhagen" as const;
 const TABLE = "supabase_availability";
 const SOURCE = "workfeed" as const;
-const ALL_DAY_START = "08:30:00";
-const ALL_DAY_END = "16:00:00";
+const DEFAULT_START = "08:30:00"; // Always start at 08:30 for WORK
+const DEFAULT_END = "16:00:00"; // Default end if all-day
 
 // ---------- Types ----------
 
@@ -35,7 +35,7 @@ type Inspector = {
   id: string;
   wf_employee_id: string;
   full_name: string;
-  department_name: string; // Joined from departments table
+  department_name: string;
 };
 
 type Slice = {
@@ -53,8 +53,8 @@ type RowForUpsert = {
   inspector_name: string;
   date_local: string;
   is_available: boolean;
-  start_time_local: string | null;
-  end_time_local: string | null;
+  start_time_local: string;
+  end_time_local: string;
   department: string;
   source: string;
   fetched_at: string;
@@ -146,53 +146,36 @@ function collapseSlicesForDate(slices: Slice[], inspectorMap: Map<string, Inspec
   // ONLY PROCESS WORK SLICES
   const workSlices = slices.filter((s) => s.isAvailable);
   if (workSlices.length === 0) {
-    // Skip NO_WORK only records
     return null;
   }
 
   const nowIso = new Date().toISOString();
 
-  // Check if all-day WORK
-  const hasAllDayWork = workSlices.some((s) => s.isAllDay);
-  if (hasAllDayWork) {
-    return {
-      inspector_id: inspector.id,
-      inspector_name: inspector.full_name,
-      date_local: key.date,
-      is_available: true,
-      start_time_local: ALL_DAY_START,
-      end_time_local: ALL_DAY_END,
-      department: inspector.department_name,
-      source: SOURCE,
-      fetched_at: nowIso,
-      raw_payload: {
-        contributing_ids: Array.from(new Set(workSlices.map((s) => s.raw.id))),
-        items: workSlices.map((s) => s.raw),
-        rationale: "Mapped ALL DAY WORK → 08:30–16:00",
-      },
-    };
-  }
+  // SIMPLIFIED TIME LOGIC:
+  // START: Always 08:30
+  // END: Use their latest end time, or 16:00 if all-day (midnight to midnight)
 
-  // Merge partial WORK windows to min start / max end
-  const starts = workSlices.map((s) => s.startLocal).sort();
-  const ends = workSlices.map((s) => s.endLocal).sort();
-  const minStart = starts[0];
-  const maxEnd = ends[ends.length - 1];
+  const hasAllDayWork = workSlices.some((s) => s.isAllDay);
+  const endTimes = workSlices.map((s) => s.endLocal).sort();
+  const latestEnd = endTimes[endTimes.length - 1];
+
+  // If all-day (00:00:00), use default 16:00, otherwise use their actual end time
+  const finalEndTime = hasAllDayWork ? DEFAULT_END : latestEnd;
 
   return {
     inspector_id: inspector.id,
     inspector_name: inspector.full_name,
     date_local: key.date,
     is_available: true,
-    start_time_local: minStart,
-    end_time_local: maxEnd,
+    start_time_local: DEFAULT_START, // Always 08:30
+    end_time_local: finalEndTime, // Their end time or 16:00
     department: inspector.department_name,
     source: SOURCE,
     fetched_at: nowIso,
     raw_payload: {
       contributing_ids: Array.from(new Set(workSlices.map((s) => s.raw.id))),
       items: workSlices.map((s) => s.raw),
-      rationale: "Merged partial WORK windows to min–max span",
+      rationale: `Always start at ${DEFAULT_START}; end at ${finalEndTime} (all-day: ${hasAllDayWork})`,
     },
   };
 }
@@ -255,7 +238,7 @@ serve(async (req) => {
     const wfUrl = new URL(`${BASE}/companies/${COMPANY_ID}/availability`);
     wfUrl.searchParams.set("from", from);
     wfUrl.searchParams.set("to", to);
-    wfUrl.searchParams.set("type", "WORK"); // ONLY FETCH WORK AVAILABILITY
+    wfUrl.searchParams.set("type", "WORK");
 
     const headers: Record<string, string> = { "content-type": "application/json" };
     const apiKey = Deno.env.get("WORKFEED_API_KEY");
@@ -279,45 +262,59 @@ serve(async (req) => {
     const items = (await resp.json()) as WorkfeedAvailability[];
     console.log(`[workfeed-ingest-availability] Received ${items.length} WORK availability items from WorkFeed`);
 
-    // Extract unique employee IDs and fetch inspector details with JOIN to departments
+    if (items.length === 0) {
+      return new Response(
+        JSON.stringify({
+          upserted: 0,
+          message: "No WORK availability found in WorkFeed for the specified date range",
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "content-type": "application/json" },
+        },
+      );
+    }
+
+    // Extract unique employee IDs and fetch inspector details
     const employeeIds = [...new Set(items.map((item) => item.employeeID))];
     console.log(`[workfeed-ingest-availability] Looking up ${employeeIds.length} unique employee IDs`);
 
-    // Join with departments table to get department name
-    const { data: inspectors, error: inspectorError } = await supabase
+    // Fetch ALL inspectors first
+    const { data: allInspectors, error: allInspectorError } = await supabase
       .from("inspectors")
-      .select(
-        `
-        id,
-        wf_employee_id,
-        full_name,
-        departments!inner(name)
-      `,
-      )
+      .select("id, wf_employee_id, full_name, department_id")
       .in("wf_employee_id", employeeIds)
       .eq("is_active", true);
 
-    if (inspectorError) {
-      console.error("[workfeed-ingest-availability] Failed to fetch inspector mappings:", inspectorError);
-      return new Response(JSON.stringify({ error: "Failed to fetch inspector mappings", details: inspectorError }), {
+    if (allInspectorError) {
+      console.error("[workfeed-ingest-availability] Failed to fetch inspectors:", allInspectorError);
+      return new Response(JSON.stringify({ error: "Failed to fetch inspectors", details: allInspectorError }), {
         status: 500,
         headers: { ...corsHeaders, "content-type": "application/json" },
       });
     }
 
-    // Create lookup map: wf_employee_id → Inspector object
+    console.log(`[workfeed-ingest-availability] Found ${allInspectors?.length || 0} active inspectors`);
+
+    // Fetch department names for all department IDs
+    const departmentIds = [...new Set(allInspectors?.map((i) => i.department_id).filter(Boolean) || [])];
+    const { data: departments } = await supabase.from("departments").select("id, name").in("id", departmentIds);
+
+    const departmentMap = new Map(departments?.map((d) => [d.id, d.name]) || []);
+
+    // Create lookup map with department names
     const inspectorMap = new Map<string, Inspector>(
-      inspectors?.map((i) => [
+      allInspectors?.map((i) => [
         i.wf_employee_id,
         {
           id: i.id,
           wf_employee_id: i.wf_employee_id,
           full_name: i.full_name,
-          department_name: i.departments?.name || "Unknown",
+          department_name: departmentMap.get(i.department_id) || "Unknown",
         },
       ]) ?? [],
     );
-    console.log(`[workfeed-ingest-availability] Mapped ${inspectorMap.size} active inspectors`);
+    console.log(`[workfeed-ingest-availability] Mapped ${inspectorMap.size} inspectors with departments`);
 
     // Normalize → slices → group → collapse → rows
     const slices: Slice[] = items.flatMap(toSlices);
@@ -337,7 +334,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({
           upserted: 0,
-          message: "No WORK availability to upsert (either no data or all inspectors inactive/unmapped)",
+          message: "No rows to upsert - all inspectors may be inactive or not found in database",
         }),
         {
           status: 200,
@@ -365,6 +362,9 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         upserted: data?.length ?? 0,
+        total_workfeed_items: items.length,
+        unique_employees: employeeIds.length,
+        mapped_inspectors: inspectorMap.size,
         rows: data,
       }),
       { status: 200, headers: { ...corsHeaders, "content-type": "application/json" } },
