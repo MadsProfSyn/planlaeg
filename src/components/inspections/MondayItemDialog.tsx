@@ -19,12 +19,7 @@ interface MondayItemDialogProps {
   item?: MondayItem | null;
 }
 
-export function MondayItemDialog({
-  open,
-  onClose,
-  onSave,
-  item,
-}: MondayItemDialogProps) {
+export function MondayItemDialog({ open, onClose, onSave, item }: MondayItemDialogProps) {
   const [formData, setFormData] = useState<Partial<MondayItem>>({
     name: "",
     adresse: "",
@@ -84,22 +79,18 @@ export function MondayItemDialog({
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>
-            {item ? "Rediger syn" : "Tilføj nyt syn"}
-          </DialogTitle>
-          <DialogDescription>
-            Udfyld formularen for at {item ? "opdatere" : "oprette"} et syn
-          </DialogDescription>
+          <DialogTitle>{item ? "Rediger syn" : "Tilføj nyt syn"}</DialogTitle>
+          <DialogDescription>Udfyld formularen for at {item ? "opdatere" : "oprette"} et syn</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="name">Navn</Label>
+              <Label htmlFor="name">Type</Label>
               <Input
                 id="name"
                 value={formData.name || ""}
                 onChange={(e) => handleChange("name", e.target.value)}
-                placeholder="Syn navn"
+                placeholder="Syn type"
               />
             </div>
             <div className="grid gap-2">
@@ -129,10 +120,7 @@ export function MondayItemDialog({
                   type="number"
                   value={formData.antal_vaerelser || ""}
                   onChange={(e) =>
-                    handleChange(
-                      "antal_vaerelser",
-                      e.target.value ? parseInt(e.target.value) : undefined
-                    )
+                    handleChange("antal_vaerelser", e.target.value ? parseInt(e.target.value) : undefined)
                   }
                   placeholder="3"
                 />
@@ -143,11 +131,7 @@ export function MondayItemDialog({
               <Input
                 id="dato_tid"
                 type="datetime-local"
-                value={
-                  formData.dato_tid
-                    ? new Date(formData.dato_tid).toISOString().slice(0, 16)
-                    : ""
-                }
+                value={formData.dato_tid ? new Date(formData.dato_tid).toISOString().slice(0, 16) : ""}
                 onChange={(e) => handleChange("dato_tid", e.target.value)}
               />
             </div>
@@ -182,12 +166,7 @@ export function MondayItemDialog({
             </div>
           </div>
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              disabled={isSubmitting}
-            >
+            <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
               Annuller
             </Button>
             <Button type="submit" disabled={isSubmitting}>
