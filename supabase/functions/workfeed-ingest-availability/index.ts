@@ -146,12 +146,19 @@ function toSlices(item: WorkfeedAvailability): Slice[] {
  *  - Else (only NO_WORK) → is_available = false, times = null.
  *  - raw_payload stores the contributing WorkFeed items for traceability.
  */
-function collapseSlicesForDate(slices: Slice[]): RowForUpsert {
+function collapseSlicesForDate(slices: Slice[], employeeIdToUuid: Map<string, string>): RowForUpsert | null {
   const key = slices[0];
   const byType = {
     work: slices.filter((s) => s.isAvailable),
     noWork: slices.filter((s) => !s.isAvailable),
   };
+
+  // Map WorkFeed employee ID to Supabase inspector UUID
+  const inspectorUuid = employeeIdToUuid.get(key.employeeID);
+  if (!inspectorUuid) {
+    console.warn(`[workfeed-ingest-availability] No UUID mapping for employeeID: ${key.employeeID} on date ${key.date}`);
+    return null;
+  }
 
   const nowIso = new Date().toISOString();
 
@@ -161,7 +168,7 @@ function collapseSlicesForDate(slices: Slice[]): RowForUpsert {
     const hasAllDayWork = byType.work.some((s) => s.isAllDay);
     if (hasAllDayWork) {
       return {
-        inspector_id: key.employeeID,
+        inspector_id: inspectorUuid,
         inspector_name: null,
         date_local: key.date,
         is_available: true,
@@ -185,7 +192,7 @@ function collapseSlicesForDate(slices: Slice[]): RowForUpsert {
     const maxEnd = ends[ends.length - 1];
 
     return {
-      inspector_id: key.employeeID,
+      inspector_id: inspectorUuid,
       inspector_name: null,
       date_local: key.date,
       is_available: true,
@@ -204,7 +211,7 @@ function collapseSlicesForDate(slices: Slice[]): RowForUpsert {
 
   // Only NO_WORK slices
   return {
-    inspector_id: key.employeeID,
+    inspector_id: inspectorUuid,
     inspector_name: null,
     date_local: key.date,
     is_available: false,
@@ -309,13 +316,38 @@ serve(async (req) => {
     const items = (await resp.json()) as WorkfeedAvailability[];
     console.log(`[workfeed-ingest-availability] Received ${items.length} availability items from WorkFeed`);
 
+    // Extract unique employee IDs and fetch inspector UUID mappings
+    const employeeIds = [...new Set(items.map(item => item.employeeID))];
+    console.log(`[workfeed-ingest-availability] Looking up UUIDs for ${employeeIds.length} unique employee IDs`);
+
+    const { data: inspectors, error: inspectorError } = await supabase
+      .from('inspectors')
+      .select('id, wf_employee_id')
+      .in('wf_employee_id', employeeIds);
+
+    if (inspectorError) {
+      console.error("[workfeed-ingest-availability] Failed to fetch inspector mappings:", inspectorError);
+      return new Response(JSON.stringify({ error: "Failed to fetch inspector mappings", details: inspectorError }), {
+        status: 500, headers: { ...corsHeaders, "content-type": "application/json" },
+      });
+    }
+
+    // Create lookup map: wf_employee_id → UUID
+    const employeeIdToUuid = new Map<string, string>(
+      inspectors?.map(i => [i.wf_employee_id, i.id]) ?? []
+    );
+    console.log(`[workfeed-ingest-availability] Mapped ${employeeIdToUuid.size} employee IDs to UUIDs`);
+
     // Normalize → slices → group → collapse → rows
     const slices: Slice[] = items.flatMap(toSlices);
     const grouped = groupSlices(slices);
 
     const rows: RowForUpsert[] = [];
     for (const [, list] of grouped) {
-      rows.push(collapseSlicesForDate(list));
+      const row = collapseSlicesForDate(list, employeeIdToUuid);
+      if (row) {
+        rows.push(row);
+      }
     }
 
     console.log(`[workfeed-ingest-availability] Prepared ${rows.length} rows for upsert`);
