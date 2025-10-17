@@ -52,89 +52,97 @@ Deno.serve(async (req) => {
     const inspectors = vrpInput?.inspectors || [];
     const existingShifts = vrpInput?.existing_shifts || [];
 
-    // Simple greedy assignment algorithm
-    // In production, this would use OR-Tools or similar optimization library
-    const assignments: any[] = [];
-    const inspectorWorkload = new Map<string, number>();
+    // Call the external Railway VRP API for optimized route planning
+    const railwayApiUrl = "https://web-production-1b301.up.railway.app/schedule";
+    
+    console.log("Calling external VRP API:", railwayApiUrl);
 
-    // Initialize inspector workload tracking
-    inspectors.forEach((inspector: any) => {
-      inspectorWorkload.set(inspector.inspector_id, 0);
-    });
-
-    // Sort inspections by preferred date
-    const sortedInspections = [...inspections].sort((a, b) =>
-      a.preferred_date.localeCompare(b.preferred_date)
-    );
-
-    // Simple assignment: assign each inspection to the first available inspector with matching skills
-    for (const inspection of sortedInspections) {
-      // Find inspectors available on this date with matching skills
-      const availableInspectors = inspectors.filter((inspector: any) => {
-        const isAvailable = inspector.date_local === inspection.preferred_date;
-        const hasSkills = inspector.can_do_types?.includes(
-          inspection.type_code
-        );
-        return isAvailable && hasSkills;
+    let railwayData: any;
+    
+    try {
+      const railwayResponse = await fetch(railwayApiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          inspection_ids,
+          target_dates,
+        }),
+        signal: AbortSignal.timeout(90000), // 90 second timeout
       });
 
-      if (availableInspectors.length === 0) {
-        console.warn(`No available inspector for inspection ${inspection.id}`);
-        continue;
+      if (!railwayResponse.ok) {
+        const errorText = await railwayResponse.text();
+        throw new Error(`VRP API returned ${railwayResponse.status}: ${errorText}`);
       }
 
-      // Pick inspector with least workload
-      const selectedInspector = availableInspectors.reduce((prev: any, curr: any) => {
-        const prevWorkload = inspectorWorkload.get(prev.inspector_id) || 0;
-        const currWorkload = inspectorWorkload.get(curr.inspector_id) || 0;
-        return currWorkload < prevWorkload ? curr : prev;
+      railwayData = await railwayResponse.json();
+
+      console.log("VRP API response:", {
+        assignments_count: railwayData.assignments?.length || 0,
+        total_scheduled: railwayData.metrics?.total_scheduled,
+        execution_seconds: railwayData.metrics?.execution_seconds,
       });
 
-      const currentWorkload = inspectorWorkload.get(selectedInspector.inspector_id) || 0;
-      const startTimeMinutes = parseTimeToMinutes(selectedInspector.start_time_local) + currentWorkload;
-      const durationMinutes = inspection.duration_minutes || 60;
-      const endTimeMinutes = startTimeMinutes + durationMinutes;
+      if (!railwayData.assignments || railwayData.assignments.length === 0) {
+        throw new Error("Ingen synskonsulenter tilgængelige på de valgte datoer");
+      }
 
-      // Simple travel time estimation (5 minutes per inspection as placeholder)
-      const travelMinutes = assignments.length > 0 ? 5 : 0;
-
-      assignments.push({
-        inspection_id: inspection.id,
-        inspector_id: selectedInspector.inspector_id,
-        inspector_name: selectedInspector.full_name,
-        scheduled_date: inspection.preferred_date,
-        start_time: minutesToTime(startTimeMinutes),
-        end_time: minutesToTime(endTimeMinutes),
-        sequence_in_route: assignments.length + 1,
-        travel_from_previous_mins: travelMinutes,
-        inspection_address: inspection.address,
-        inspection_type: inspection.type_code,
-      });
-
-      // Update workload
-      inspectorWorkload.set(
-        selectedInspector.inspector_id,
-        currentWorkload + durationMinutes + travelMinutes
-      );
+    } catch (error: any) {
+      console.error("Railway VRP API error:", error);
+      
+      // Provide user-friendly error messages
+      let userMessage = "Kunne ikke beregne rute. Prøv igen.";
+      
+      if (error.name === "TimeoutError" || error.message?.includes("timeout")) {
+        userMessage = "Rute-beregning tog for lang tid. Prøv med færre syn.";
+      } else if (error.message?.includes("fetch") || error.message?.includes("network")) {
+        userMessage = "Rute-serveren svarer ikke. Prøv igen om et øjeblik.";
+      } else if (error.message?.includes("tilgængelige")) {
+        userMessage = error.message;
+      } else if (error.message?.includes("no solution")) {
+        userMessage = "Kunne ikke finde optimal rute for de valgte syn.";
+      }
+      
+      throw new Error(userMessage);
     }
 
-    // Calculate route metrics
-    const totalTravelMinutes = assignments.reduce(
-      (sum, a) => sum + (a.travel_from_previous_mins || 0),
-      0
-    );
-    const totalDistanceKm = totalTravelMinutes * 0.8; // Rough estimate: 0.8 km per minute
+    // Transform Railway API response to match our VrpRoutePlan interface
+    const assignments = railwayData.assignments.map((a: any) => {
+      const inspection = inspections.find((i: any) => i.id === a.inspection_id);
+      const inspector = inspectors.find((i: any) => i.inspector_id === a.inspector_id);
+      
+      return {
+        inspection_id: a.inspection_id,
+        inspector_id: a.inspector_id,
+        inspector_name: a.inspector_name || inspector?.full_name || "Ukendt synskonsulent",
+        scheduled_date: a.date,
+        start_time: a.start_time.substring(0, 5), // "09:00:00" → "09:00"
+        end_time: a.end_time.substring(0, 5),
+        sequence_in_route: a.sequence,
+        travel_from_previous_mins: a.travel_mins,
+        inspection_address: inspection?.address || "Ukendt adresse",
+        inspection_type: inspection?.type_code || a.inspection_type,
+      };
+    });
+
+    const metrics = railwayData.metrics || {};
+    const totalDistanceKm = metrics.total_travel_km || 0;
+    const totalTravelMinutes = metrics.total_travel_minutes || 0;
 
     const routePlan = {
-      ordered_syn_ids: assignments.map((a) => a.inspection_id),
+      ordered_syn_ids: assignments.map((a: any) => a.inspection_id),
       assignments,
       total_distance_km: totalDistanceKm,
       total_eta_minutes: totalTravelMinutes,
-      legs: assignments.map((a, i) => ({
+      legs: assignments.map((a: any, i: number) => ({
         from_syn_id: i > 0 ? assignments[i - 1].inspection_id : null,
         to_syn_id: a.inspection_id,
         eta_minutes: a.travel_from_previous_mins,
-        distance_km: a.travel_from_previous_mins * 0.8,
+        distance_km: totalTravelMinutes > 0 
+          ? (a.travel_from_previous_mins / totalTravelMinutes) * totalDistanceKm 
+          : 0,
       })),
     };
 
