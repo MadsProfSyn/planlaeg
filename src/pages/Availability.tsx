@@ -42,7 +42,7 @@ export default function AvailabilityPage() {
     data: [],
     total: 0,
     page: 1,
-    pageSize: 50,
+    pageSize: 500,
     totalPages: 0
   });
   const [sortBy, setSortBy] = React.useState("dato");
@@ -155,7 +155,7 @@ export default function AvailabilityPage() {
         data: data.data || [],
         total: data.total || 0,
         page: data.page || 1,
-        pageSize: data.pageSize || 50,
+        pageSize: data.pageSize || 500,
         totalPages: data.totalPages || 0
       });
     } catch (error) {
