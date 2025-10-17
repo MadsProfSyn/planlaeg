@@ -6,8 +6,8 @@
  *   SUPABASE_URL
  *   SUPABASE_SERVICE_ROLE_KEY
  *   WORKFEED_BASE_URL      (default: https://europe-west1-production-eu-327a3.cloudfunctions.net/api)
- *   WORKFEED_COMPANY_ID    (required)
- *   WORKFEED_API_KEY       (required; sent as Bearer)
+ *   WORKFEED_COMPANY_ID    (default: KASqUqisoJTrzapASxwG)
+ *   WORKFEED_API_KEY       (required; sent without Bearer prefix)
  *
  * HTTP (examples):
  *   POST /workfeed-ingest-availability?from=2025-10-19T00:00:00.000Z&to=2025-10-26T00:00:00.000Z
@@ -279,13 +279,7 @@ serve(async (req) => {
 
     const BASE = Deno.env.get("WORKFEED_BASE_URL") ??
       "https://europe-west1-production-eu-327a3.cloudfunctions.net/api";
-    const COMPANY_ID = Deno.env.get("WORKFEED_COMPANY_ID");
-    if (!COMPANY_ID) {
-      return new Response(JSON.stringify({ error: "Missing env WORKFEED_COMPANY_ID" }), {
-        status: 500,
-        headers: { ...corsHeaders, "content-type": "application/json" },
-      });
-    }
+    const COMPANY_ID = Deno.env.get("WORKFEED_COMPANY_ID") ?? "KASqUqisoJTrzapASxwG";
 
     // Build WorkFeed request
     const wfUrl = new URL(`${BASE}/companies/${COMPANY_ID}/availability`);
@@ -297,7 +291,7 @@ serve(async (req) => {
     const headers: Record<string, string> = { "content-type": "application/json" };
     const apiKey = Deno.env.get("WORKFEED_API_KEY");
     if (apiKey) {
-      headers["Authorization"] = `Bearer ${apiKey}`;
+      headers["Authorization"] = apiKey; // WorkFeed expects token without 'Bearer' prefix
     } else {
       console.warn("[workfeed-ingest-availability] WORKFEED_API_KEY not set");
     }
