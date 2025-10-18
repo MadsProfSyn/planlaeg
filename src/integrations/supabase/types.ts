@@ -658,6 +658,50 @@ export type Database = {
         }
         Relationships: []
       }
+      shifts: {
+        Row: {
+          created_at: string | null
+          ends_at: string
+          external_id: string
+          id: string
+          inspector_id: string
+          source: string
+          starts_at: string
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          ends_at: string
+          external_id: string
+          id?: string
+          inspector_id: string
+          source: string
+          starts_at: string
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          ends_at?: string
+          external_id?: string
+          id?: string
+          inspector_id?: string
+          source?: string
+          starts_at?: string
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shifts_inspector_id_fkey"
+            columns: ["inspector_id"]
+            isOneToOne: false
+            referencedRelation: "inspectors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supabase_availability: {
         Row: {
           date_local: string
