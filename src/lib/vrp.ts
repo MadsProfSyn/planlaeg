@@ -60,6 +60,54 @@ export async function approveVrpAssignments(
 }
 
 /**
+ * Transform Monday items to inspection queue records for VRP processing
+ */
+export async function transformMondayItemsToInspections(
+  mondayItemIds: number[]
+): Promise<string[]> {
+  // Fetch Monday items by IDs
+  const { data: mondayItems, error: fetchError } = await supabase
+    .from("monday_items_selected")
+    .select("*")
+    .in("id", mondayItemIds);
+
+  if (fetchError) {
+    throw new Error(`Failed to fetch Monday items: ${fetchError.message}`);
+  }
+
+  if (!mondayItems || mondayItems.length === 0) {
+    throw new Error("No Monday items found");
+  }
+
+  // Transform and insert into inspection_queue
+  const inspectionRecords = mondayItems.map((item) => ({
+    monday_item_id: item.id,
+    address: item.adresse || "",
+    inspection_type: item.synstype || "Ukendt",
+    rooms: item.antal_vaerelser || 0,
+    preferred_date: item.dato_tid
+      ? new Date(item.dato_tid).toISOString().split("T")[0]
+      : new Date().toISOString().split("T")[0],
+    customer_name: item.Kunde || "",
+    lease_number: item.lejemalsnr || "",
+    department: item.landsdel || "Ukendt",
+    status: "PENDING",
+    geocode_status: "pending",
+  }));
+
+  const { data: created, error: insertError } = await supabase
+    .from("inspection_queue")
+    .insert(inspectionRecords)
+    .select("id");
+
+  if (insertError) {
+    throw new Error(`Failed to create inspections: ${insertError.message}`);
+  }
+
+  return created.map((record) => record.id);
+}
+
+/**
  * Fetch inspections by IDs for VRP modal display
  */
 export async function getInspectionsByIds(inspectionIds: string[]) {

@@ -6,9 +6,10 @@ import { MondayItemsTable } from "@/components/inspections/MondayItemsTable";
 import { InspectionsPagination } from "@/components/inspections/InspectionsPagination";
 import { SearchBar } from "@/components/filters/SearchBar";
 import { getMondayItems, createMondayItem, updateMondayItem, deleteMondayItem, getRegions, type MondayItemFilters, type MondayItem } from "@/lib/supabase";
+import { transformMondayItemsToInspections } from "@/lib/vrp";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { CalendarCheck, Plus, Building2 } from "lucide-react";
+import { CalendarCheck, Plus, Building2, Loader2 } from "lucide-react";
 import { PlanlaegSynModal } from "@/components/inspections/PlanlaegSynModal";
 import { MondayItemDialog } from "@/components/inspections/MondayItemDialog";
 import { supabase } from "@/integrations/supabase/client";
@@ -34,6 +35,8 @@ export default function InspectionsPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false);
   const [editingItem, setEditingItem] = React.useState<MondayItem | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = React.useState<number | null>(null);
+  const [transformedInspectionIds, setTransformedInspectionIds] = React.useState<string[]>([]);
+  const [isTransforming, setIsTransforming] = React.useState(false);
   const pageSize = 50;
   const abortControllerRef = React.useRef<AbortController | null>(null);
 
@@ -179,7 +182,7 @@ export default function InspectionsPage() {
     }
   };
 
-  const handleOpenPlanningModal = () => {
+  const handleOpenPlanningModal = async () => {
     if (selectedIds.length === 0) {
       toast({
         title: "Ingen syn valgt",
@@ -188,18 +191,39 @@ export default function InspectionsPage() {
       });
       return;
     }
-    setIsPlanningModalOpen(true);
+
+    setIsTransforming(true);
+
+    try {
+      // Transform Monday items to inspection queue records
+      const inspectionIds = await transformMondayItemsToInspections(selectedIds);
+      setTransformedInspectionIds(inspectionIds);
+      setIsPlanningModalOpen(true);
+    } catch (error) {
+      toast({
+        title: "Fejl",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Kunne ikke forberede syn til planlægning",
+        variant: "destructive",
+      });
+    } finally {
+      setIsTransforming(false);
+    }
   };
 
   const handlePlanningApproved = () => {
     // Clear selections after approval
+    const count = selectedIds.length;
     setSelectedIds([]);
+    setTransformedInspectionIds([]);
     setIsPlanningModalOpen(false);
     queryClient.invalidateQueries({ queryKey: ["monday-items"] });
-    
+
     toast({
       title: "Syn planlagt",
-      description: `${selectedIds.length} syn er blevet planlagt.`,
+      description: `${count} syn er blevet planlagt.`,
     });
   };
 
@@ -236,9 +260,23 @@ export default function InspectionsPage() {
             Tilføj Syn
           </Button>
           {selectedIds.length > 0 && (
-            <Button onClick={handleOpenPlanningModal} size="lg" className="gap-2 shadow-md">
-              <CalendarCheck className="h-5 w-5" />
-              Planlæg Syn ({selectedIds.length})
+            <Button
+              onClick={handleOpenPlanningModal}
+              size="lg"
+              className="gap-2 shadow-md"
+              disabled={isTransforming}
+            >
+              {isTransforming ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  Forbereder...
+                </>
+              ) : (
+                <>
+                  <CalendarCheck className="h-5 w-5" />
+                  Planlæg Syn ({selectedIds.length})
+                </>
+              )}
             </Button>
           )}
         </div>
@@ -296,8 +334,11 @@ export default function InspectionsPage() {
 
       <PlanlaegSynModal
         open={isPlanningModalOpen}
-        onClose={() => setIsPlanningModalOpen(false)}
-        selectedInspectionIds={selectedIds.map(id => id.toString())}
+        onClose={() => {
+          setIsPlanningModalOpen(false);
+          setTransformedInspectionIds([]);
+        }}
+        selectedInspectionIds={transformedInspectionIds}
         onApproved={handlePlanningApproved}
       />
 
