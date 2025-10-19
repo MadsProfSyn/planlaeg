@@ -5,11 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MondayItemsTable } from "@/components/inspections/MondayItemsTable";
 import { InspectionsPagination } from "@/components/inspections/InspectionsPagination";
 import { InspectionsFiltersBar } from "@/components/inspections/InspectionsFiltersBar";
-import { getMondayItems, createMondayItem, updateMondayItem, deleteMondayItem, getRegions, type MondayItemFilters, type MondayItem } from "@/lib/supabase";
+import { getMondayItems, createMondayItem, updateMondayItem, deleteMondayItem, deleteAllMondayItems, getRegions, type MondayItemFilters, type MondayItem } from "@/lib/supabase";
 import { transformMondayItemsToInspections } from "@/lib/vrp";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { CalendarCheck, Plus, Building2, Loader2 } from "lucide-react";
+import { CalendarCheck, Plus, Building2, Loader2, Trash2 } from "lucide-react";
 import { PlanlaegSynModal } from "@/components/inspections/PlanlaegSynModal";
 import { MondayItemDialog } from "@/components/inspections/MondayItemDialog";
 import { supabase } from "@/integrations/supabase/client";
@@ -40,6 +40,8 @@ export default function InspectionsPage() {
   const [deleteConfirmId, setDeleteConfirmId] = React.useState<number | null>(null);
   const [transformedInspectionIds, setTransformedInspectionIds] = React.useState<string[]>([]);
   const [isTransforming, setIsTransforming] = React.useState(false);
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = React.useState(false);
+  const [isDeletingAll, setIsDeletingAll] = React.useState(false);
   const pageSize = 50;
   const abortControllerRef = React.useRef<AbortController | null>(null);
 
@@ -269,6 +271,32 @@ export default function InspectionsPage() {
     setDateTo(undefined);
   };
 
+  const handleDeleteAll = async () => {
+    setIsDeletingAll(true);
+
+    try {
+      const deletedCount = await deleteAllMondayItems();
+
+      toast({
+        title: "Syn slettet",
+        description: `${deletedCount} syn blev slettet.`,
+      });
+
+      // Clear selections and refresh data
+      setSelectedIds([]);
+      queryClient.invalidateQueries({ queryKey: ["monday-items"] });
+      setShowDeleteAllConfirm(false);
+    } catch (error) {
+      toast({
+        title: "Fejl",
+        description: "Kunne ikke slette syn. Prøv igen.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeletingAll(false);
+    }
+  };
+
   const items = mondayData?.data || [];
   const totalCount = mondayData?.count || 0;
   const totalPages = mondayData?.totalPages || 1;
@@ -293,6 +321,29 @@ export default function InspectionsPage() {
             <Plus className="h-5 w-5" />
             Tilføj Syn
           </Button>
+
+          {totalCount > 0 && (
+            <Button
+              onClick={() => setShowDeleteAllConfirm(true)}
+              variant="destructive"
+              size="lg"
+              className="gap-2"
+              disabled={isDeletingAll}
+            >
+              {isDeletingAll ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  Sletter...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-5 w-5" />
+                  Slet alle syn
+                </>
+              )}
+            </Button>
+          )}
+
           {selectedIds.length > 0 && (
             <Button
               onClick={handleOpenPlanningModal}
@@ -399,6 +450,45 @@ export default function InspectionsPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>Annuller</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteConfirm}>Slet</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Delete Confirmation */}
+      <AlertDialog open={showDeleteAllConfirm} onOpenChange={setShowDeleteAllConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" />
+              Bekræft massesletning
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Er du sikker på, at du vil slette ALLE {totalCount} syn fra Monday.com?
+              <br /><br />
+              <strong>Denne handling kan ikke fortrydes.</strong>
+              <br /><br />
+              Alle ikke-planlagte syn vil blive permanent slettet.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuller</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteAll}
+              className="bg-destructive hover:bg-destructive/90"
+              disabled={isDeletingAll}
+            >
+              {isDeletingAll ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Sletter...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Ja, slet alle syn
+                </>
+              )}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

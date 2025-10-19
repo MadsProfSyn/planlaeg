@@ -23,6 +23,8 @@ import { Progress } from "@/components/ui/progress";
 import { approveVrpAssignments, getInspectionsByIds, groupAssignmentsByInspector } from "@/lib/vrp";
 import { useToast } from "@/hooks/use-toast";
 import { InspectorRouteGroup } from "./InspectorRouteGroup";
+import { RouteMapView } from "./RouteMapView";
+import { supabase } from "@/integrations/supabase/client";
 import type { VrpAssignment } from "@/types/vrp";
 
 interface PlanlaegSynModalProps {
@@ -43,6 +45,8 @@ export function PlanlaegSynModal({
   const [datetimeByInspection, setDatetimeByInspection] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadingInspections, setLoadingInspections] = useState(false);
+  const [selectedInspectorId, setSelectedInspectorId] = useState<string | null>(null);
+  const [mapboxToken, setMapboxToken] = useState<string>("");
 
   // Extract unique target dates from inspections
   const targetDates = React.useMemo(() => {
@@ -201,7 +205,7 @@ export function PlanlaegSynModal({
 
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-[95vw] max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-2xl">
             Planlæg syn ({selectedInspectionIds.length} valgt)
@@ -209,7 +213,7 @@ export function PlanlaegSynModal({
         </DialogHeader>
 
         <div className="flex-1 overflow-hidden">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 h-full">
             {/* Left Panel: Inspection Details */}
             <div className="space-y-4">
               <h3 className="font-semibold text-lg flex items-center gap-2">
@@ -348,6 +352,8 @@ export function PlanlaegSynModal({
                           key={inspectorRoute.inspector_id}
                           inspectorRoute={inspectorRoute}
                           inspectionsMap={inspectionsMap}
+                          isSelected={selectedInspectorId === inspectorRoute.inspector_id}
+                          onSelect={() => setSelectedInspectorId(inspectorRoute.inspector_id)}
                         />
                       ))}
 
@@ -385,6 +391,37 @@ export function PlanlaegSynModal({
                     Venter på ruteberegning...
                   </AlertDescription>
                 </Alert>
+              )}
+            </div>
+
+            {/* Third Panel: Map View */}
+            <div className="space-y-4 hidden xl:block">
+              <h3 className="font-semibold text-lg flex items-center gap-2">
+                <MapPin className="h-5 w-5" />
+                Kortvisning
+              </h3>
+
+              {isLoadingRoutes ? (
+                <Skeleton className="h-[600px] w-full rounded-lg" />
+              ) : vrpError ? (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    Kort kan ikke vises
+                  </AlertDescription>
+                </Alert>
+              ) : groupedRoutes && mapboxToken ? (
+                <RouteMapView
+                  inspectorRoutes={groupedRoutes.inspector_routes}
+                  selectedInspectorId={selectedInspectorId}
+                  inspectionsMap={inspectionsMap}
+                  onInspectorSelect={setSelectedInspectorId}
+                  mapboxToken={mapboxToken}
+                />
+              ) : (
+                <div className="h-[600px] border rounded-lg bg-muted/20 flex items-center justify-center">
+                  <p className="text-muted-foreground">Venter på kort...</p>
+                </div>
               )}
             </div>
           </div>

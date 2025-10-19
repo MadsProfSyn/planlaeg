@@ -7,19 +7,30 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { RouteOverviewCard } from "./RouteOverviewCard";
 import type { InspectorRouteSummary } from "@/types/vrp";
+import { cn } from "@/lib/utils";
 
 interface InspectorRouteGroupProps {
   inspectorRoute: InspectorRouteSummary;
   inspectionsMap: Map<string, any>;
+  isSelected?: boolean;
+  onSelect?: () => void;
 }
 
 export function InspectorRouteGroup({
   inspectorRoute,
   inspectionsMap,
+  isSelected = false,
+  onSelect,
 }: InspectorRouteGroupProps) {
   return (
     <Collapsible defaultOpen={true} className="border rounded-lg">
-      <CollapsibleTrigger className="w-full p-4 hover:bg-muted/50 transition-colors">
+      <CollapsibleTrigger
+        className={cn(
+          "w-full p-4 hover:bg-muted/50 transition-colors cursor-pointer",
+          isSelected && "bg-primary/10 border-l-4 border-l-primary"
+        )}
+        onClick={onSelect}
+      >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <User className="h-5 w-5 text-primary" />

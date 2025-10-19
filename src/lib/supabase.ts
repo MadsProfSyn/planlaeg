@@ -169,3 +169,22 @@ export async function getRegions(): Promise<string[]> {
 
   return regions as string[];
 }
+
+export async function deleteAllMondayItems(): Promise<number> {
+  // Get count first
+  const { count } = await supabase
+    .from("monday_items_selected")
+    .select("*", { count: "exact", head: true });
+
+  // Delete all records
+  const { error } = await supabase
+    .from("monday_items_selected")
+    .delete()
+    .neq("id", 0); // Delete all records
+
+  if (error) {
+    throw new Error(`Failed to delete all Monday items: ${error.message}`);
+  }
+
+  return count || 0;
+}
