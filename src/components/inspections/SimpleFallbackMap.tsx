@@ -68,7 +68,7 @@ export function SimpleFallbackMap({
                   </div>
                   <div className="flex items-center gap-1">
                     <MapPin className="h-4 w-4" />
-                    {route.total_distance_km.toFixed(1)} km
+                    {Number(route.total_distance_km ?? 0).toFixed(1)} km
                   </div>
                 </div>
               </button>

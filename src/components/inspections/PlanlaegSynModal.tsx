@@ -26,6 +26,7 @@ import { InspectorRouteGroup } from "./InspectorRouteGroup";
 import { RouteMapView } from "./RouteMapView";
 import { SimpleFallbackMap } from "./SimpleFallbackMap";
 import type { VrpAssignment } from "@/types/vrp";
+import { ErrorBoundary } from "@/components/utility/ErrorBoundary";
 
 interface PlanlaegSynModalProps {
   open: boolean;
@@ -46,6 +47,7 @@ export function PlanlaegSynModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadingInspections, setLoadingInspections] = useState(false);
   const [selectedInspectorId, setSelectedInspectorId] = useState<string | null>(null);
+  const [groupingError, setGroupingError] = useState<string | null>(null);
 
   // Extract unique target dates from inspections
   const targetDates = React.useMemo(() => {
@@ -191,26 +193,45 @@ export function PlanlaegSynModal({
     (inspection) => !datetimeByInspection[inspection.id]
   );
 
-  // Group assignments by inspector
+  // Group assignments by inspector (bulletproof)
   const groupedRoutes = React.useMemo(() => {
-    console.log("📊 Computing groupedRoutes", {
-      hasRoutePlan: !!routePlan,
-      inspectionsCount: inspections.length,
-      assignmentsCount: routePlan?.assignments?.length || 0,
-    });
-
-    if (!routePlan) {
-      console.warn("⚠️ No routePlan yet");
-      return null;
+    try {
+      setGroupingError(null);
+      if (!routePlan) return null;
+      const result = groupAssignmentsByInspector(routePlan, inspections);
+      return result;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("groupAssignmentsByInspector failed:", e);
+      setGroupingError(msg);
+      // Minimal fallback from assignments only
+      const assignments = routePlan?.assignments ?? [];
+      const grouped = new Map<string, typeof assignments>();
+      assignments.forEach((a) => {
+        const arr = grouped.get(a.inspector_id) ?? [];
+        grouped.set(a.inspector_id, [...arr, a]);
+      });
+      const inspector_routes = Array.from(grouped.entries()).map(([inspector_id, arr]) => {
+        const sorted = arr.slice().sort((a, b) => a.sequence_in_route - b.sequence_in_route);
+        const total_inspection_mins = sorted.length * 60;
+        return {
+          inspector_id,
+          inspector_name: sorted[0]?.inspector_name || "Ukendt",
+          assignments: sorted,
+          total_time_mins: total_inspection_mins,
+          total_distance_km: 0,
+          total_inspections: sorted.length,
+        };
+      });
+      const assignedIds = new Set(assignments.map((a) => a.inspection_id));
+      const unassigned_inspections = inspections.filter((i) => !assignedIds.has(i.id));
+      return {
+        inspector_routes,
+        unassigned_inspections,
+        overall_total_time: (routePlan?.total_eta_minutes ?? inspector_routes.reduce((s, r) => s + r.total_time_mins, 0)),
+        overall_total_distance: (routePlan?.total_distance_km ?? 0),
+      };
     }
-
-    const result = groupAssignmentsByInspector(routePlan, inspections);
-    console.log("✅ Grouped routes computed", {
-      inspectorRoutesCount: result.inspector_routes.length,
-      unassignedCount: result.unassigned_inspections.length,
-    });
-
-    return result;
   }, [routePlan, inspections]);
 
   // Create inspection map for quick lookup
@@ -219,13 +240,14 @@ export function PlanlaegSynModal({
   }, [inspections]);
 
   return (
-    <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-[95vw] max-h-[90vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="text-2xl">
-            Planlæg syn ({selectedInspectionIds.length} valgt)
-          </DialogTitle>
-        </DialogHeader>
+    <ErrorBoundary name="PlanlaegSynModal">
+      <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
+        <DialogContent className="max-w-[95vw] max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="text-2xl">
+              Planlæg syn ({selectedInspectionIds.length} valgt)
+            </DialogTitle>
+          </DialogHeader>
 
         <div className="flex-1 overflow-hidden">
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 h-full">
@@ -351,7 +373,7 @@ export function PlanlaegSynModal({
                     <div className="flex items-center gap-2 text-sm">
                       <MapPin className="h-4 w-4" />
                       <span className="font-medium">Distance:</span>
-                      <span>{groupedRoutes.overall_total_distance.toFixed(1)} km</span>
+                      <span>{Number(groupedRoutes.overall_total_distance ?? 0).toFixed(1)} km</span>
                     </div>
                   </div>
 
@@ -508,7 +530,8 @@ export function PlanlaegSynModal({
             )}
           </Button>
         </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+    </ErrorBoundary>
   );
 }

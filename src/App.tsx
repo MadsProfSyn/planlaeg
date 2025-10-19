@@ -17,38 +17,41 @@ import Account from "./pages/admin/Account";
 import MySyn from "./pages/admin/MySyn";
 import Users from "./pages/admin/Users";
 import NotFound from "./pages/NotFound";
+import { ErrorBoundary } from "@/components/utility/ErrorBoundary";
 
 const queryClient = new QueryClient();
 
 const App = () => {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<Auth />} />
-              <Route path="/inspections" element={<ProtectedRoute><AppLayout><Inspections /></AppLayout></ProtectedRoute>} />
-              <Route path="/scheduled" element={<ProtectedRoute><AppLayout><Scheduled /></AppLayout></ProtectedRoute>} />
-              <Route path="/availability" element={<ProtectedRoute><AppLayout><Availability /></AppLayout></ProtectedRoute>} />
-              <Route path="/profsyn-ai" element={<ProtectedRoute><AppLayout><ProfSynAI /></AppLayout></ProtectedRoute>} />
-              
-              {/* Admin Routes */}
-              <Route path="/admin" element={<ProtectedRoute><AppLayout><Navigate to="/admin/overview" replace /></AppLayout></ProtectedRoute>} />
-              <Route path="/admin/overview" element={<ProtectedRoute><AppLayout><Overview /></AppLayout></ProtectedRoute>} />
-              <Route path="/admin/account" element={<ProtectedRoute><AppLayout><Account /></AppLayout></ProtectedRoute>} />
-              <Route path="/admin/my-syn" element={<ProtectedRoute><AppLayout><MySyn /></AppLayout></ProtectedRoute>} />
-              <Route path="/admin/users" element={<ProtectedRoute><AdminRoute><AppLayout><Users /></AppLayout></AdminRoute></ProtectedRoute>} />
-              
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <ErrorBoundary name="App Root">
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <Routes>
+                <Route path="/" element={<Auth />} />
+                <Route path="/inspections" element={<ProtectedRoute><AppLayout><Inspections /></AppLayout></ProtectedRoute>} />
+                <Route path="/scheduled" element={<ProtectedRoute><AppLayout><Scheduled /></AppLayout></ProtectedRoute>} />
+                <Route path="/availability" element={<ProtectedRoute><AppLayout><Availability /></AppLayout></ProtectedRoute>} />
+                <Route path="/profsyn-ai" element={<ProtectedRoute><AppLayout><ProfSynAI /></AppLayout></ProtectedRoute>} />
+                
+                {/* Admin Routes */}
+                <Route path="/admin" element={<ProtectedRoute><AppLayout><Navigate to="/admin/overview" replace /></AppLayout></ProtectedRoute>} />
+                <Route path="/admin/overview" element={<ProtectedRoute><AppLayout><Overview /></AppLayout></ProtectedRoute>} />
+                <Route path="/admin/account" element={<ProtectedRoute><AppLayout><Account /></AppLayout></ProtectedRoute>} />
+                <Route path="/admin/my-syn" element={<ProtectedRoute><AppLayout><MySyn /></AppLayout></ProtectedRoute>} />
+                <Route path="/admin/users" element={<ProtectedRoute><AdminRoute><AppLayout><Users /></AppLayout></AdminRoute></ProtectedRoute>} />
+                
+                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </TooltipProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 };
 

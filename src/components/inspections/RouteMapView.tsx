@@ -126,23 +126,27 @@ export function RouteMapView({
       mapLoaded,
     });
 
-    if (!map.current || inspectorRoutes.length === 0) {
-      console.warn("⚠️ Skipping marker update: no map or no routes");
+    if (!map.current || inspectorRoutes.length === 0 || !mapLoaded) {
+      console.warn("⚠️ Skipping marker update: no map, no routes, or map not loaded");
       return;
     }
-
+  
     // Clear existing markers
     markersRef.current.forEach((marker) => marker.remove());
     markersRef.current = [];
 
     // Remove existing route layers
-    inspectorRoutes.forEach((route, index) => {
+    inspectorRoutes.forEach((route) => {
       const sourceId = `route-${route.inspector_id}`;
-      if (map.current?.getLayer(sourceId)) {
-        map.current.removeLayer(sourceId);
-      }
-      if (map.current?.getSource(sourceId)) {
-        map.current.removeSource(sourceId);
+      try {
+        if (map.current?.getLayer(sourceId)) {
+          map.current.removeLayer(sourceId);
+        }
+        if (map.current?.getSource(sourceId)) {
+          map.current.removeSource(sourceId);
+        }
+      } catch (e) {
+        console.error("Failed to remove layer/source", sourceId, e);
       }
     });
 
@@ -168,32 +172,36 @@ export function RouteMapView({
 
       // Add route line
       if (coordinates.length > 1 && map.current) {
-        map.current.addSource(`route-${route.inspector_id}`, {
-          type: "geojson",
-          data: {
-            type: "Feature",
-            properties: {},
-            geometry: {
-              type: "LineString",
-              coordinates,
+        try {
+          map.current.addSource(`route-${route.inspector_id}`, {
+            type: "geojson",
+            data: {
+              type: "Feature",
+              properties: {},
+              geometry: {
+                type: "LineString",
+                coordinates,
+              },
             },
-          },
-        });
+          });
 
-        map.current.addLayer({
-          id: `route-${route.inspector_id}`,
-          type: "line",
-          source: `route-${route.inspector_id}`,
-          layout: {
-            "line-join": "round",
-            "line-cap": "round",
-          },
-          paint: {
-            "line-color": color,
-            "line-width": selectedInspectorId === route.inspector_id ? 4 : 2,
-            "line-opacity": isRouteSelected ? 1 : 0.6,
-          },
-        });
+          map.current.addLayer({
+            id: `route-${route.inspector_id}`,
+            type: "line",
+            source: `route-${route.inspector_id}`,
+            layout: {
+              "line-join": "round",
+              "line-cap": "round",
+            },
+            paint: {
+              "line-color": color,
+              "line-width": selectedInspectorId === route.inspector_id ? 4 : 2,
+              "line-opacity": isRouteSelected ? 1 : 0.6,
+            },
+          });
+        } catch (e) {
+          console.error("Failed to add route layer", e);
+        }
       }
 
       // Add numbered markers
@@ -269,23 +277,27 @@ export function RouteMapView({
     });
 
     // Fit map to show all markers
-    if (allCoords.length > 0 && map.current) {
-      const lngs = allCoords.map((c) => c[0]);
-      const lats = allCoords.map((c) => c[1]);
+    if (allCoords.length > 0 && map.current && mapLoaded) {
+      try {
+        const lngs = allCoords.map((c) => c[0]);
+        const lats = allCoords.map((c) => c[1]);
 
-      map.current.fitBounds(
-        [
-          [Math.min(...lngs), Math.min(...lats)],
-          [Math.max(...lngs), Math.max(...lats)],
-        ],
-        { padding: 50, duration: 1000 }
-      );
+        map.current.fitBounds(
+          [
+            [Math.min(...lngs), Math.min(...lats)],
+            [Math.max(...lngs), Math.max(...lats)],
+          ],
+          { padding: 50, duration: 1000 }
+        );
+      } catch (e) {
+        console.error("Failed to fit bounds", e);
+      }
     }
-  }, [inspectorRoutes, inspectionsMap, selectedInspectorId]);
+  }, [inspectorRoutes, inspectionsMap, selectedInspectorId, mapLoaded]);
 
   // Zoom to selected inspector route
   useEffect(() => {
-    if (!map.current || !selectedInspectorId) return;
+    if (!map.current || !selectedInspectorId || !mapLoaded) return;
 
     const selectedRoute = inspectorRoutes.find(
       (r) => r.inspector_id === selectedInspectorId
@@ -302,17 +314,21 @@ export function RouteMapView({
 
     if (coords.length === 0) return;
 
-    const lngs = coords.map((c) => c[0]);
-    const lats = coords.map((c) => c[1]);
+    try {
+      const lngs = coords.map((c) => c[0]);
+      const lats = coords.map((c) => c[1]);
 
-    map.current.fitBounds(
-      [
-        [Math.min(...lngs), Math.min(...lats)],
-        [Math.max(...lngs), Math.max(...lats)],
-      ],
-      { padding: 80, duration: 800 }
-    );
-  }, [selectedInspectorId, inspectorRoutes, inspectionsMap]);
+      map.current.fitBounds(
+        [
+          [Math.min(...lngs), Math.min(...lats)],
+          [Math.max(...lngs), Math.max(...lats)],
+        ],
+        { padding: 80, duration: 800 }
+      );
+    } catch (e) {
+      console.error("Failed to fit bounds to selected route", e);
+    }
+  }, [selectedInspectorId, inspectorRoutes, inspectionsMap, mapLoaded]);
 
   return (
     <div className="relative h-[600px] w-full rounded-lg overflow-hidden border">
