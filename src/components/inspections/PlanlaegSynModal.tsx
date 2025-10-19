@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Calendar, Clock, MapPin, User, AlertCircle, CheckCircle2, Loader2, Package } from "lucide-react";
+import { Calendar, Clock, MapPin, User, AlertCircle, CheckCircle2, Loader2, Package, ChevronDown } from "lucide-react";
 import { useVrpOptimization, type VrpProgress } from "@/hooks/useVrpOptimization";
 import { Progress } from "@/components/ui/progress";
 import { approveVrpAssignments, getInspectionsByIds, groupAssignmentsByInspector } from "@/lib/vrp";
@@ -27,6 +27,8 @@ import { RouteMapView } from "./RouteMapView";
 import { SimpleFallbackMap } from "./SimpleFallbackMap";
 import type { VrpAssignment } from "@/types/vrp";
 import { ErrorBoundary } from "@/components/utility/ErrorBoundary";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { cn } from "@/lib/utils";
 
 interface PlanlaegSynModalProps {
   open: boolean;
@@ -48,6 +50,7 @@ export function PlanlaegSynModal({
   const [loadingInspections, setLoadingInspections] = useState(false);
   const [selectedInspectorId, setSelectedInspectorId] = useState<string | null>(null);
   const [groupingError, setGroupingError] = useState<string | null>(null);
+  const [isMapExpanded, setIsMapExpanded] = useState(false);
 
   // Extract unique target dates from inspections
   const targetDates = React.useMemo(() => {
@@ -486,20 +489,23 @@ export function PlanlaegSynModal({
                     />
                     
                     {/* Optional: Interactive map view */}
-                    <details className="mt-2">
-                      <summary className="text-sm font-medium cursor-pointer hover:text-primary flex items-center gap-2">
+                    <Collapsible open={isMapExpanded} onOpenChange={setIsMapExpanded} className="mt-2">
+                      <CollapsibleTrigger className="text-sm font-medium cursor-pointer hover:text-primary flex items-center gap-2">
                         <MapPin className="h-4 w-4" />
                         Vis interaktivt kort (valgfrit)
-                      </summary>
-                      <div className="mt-2">
-                        <RouteMapView
-                          inspectorRoutes={groupedRoutes.inspector_routes}
-                          selectedInspectorId={selectedInspectorId}
-                          inspectionsMap={inspectionsMap}
-                          onInspectorSelect={setSelectedInspectorId}
-                        />
-                      </div>
-                    </details>
+                        <ChevronDown className={cn("h-4 w-4 transition-transform", isMapExpanded && "rotate-180")} />
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="mt-2">
+                        {isMapExpanded && (
+                          <RouteMapView
+                            inspectorRoutes={groupedRoutes.inspector_routes}
+                            selectedInspectorId={selectedInspectorId}
+                            inspectionsMap={inspectionsMap}
+                            onInspectorSelect={setSelectedInspectorId}
+                          />
+                        )}
+                      </CollapsibleContent>
+                    </Collapsible>
                   </div>
                 )}
               </div>
