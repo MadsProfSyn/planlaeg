@@ -24,7 +24,6 @@ import { approveVrpAssignments, getInspectionsByIds, groupAssignmentsByInspector
 import { useToast } from "@/hooks/use-toast";
 import { InspectorRouteGroup } from "./InspectorRouteGroup";
 import { RouteMapView } from "./RouteMapView";
-import { supabase } from "@/integrations/supabase/client";
 import type { VrpAssignment } from "@/types/vrp";
 
 interface PlanlaegSynModalProps {
@@ -46,7 +45,6 @@ export function PlanlaegSynModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadingInspections, setLoadingInspections] = useState(false);
   const [selectedInspectorId, setSelectedInspectorId] = useState<string | null>(null);
-  const [mapboxToken, setMapboxToken] = useState<string>("");
 
   // Extract unique target dates from inspections
   const targetDates = React.useMemo(() => {
@@ -103,48 +101,6 @@ export function PlanlaegSynModal({
 
     loadInspections();
   }, [open, selectedInspectionIds, toast]);
-
-  // Fetch Mapbox token when modal opens
-  useEffect(() => {
-    if (!open) return;
-
-    const fetchMapboxToken = async () => {
-      console.log("[PlanlaegSynModal] Fetching Mapbox token...");
-      
-      try {
-        console.log("[PlanlaegSynModal] Calling get-mapbox-token edge function...");
-        const { data: mapboxData, error: mapboxError } = await supabase.functions.invoke('get-mapbox-token');
-        
-        if (mapboxError) {
-          console.error('[PlanlaegSynModal] Mapbox token error:', mapboxError);
-          toast({
-            title: "Kort advarsel",
-            description: "Kunne ikke indlæse kort. Kontakt support hvis problemet fortsætter.",
-            variant: "default",
-          });
-        } else if (mapboxData?.token) {
-          console.log("[PlanlaegSynModal] Mapbox token received successfully");
-          setMapboxToken(mapboxData.token);
-        } else {
-          console.warn("[PlanlaegSynModal] No Mapbox token in response");
-          toast({
-            title: "Kort advarsel",
-            description: "Ingen kort token modtaget.",
-            variant: "default",
-          });
-        }
-      } catch (err) {
-        console.error('[PlanlaegSynModal] Failed to fetch Mapbox token:', err);
-        toast({
-          title: "Kort fejl",
-          description: "Kunne ikke hente kort token.",
-          variant: "destructive",
-        });
-      }
-    };
-
-    fetchMapboxToken();
-  }, [open, toast]);
 
   // Update datetime when VRP assignments are computed
   useEffect(() => {
@@ -453,21 +409,12 @@ export function PlanlaegSynModal({
                   </AlertDescription>
                 </Alert>
               ) : groupedRoutes ? (
-                <>
-                  {mapboxToken ? (
-                    <RouteMapView
-                      inspectorRoutes={groupedRoutes.inspector_routes}
-                      selectedInspectorId={selectedInspectorId}
-                      inspectionsMap={inspectionsMap}
-                      onInspectorSelect={setSelectedInspectorId}
-                      mapboxToken={mapboxToken}
-                    />
-                  ) : (
-                    <div className="h-[600px] border rounded-lg bg-muted/20 flex items-center justify-center">
-                      <p className="text-muted-foreground">Venter på kort...</p>
-                    </div>
-                  )}
-                </>
+                <RouteMapView
+                  inspectorRoutes={groupedRoutes.inspector_routes}
+                  selectedInspectorId={selectedInspectorId}
+                  inspectionsMap={inspectionsMap}
+                  onInspectorSelect={setSelectedInspectorId}
+                />
               ) : (
                 <div className="h-[600px] border rounded-lg bg-muted/20 flex items-center justify-center">
                   <p className="text-muted-foreground">Venter på ruteoversigt...</p>

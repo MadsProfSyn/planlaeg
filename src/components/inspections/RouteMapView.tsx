@@ -10,7 +10,6 @@ interface RouteMapViewProps {
   selectedInspectorId: string | null;
   inspectionsMap: Map<string, any>;
   onInspectorSelect: (inspectorId: string | null) => void;
-  mapboxToken: string;
 }
 
 const INSPECTOR_COLORS = [
@@ -29,22 +28,42 @@ export function RouteMapView({
   selectedInspectorId,
   inspectionsMap,
   onInspectorSelect,
-  mapboxToken,
 }: RouteMapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const [hoveredMarkerId, setHoveredMarkerId] = useState<string | null>(null);
 
-  // Initialize map
+  // Initialize map with OpenStreetMap tiles (no API key needed!)
   useEffect(() => {
-    if (!mapContainer.current || !mapboxToken) return;
-
-    mapboxgl.accessToken = mapboxToken;
+    if (!mapContainer.current) return;
 
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
-      style: "mapbox://styles/mapbox/light-v11",
+      style: {
+        version: 8,
+        sources: {
+          'osm-tiles': {
+            type: 'raster',
+            tiles: [
+              'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+              'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+              'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
+            ],
+            tileSize: 256,
+            attribution: '© OpenStreetMap contributors'
+          }
+        },
+        layers: [
+          {
+            id: 'osm-tiles',
+            type: 'raster',
+            source: 'osm-tiles',
+            minzoom: 0,
+            maxzoom: 19
+          }
+        ]
+      },
       center: [12.5683, 55.6761], // Denmark center
       zoom: 7,
     });
@@ -63,7 +82,7 @@ export function RouteMapView({
       markersRef.current = [];
       map.current?.remove();
     };
-  }, [mapboxToken]);
+  }, []);
 
   // Update markers and routes when data changes
   useEffect(() => {
