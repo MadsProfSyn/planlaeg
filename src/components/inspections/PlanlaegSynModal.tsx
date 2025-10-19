@@ -286,6 +286,13 @@ export function PlanlaegSynModal({
     };
   }, [groupedRoutes]);
 
+  // Auto-open map on large screens when routes are ready
+  useEffect(() => {
+    if (groupedRoutes && !isMapExpanded && typeof window !== "undefined" && window.innerWidth >= 1280) {
+      setIsMapExpanded(true);
+    }
+  }, [groupedRoutes, isMapExpanded]);
+
   return (
     <ErrorBoundary name="PlanlaegSynModal">
       <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
