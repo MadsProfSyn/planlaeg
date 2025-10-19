@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { format } from "date-fns";
 import { da } from "date-fns/locale";
 import {
@@ -63,6 +63,7 @@ export function PlanlaegSynModal({
   const [inspectorBases, setInspectorBases] = useState<Map<string, InspectorBase>>(new Map());
   const [isFetchingBases, setIsFetchingBases] = useState(false);
   const [roundtripEnabled, setRoundtripEnabled] = useState(true);
+  const mapSectionRef = useRef<HTMLDivElement | null>(null);
 
   // Extract unique target dates from inspections
   const targetDates = React.useMemo(() => {
@@ -487,12 +488,27 @@ export function PlanlaegSynModal({
 
             {/* Third Panel: Map View */}
             <div className="space-y-4 hidden xl:block">
-              <h3 className="font-semibold text-lg flex items-center gap-2">
-                <MapPin className="h-5 w-5" />
-                Kortvisning
-              </h3>
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-lg flex items-center gap-2">
+                  <MapPin className="h-5 w-5" />
+                  Kortvisning
+                </h3>
+                {groupedRoutes && (
+                  <Button
+                    size="sm"
+                    variant={isMapExpanded ? "secondary" : "default"}
+                    onClick={() => {
+                      setIsMapExpanded((v) => !v);
+                      setTimeout(() => mapSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+                    }}
+                  >
+                    {isMapExpanded ? "Skjul interaktivt kort" : "Vis interaktivt kort"}
+                  </Button>
+                )}
+              </div>
 
-              <div className="space-y-2">
+              <ScrollArea className="h-[600px] pr-4">
+                <div className="space-y-2">
                 {/* Debug Info */}
                 <details className="text-xs text-muted-foreground p-2 bg-muted/50 rounded">
                   <summary className="cursor-pointer font-medium">
@@ -531,32 +547,12 @@ export function PlanlaegSynModal({
 
                 {!isLoadingRoutes && !vrpError && groupedRoutes && (
                   <div className="space-y-4">
-                    {/* Primary: Always visible list view */}
-                    <SimpleFallbackMap
-                      inspectorRoutes={groupedRoutes.inspector_routes}
-                      selectedInspectorId={selectedInspectorId}
-                      inspectionsMap={inspectionsMap}
-                      onInspectorSelect={setSelectedInspectorId}
-                    />
+                    {/* Anchor for smooth scroll */}
+                    <div ref={mapSectionRef} />
                     
                     {/* Optional: Interactive map view */}
-                    <div className="flex items-center gap-3 mt-4 mb-2">
-                      <label className="text-sm flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={roundtripEnabled}
-                          onChange={(e) => setRoundtripEnabled(e.target.checked)}
-                          className="rounded border-gray-300"
-                        />
-                        Inkludér retur til base
-                      </label>
-                      {isFetchingBases && (
-                        <span className="text-xs text-muted-foreground">Henter base-adresser…</span>
-                      )}
-                    </div>
-                    
                     <Collapsible open={isMapExpanded} onOpenChange={setIsMapExpanded}>
-                      <CollapsibleTrigger className="text-sm font-medium cursor-pointer hover:text-primary flex items-center gap-2">
+                      <CollapsibleTrigger className="text-sm font-medium cursor-pointer hover:text-primary flex items-center gap-2 p-2 rounded hover:bg-accent">
                         <MapPin className="h-4 w-4" />
                         Vis interaktivt kort (valgfrit)
                         <ChevronDown className={cn("h-4 w-4 transition-transform", isMapExpanded && "rotate-180")} />
@@ -574,9 +570,33 @@ export function PlanlaegSynModal({
                         )}
                       </CollapsibleContent>
                     </Collapsible>
+
+                    <div className="flex items-center gap-3 pt-2">
+                      <label className="text-sm flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={roundtripEnabled}
+                          onChange={(e) => setRoundtripEnabled(e.target.checked)}
+                          className="rounded border-gray-300"
+                        />
+                        Inkludér retur til base
+                      </label>
+                      {isFetchingBases && (
+                        <span className="text-xs text-muted-foreground">Henter base-adresser…</span>
+                      )}
+                    </div>
+                    
+                    {/* Primary: Always visible list view */}
+                    <SimpleFallbackMap
+                      inspectorRoutes={groupedRoutes.inspector_routes}
+                      selectedInspectorId={selectedInspectorId}
+                      inspectionsMap={inspectionsMap}
+                      onInspectorSelect={setSelectedInspectorId}
+                    />
                   </div>
                 )}
-              </div>
+                </div>
+              </ScrollArea>
             </div>
           </div>
         </div>
