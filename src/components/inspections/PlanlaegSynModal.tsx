@@ -454,21 +454,23 @@ export function PlanlaegSynModal({
                 )}
 
                 {!isLoadingRoutes && !vrpError && groupedRoutes && (
-                  <>
-                    <RouteMapView
+                  <div className="space-y-4">
+                    {/* Primary: Always visible list view */}
+                    <SimpleFallbackMap
                       inspectorRoutes={groupedRoutes.inspector_routes}
                       selectedInspectorId={selectedInspectorId}
                       inspectionsMap={inspectionsMap}
                       onInspectorSelect={setSelectedInspectorId}
                     />
                     
-                    {/* Fallback: Simple list view */}
+                    {/* Optional: Interactive map view */}
                     <details className="mt-2">
-                      <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
-                        Kort vises ikke korrekt? Klik her for alternativ liste-visning
+                      <summary className="text-sm font-medium cursor-pointer hover:text-primary flex items-center gap-2">
+                        <MapPin className="h-4 w-4" />
+                        Vis interaktivt kort (valgfrit)
                       </summary>
                       <div className="mt-2">
-                        <SimpleFallbackMap
+                        <RouteMapView
                           inspectorRoutes={groupedRoutes.inspector_routes}
                           selectedInspectorId={selectedInspectorId}
                           inspectionsMap={inspectionsMap}
@@ -476,7 +478,7 @@ export function PlanlaegSynModal({
                         />
                       </div>
                     </details>
-                  </>
+                  </div>
                 )}
               </div>
             </div>
