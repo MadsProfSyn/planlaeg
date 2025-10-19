@@ -24,6 +24,7 @@ import { approveVrpAssignments, getInspectionsByIds, groupAssignmentsByInspector
 import { useToast } from "@/hooks/use-toast";
 import { InspectorRouteGroup } from "./InspectorRouteGroup";
 import { RouteMapView } from "./RouteMapView";
+import { SimpleFallbackMap } from "./SimpleFallbackMap";
 import type { VrpAssignment } from "@/types/vrp";
 
 interface PlanlaegSynModalProps {
@@ -192,8 +193,24 @@ export function PlanlaegSynModal({
 
   // Group assignments by inspector
   const groupedRoutes = React.useMemo(() => {
-    if (!routePlan) return null;
-    return groupAssignmentsByInspector(routePlan, inspections);
+    console.log("📊 Computing groupedRoutes", {
+      hasRoutePlan: !!routePlan,
+      inspectionsCount: inspections.length,
+      assignmentsCount: routePlan?.assignments?.length || 0,
+    });
+
+    if (!routePlan) {
+      console.warn("⚠️ No routePlan yet");
+      return null;
+    }
+
+    const result = groupAssignmentsByInspector(routePlan, inspections);
+    console.log("✅ Grouped routes computed", {
+      inspectorRoutesCount: result.inspector_routes.length,
+      unassignedCount: result.unassigned_inspections.length,
+    });
+
+    return result;
   }, [routePlan, inspections]);
 
   // Create inspection map for quick lookup
@@ -399,27 +416,69 @@ export function PlanlaegSynModal({
                 Kortvisning
               </h3>
 
-              {isLoadingRoutes ? (
-                <Skeleton className="h-[600px] w-full rounded-lg" />
-              ) : vrpError ? (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    Kort kan ikke vises
-                  </AlertDescription>
-                </Alert>
-              ) : groupedRoutes ? (
-                <RouteMapView
-                  inspectorRoutes={groupedRoutes.inspector_routes}
-                  selectedInspectorId={selectedInspectorId}
-                  inspectionsMap={inspectionsMap}
-                  onInspectorSelect={setSelectedInspectorId}
-                />
-              ) : (
-                <div className="h-[600px] border rounded-lg bg-muted/20 flex items-center justify-center">
-                  <p className="text-muted-foreground">Venter på ruteoversigt...</p>
-                </div>
-              )}
+              <div className="space-y-2">
+                {/* Debug Info */}
+                <details className="text-xs text-muted-foreground p-2 bg-muted/50 rounded">
+                  <summary className="cursor-pointer font-medium">
+                    Debug info (klik for detaljer)
+                  </summary>
+                  <div className="mt-2 space-y-1">
+                    <div>Loading: {isLoadingRoutes ? 'Ja' : 'Nej'}</div>
+                    <div>Error: {vrpError ? 'Ja' : 'Nej'}</div>
+                    <div>GroupedRoutes: {groupedRoutes ? 'Ja' : 'Nej'}</div>
+                    <div>Routes: {groupedRoutes?.inspector_routes?.length || 0}</div>
+                    <div>Inspections: {inspections.length}</div>
+                  </div>
+                </details>
+
+                {isLoadingRoutes && (
+                  <Skeleton className="h-[600px] w-full rounded-lg" />
+                )}
+
+                {!isLoadingRoutes && vrpError && (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      Kort kan ikke vises: {vrpError}
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {!isLoadingRoutes && !vrpError && !groupedRoutes && (
+                  <div className="h-[600px] border rounded-lg bg-muted/20 flex items-center justify-center">
+                    <div className="text-center">
+                      <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-muted-foreground" />
+                      <p className="text-muted-foreground">Venter på ruteoversigt...</p>
+                    </div>
+                  </div>
+                )}
+
+                {!isLoadingRoutes && !vrpError && groupedRoutes && (
+                  <>
+                    <RouteMapView
+                      inspectorRoutes={groupedRoutes.inspector_routes}
+                      selectedInspectorId={selectedInspectorId}
+                      inspectionsMap={inspectionsMap}
+                      onInspectorSelect={setSelectedInspectorId}
+                    />
+                    
+                    {/* Fallback: Simple list view */}
+                    <details className="mt-2">
+                      <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+                        Kort vises ikke korrekt? Klik her for alternativ liste-visning
+                      </summary>
+                      <div className="mt-2">
+                        <SimpleFallbackMap
+                          inspectorRoutes={groupedRoutes.inspector_routes}
+                          selectedInspectorId={selectedInspectorId}
+                          inspectionsMap={inspectionsMap}
+                          onInspectorSelect={setSelectedInspectorId}
+                        />
+                      </div>
+                    </details>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>

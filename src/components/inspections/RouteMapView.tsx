@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Loader2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { InspectorRouteSummary } from "@/types/vrp";
 import "mapbox-gl/dist/mapbox-gl.css";
@@ -33,48 +35,80 @@ export function RouteMapView({
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const [hoveredMarkerId, setHoveredMarkerId] = useState<string | null>(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [initError, setInitError] = useState<string | null>(null);
+  const [tileLoadError, setTileLoadError] = useState(false);
 
   // Initialize map with OpenStreetMap tiles (no API key needed!)
   useEffect(() => {
-    if (!mapContainer.current) return;
-
-    map.current = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: {
-        version: 8,
-        sources: {
-          'osm-tiles': {
-            type: 'raster',
-            tiles: [
-              'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
-              'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
-              'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
-            ],
-            tileSize: 256,
-            attribution: '© OpenStreetMap contributors'
-          }
-        },
-        layers: [
-          {
-            id: 'osm-tiles',
-            type: 'raster',
-            source: 'osm-tiles',
-            minzoom: 0,
-            maxzoom: 19
-          }
-        ]
-      },
-      center: [12.5683, 55.6761], // Denmark center
-      zoom: 7,
+    console.log("🗺️ RouteMapView: Initializing map", {
+      hasContainer: !!mapContainer.current,
+      routesCount: inspectorRoutes.length,
     });
 
-    // Add navigation controls
-    map.current.addControl(
-      new mapboxgl.NavigationControl({
-        visualizePitch: true,
-      }),
-      "top-left"
-    );
+    if (!mapContainer.current) {
+      console.error("❌ No map container element");
+      return;
+    }
+
+    try {
+      map.current = new mapboxgl.Map({
+        container: mapContainer.current,
+        style: {
+          version: 8,
+          sources: {
+            'osm-tiles': {
+              type: 'raster',
+              tiles: [
+                'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
+              ],
+              tileSize: 256,
+              attribution: '© OpenStreetMap contributors'
+            }
+          },
+          layers: [
+            {
+              id: 'osm-tiles',
+              type: 'raster',
+              source: 'osm-tiles',
+              minzoom: 0,
+              maxzoom: 19
+            }
+          ]
+        },
+        center: [12.5683, 55.6761], // Denmark center
+        zoom: 7,
+      });
+
+      // Listen for successful load
+      map.current.on('load', () => {
+        console.log("✅ Map loaded successfully");
+        setMapLoaded(true);
+      });
+
+      // Listen for errors
+      map.current.on('error', (e) => {
+        console.error("❌ Map error:", e);
+        if (e.error?.message?.includes('tile') || e.error?.message?.includes('network')) {
+          setTileLoadError(true);
+        }
+        setInitError(e.error?.message || "Map initialization failed");
+      });
+
+      // Add navigation controls
+      map.current.addControl(
+        new mapboxgl.NavigationControl({
+          visualizePitch: true,
+        }),
+        "top-left"
+      );
+
+    } catch (err) {
+      console.error("❌ Failed to create map:", err);
+      setInitError(err instanceof Error ? err.message : "Unknown error");
+    }
 
     // Cleanup
     return () => {
@@ -86,7 +120,16 @@ export function RouteMapView({
 
   // Update markers and routes when data changes
   useEffect(() => {
-    if (!map.current || inspectorRoutes.length === 0) return;
+    console.log("🔄 Updating markers and routes", {
+      hasMap: !!map.current,
+      routesCount: inspectorRoutes.length,
+      mapLoaded,
+    });
+
+    if (!map.current || inspectorRoutes.length === 0) {
+      console.warn("⚠️ Skipping marker update: no map or no routes");
+      return;
+    }
 
     // Clear existing markers
     markersRef.current.forEach((marker) => marker.remove());
@@ -274,6 +317,44 @@ export function RouteMapView({
   return (
     <div className="relative h-[600px] w-full rounded-lg overflow-hidden border">
       <div ref={mapContainer} className="absolute inset-0" />
+
+      {/* Loading Overlay */}
+      {!mapLoaded && !initError && (
+        <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-10">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-primary" />
+            <p className="text-sm text-muted-foreground">Indlæser kort...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Error Overlay */}
+      {initError && (
+        <div className="absolute inset-0 bg-background/90 flex items-center justify-center z-10">
+          <div className="max-w-md p-6 text-center">
+            <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
+            <p className="font-semibold mb-2">Kort kan ikke indlæses</p>
+            <p className="text-sm text-muted-foreground mb-4">{initError}</p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.location.reload()}
+            >
+              Genindlæs side
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Tile Load Error Warning */}
+      {tileLoadError && !initError && (
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-destructive/90 text-destructive-foreground p-4 rounded-lg max-w-md text-center z-20">
+          <p className="font-semibold mb-2">Kort-fliser kan ikke indlæses</p>
+          <p className="text-sm">
+            OpenStreetMap er muligvis utilgængelig. Tjek din internetforbindelse.
+          </p>
+        </div>
+      )}
 
       {/* Inspector Legend */}
       <div className="absolute top-4 right-4 bg-background rounded-lg shadow-lg p-3 space-y-2 max-w-[250px] border">
