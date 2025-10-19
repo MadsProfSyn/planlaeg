@@ -195,8 +195,19 @@ export default function InspectionsPage() {
     setIsTransforming(true);
 
     try {
-      // Transform Monday items to inspection queue records
+      toast({
+        title: "Forbereder syn",
+        description: "Geocoder adresser...",
+      });
+
+      // Transform Monday items to inspection queue records (includes geocoding)
       const inspectionIds = await transformMondayItemsToInspections(selectedIds);
+      
+      toast({
+        title: "Klar til planlægning",
+        description: `${inspectionIds.length} syn er klar til rute-optimering`,
+      });
+
       setTransformedInspectionIds(inspectionIds);
       setIsPlanningModalOpen(true);
     } catch (error) {

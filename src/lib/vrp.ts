@@ -104,7 +104,22 @@ export async function transformMondayItemsToInspections(
     throw new Error(`Failed to create inspections: ${insertError.message}`);
   }
 
-  return created.map((record) => record.id);
+  const inspectionIds = created.map((record) => record.id);
+
+  // Trigger geocoding for the new inspections
+  const { error: geocodeError } = await supabase.functions.invoke(
+    "geocode-addresses",
+    {
+      body: { inspection_ids: inspectionIds },
+    }
+  );
+
+  if (geocodeError) {
+    console.warn("Geocoding failed:", geocodeError);
+    // Don't throw - allow process to continue with partial data
+  }
+
+  return inspectionIds;
 }
 
 /**
