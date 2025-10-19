@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import Map, { Marker, Source, Layer, NavigationControl } from "react-map-gl";
-import type { MapRef } from "react-map-gl";
+import mapboxgl from "mapbox-gl";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { InspectorRouteSummary } from "@/types/vrp";
@@ -32,40 +31,199 @@ export function RouteMapView({
   onInspectorSelect,
   mapboxToken,
 }: RouteMapViewProps) {
-  const mapRef = useRef<MapRef>(null);
+  const mapContainer = useRef<HTMLDivElement>(null);
+  const map = useRef<mapboxgl.Map | null>(null);
+  const markersRef = useRef<mapboxgl.Marker[]>([]);
   const [hoveredMarkerId, setHoveredMarkerId] = useState<string | null>(null);
 
-  // Calculate bounds and fit map
+  // Initialize map
   useEffect(() => {
-    if (!mapRef.current || inspectorRoutes.length === 0) return;
+    if (!mapContainer.current || !mapboxToken) return;
+
+    mapboxgl.accessToken = mapboxToken;
+
+    map.current = new mapboxgl.Map({
+      container: mapContainer.current,
+      style: "mapbox://styles/mapbox/light-v11",
+      center: [12.5683, 55.6761], // Denmark center
+      zoom: 7,
+    });
+
+    // Add navigation controls
+    map.current.addControl(
+      new mapboxgl.NavigationControl({
+        visualizePitch: true,
+      }),
+      "top-left"
+    );
+
+    // Cleanup
+    return () => {
+      markersRef.current.forEach((marker) => marker.remove());
+      markersRef.current = [];
+      map.current?.remove();
+    };
+  }, [mapboxToken]);
+
+  // Update markers and routes when data changes
+  useEffect(() => {
+    if (!map.current || inspectorRoutes.length === 0) return;
+
+    // Clear existing markers
+    markersRef.current.forEach((marker) => marker.remove());
+    markersRef.current = [];
+
+    // Remove existing route layers
+    inspectorRoutes.forEach((route, index) => {
+      const sourceId = `route-${route.inspector_id}`;
+      if (map.current?.getLayer(sourceId)) {
+        map.current.removeLayer(sourceId);
+      }
+      if (map.current?.getSource(sourceId)) {
+        map.current.removeSource(sourceId);
+      }
+    });
 
     const allCoords: [number, number][] = [];
-    inspectorRoutes.forEach((route) => {
+
+    // Add route lines and markers for each inspector
+    inspectorRoutes.forEach((route, routeIndex) => {
+      const color = INSPECTOR_COLORS[routeIndex % INSPECTOR_COLORS.length];
+      const isRouteSelected =
+        !selectedInspectorId || selectedInspectorId === route.inspector_id;
+
+      // Create route line coordinates
+      const coordinates: [number, number][] = [];
+      route.assignments
+        .sort((a, b) => a.sequence_in_route - b.sequence_in_route)
+        .forEach((assignment) => {
+          const inspection = inspectionsMap.get(assignment.inspection_id);
+          if (inspection?.lat && inspection?.lng) {
+            coordinates.push([inspection.lng, inspection.lat]);
+            allCoords.push([inspection.lng, inspection.lat]);
+          }
+        });
+
+      // Add route line
+      if (coordinates.length > 1 && map.current) {
+        map.current.addSource(`route-${route.inspector_id}`, {
+          type: "geojson",
+          data: {
+            type: "Feature",
+            properties: {},
+            geometry: {
+              type: "LineString",
+              coordinates,
+            },
+          },
+        });
+
+        map.current.addLayer({
+          id: `route-${route.inspector_id}`,
+          type: "line",
+          source: `route-${route.inspector_id}`,
+          layout: {
+            "line-join": "round",
+            "line-cap": "round",
+          },
+          paint: {
+            "line-color": color,
+            "line-width": selectedInspectorId === route.inspector_id ? 4 : 2,
+            "line-opacity": isRouteSelected ? 1 : 0.6,
+          },
+        });
+      }
+
+      // Add numbered markers
       route.assignments.forEach((assignment) => {
         const inspection = inspectionsMap.get(assignment.inspection_id);
-        if (inspection?.lat && inspection?.lng) {
-          allCoords.push([inspection.lng, inspection.lat]);
-        }
+        if (!inspection?.lat || !inspection?.lng) return;
+
+        // Create marker element
+        const el = document.createElement("div");
+        el.className = "cursor-pointer transition-all hover:scale-125";
+        el.style.width = "32px";
+        el.style.height = "32px";
+        el.style.opacity = isRouteSelected ? "1" : "0.3";
+
+        el.innerHTML = `
+          <div style="
+            width: 32px;
+            height: 32px;
+            background-color: ${color};
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+            border: 2px solid white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          ">
+            ${assignment.sequence_in_route}
+          </div>
+        `;
+
+        // Create popup
+        const popup = new mapboxgl.Popup({
+          offset: 25,
+          closeButton: false,
+          closeOnClick: false,
+        }).setHTML(`
+          <div style="padding: 8px; min-width: 200px;">
+            <div style="font-size: 12px; font-weight: 600; margin-bottom: 4px;">
+              ${assignment.inspector_name}
+            </div>
+            <div style="font-size: 11px; color: #666; margin-bottom: 2px;">
+              ${inspection.address}
+            </div>
+            <div style="font-size: 11px; color: #666; margin-bottom: 2px;">
+              ${inspection.inspection_type}
+            </div>
+            <div style="font-size: 11px; font-weight: 500; margin-top: 4px;">
+              ${assignment.start_time} - ${assignment.end_time}
+            </div>
+          </div>
+        `);
+
+        // Create marker
+        const marker = new mapboxgl.Marker({ element: el })
+          .setLngLat([inspection.lng, inspection.lat])
+          .setPopup(popup)
+          .addTo(map.current!);
+
+        // Show popup on hover
+        el.addEventListener("mouseenter", () => {
+          popup.addTo(map.current!);
+        });
+
+        el.addEventListener("mouseleave", () => {
+          popup.remove();
+        });
+
+        markersRef.current.push(marker);
       });
     });
 
-    if (allCoords.length === 0) return;
+    // Fit map to show all markers
+    if (allCoords.length > 0 && map.current) {
+      const lngs = allCoords.map((c) => c[0]);
+      const lats = allCoords.map((c) => c[1]);
 
-    const lngs = allCoords.map((c) => c[0]);
-    const lats = allCoords.map((c) => c[1]);
-
-    mapRef.current.fitBounds(
-      [
-        [Math.min(...lngs), Math.min(...lats)],
-        [Math.max(...lngs), Math.max(...lats)],
-      ],
-      { padding: 50, duration: 1000 }
-    );
-  }, [inspectorRoutes, inspectionsMap]);
+      map.current.fitBounds(
+        [
+          [Math.min(...lngs), Math.min(...lats)],
+          [Math.max(...lngs), Math.max(...lats)],
+        ],
+        { padding: 50, duration: 1000 }
+      );
+    }
+  }, [inspectorRoutes, inspectionsMap, selectedInspectorId]);
 
   // Zoom to selected inspector route
   useEffect(() => {
-    if (!mapRef.current || !selectedInspectorId) return;
+    if (!map.current || !selectedInspectorId) return;
 
     const selectedRoute = inspectorRoutes.find(
       (r) => r.inspector_id === selectedInspectorId
@@ -85,7 +243,7 @@ export function RouteMapView({
     const lngs = coords.map((c) => c[0]);
     const lats = coords.map((c) => c[1]);
 
-    mapRef.current.fitBounds(
+    map.current.fitBounds(
       [
         [Math.min(...lngs), Math.min(...lats)],
         [Math.max(...lngs), Math.max(...lats)],
@@ -94,126 +252,9 @@ export function RouteMapView({
     );
   }, [selectedInspectorId, inspectorRoutes, inspectionsMap]);
 
-  // Generate GeoJSON for route lines
-  const generateRouteGeoJSON = (route: InspectorRouteSummary) => {
-    const coordinates = route.assignments
-      .sort((a, b) => a.sequence_in_route - b.sequence_in_route)
-      .map((assignment) => {
-        const inspection = inspectionsMap.get(assignment.inspection_id);
-        return [inspection?.lng, inspection?.lat];
-      })
-      .filter((coord) => coord[0] && coord[1]);
-
-    return {
-      type: "Feature",
-      geometry: {
-        type: "LineString",
-        coordinates,
-      },
-    };
-  };
-
   return (
     <div className="relative h-[600px] w-full rounded-lg overflow-hidden border">
-      <Map
-        ref={mapRef}
-        mapboxAccessToken={mapboxToken}
-        initialViewState={{
-          longitude: 12.5683,
-          latitude: 55.6761,
-          zoom: 7,
-        }}
-        style={{ width: "100%", height: "100%" }}
-        mapStyle="mapbox://styles/mapbox/light-v11"
-      >
-        <NavigationControl position="top-left" />
-
-        {/* Route lines */}
-        {inspectorRoutes.map((route, index) => {
-          const isSelected = selectedInspectorId === route.inspector_id;
-          const color = INSPECTOR_COLORS[index % INSPECTOR_COLORS.length];
-
-          return (
-            <Source
-              key={`route-${route.inspector_id}`}
-              id={`route-${route.inspector_id}`}
-              type="geojson"
-              data={generateRouteGeoJSON(route) as any}
-            >
-              <Layer
-                id={`route-line-${route.inspector_id}`}
-                type="line"
-                paint={{
-                  "line-color": color,
-                  "line-width": isSelected ? 4 : 2,
-                  "line-opacity": isSelected ? 1 : 0.6,
-                }}
-                layout={{
-                  "line-join": "round",
-                  "line-cap": "round",
-                }}
-              />
-            </Source>
-          );
-        })}
-
-        {/* Inspection markers */}
-        {inspectorRoutes.map((route, routeIndex) => {
-          const isRouteSelected =
-            !selectedInspectorId || selectedInspectorId === route.inspector_id;
-          const color = INSPECTOR_COLORS[routeIndex % INSPECTOR_COLORS.length];
-
-          return route.assignments.map((assignment) => {
-            const inspection = inspectionsMap.get(assignment.inspection_id);
-            if (!inspection?.lat || !inspection?.lng) return null;
-
-            const isHovered = hoveredMarkerId === assignment.inspection_id;
-
-            return (
-              <Marker
-                key={assignment.inspection_id}
-                longitude={inspection.lng}
-                latitude={inspection.lat}
-                anchor="center"
-              >
-                <div
-                  className={cn(
-                    "relative transition-all cursor-pointer",
-                    isHovered && "scale-125"
-                  )}
-                  onMouseEnter={() => setHoveredMarkerId(assignment.inspection_id)}
-                  onMouseLeave={() => setHoveredMarkerId(null)}
-                  style={{ opacity: isRouteSelected ? 1 : 0.3 }}
-                >
-                  {/* Numbered circle marker */}
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-lg border-2 border-white"
-                    style={{ backgroundColor: color }}
-                  >
-                    {assignment.sequence_in_route}
-                  </div>
-
-                  {/* Popup on hover */}
-                  {isHovered && (
-                    <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 bg-white rounded-lg shadow-xl p-3 min-w-[200px] z-50 border">
-                      <div className="text-xs font-semibold text-foreground mb-1">
-                        {assignment.inspector_name}
-                      </div>
-                      <div className="text-xs text-muted-foreground space-y-1">
-                        <div>{inspection.address}</div>
-                        <div>{inspection.inspection_type}</div>
-                        <div className="font-medium text-foreground">
-                          {assignment.start_time} - {assignment.end_time}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </Marker>
-            );
-          });
-        })}
-      </Map>
+      <div ref={mapContainer} className="absolute inset-0" />
 
       {/* Inspector Legend */}
       <div className="absolute top-4 right-4 bg-background rounded-lg shadow-lg p-3 space-y-2 max-w-[250px] border">
