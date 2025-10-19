@@ -507,7 +507,7 @@ export function PlanlaegSynModal({
                 )}
               </div>
 
-              <ScrollArea className="h-[600px] pr-4">
+              <ScrollArea className="h-[calc(100vh-280px)] max-h-[800px] pr-4">
                 <div className="space-y-2">
                 {/* Debug Info */}
                 <details className="text-xs text-muted-foreground p-2 bg-muted/50 rounded">
