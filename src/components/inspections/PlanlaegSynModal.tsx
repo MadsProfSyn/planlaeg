@@ -104,6 +104,35 @@ export function PlanlaegSynModal({
     loadInspections();
   }, [open, selectedInspectionIds, toast]);
 
+  // Fetch Mapbox token when modal opens
+  useEffect(() => {
+    if (!open) return;
+
+    const fetchMapboxToken = async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke('get-mapbox-token');
+        
+        if (error) {
+          console.error('Error fetching Mapbox token:', error);
+          toast({
+            title: "Kort advarsel",
+            description: "Kunne ikke indlæse kort. Funktionalitet begrænset.",
+            variant: "default",
+          });
+          return;
+        }
+        
+        if (data?.token) {
+          setMapboxToken(data.token);
+        }
+      } catch (err) {
+        console.error('Failed to fetch Mapbox token:', err);
+      }
+    };
+
+    fetchMapboxToken();
+  }, [open, toast]);
+
   // Update datetime when VRP assignments are computed
   useEffect(() => {
     if (!routePlan?.assignments) return;
