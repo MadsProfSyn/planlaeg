@@ -36,6 +36,3 @@ verify_jwt = false
 
 [functions.get-mapbox-token]
 verify_jwt = false
-
-[functions.get-google-maps-token]
-verify_jwt = false
