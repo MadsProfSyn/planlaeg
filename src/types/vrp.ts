@@ -63,3 +63,19 @@ export interface VrpApprovalResponse {
   approved_count: number;
   error?: string;
 }
+
+export interface InspectorRouteSummary {
+  inspector_id: string;
+  inspector_name: string;
+  assignments: VrpAssignment[];
+  total_time_mins: number;
+  total_distance_km: number;
+  total_inspections: number;
+}
+
+export interface GroupedRoutePlan {
+  inspector_routes: InspectorRouteSummary[];
+  unassigned_inspections: InspectionForVrp[];
+  overall_total_time: number;
+  overall_total_distance: number;
+}

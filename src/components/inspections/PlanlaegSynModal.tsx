@@ -17,10 +17,11 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Calendar, Clock, MapPin, User, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { Calendar, Clock, MapPin, User, AlertCircle, CheckCircle2, Loader2, Package } from "lucide-react";
 import { useVrpOptimization } from "@/hooks/useVrpOptimization";
-import { approveVrpAssignments, getInspectionsByIds } from "@/lib/vrp";
+import { approveVrpAssignments, getInspectionsByIds, groupAssignmentsByInspector } from "@/lib/vrp";
 import { useToast } from "@/hooks/use-toast";
+import { InspectorRouteGroup } from "./InspectorRouteGroup";
 import type { VrpAssignment } from "@/types/vrp";
 
 interface PlanlaegSynModalProps {
@@ -180,6 +181,17 @@ export function PlanlaegSynModal({
     (inspection) => !datetimeByInspection[inspection.id]
   );
 
+  // Group assignments by inspector
+  const groupedRoutes = React.useMemo(() => {
+    if (!routePlan) return null;
+    return groupAssignmentsByInspector(routePlan, inspections);
+  }, [routePlan, inspections]);
+
+  // Create inspection map for quick lookup
+  const inspectionsMap = React.useMemo(() => {
+    return new Map(inspections.map((i) => [i.id, i]));
+  }, [inspections]);
+
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col">
@@ -287,53 +299,61 @@ export function PlanlaegSynModal({
                     <span className="text-xs">{routeError}</span>
                   </AlertDescription>
                 </Alert>
-              ) : routePlan ? (
+              ) : groupedRoutes ? (
                 <>
+                  {/* Overall Stats */}
                   <div className="bg-primary/10 rounded-lg p-4 space-y-2">
                     <div className="flex items-center gap-2 text-sm">
                       <Clock className="h-4 w-4" />
                       <span className="font-medium">Estimeret tid:</span>
-                      <span>{routePlan.total_eta_minutes} min</span>
+                      <span>{groupedRoutes.overall_total_time} min</span>
                     </div>
                     <div className="flex items-center gap-2 text-sm">
                       <MapPin className="h-4 w-4" />
                       <span className="font-medium">Distance:</span>
-                      <span>{routePlan.total_distance_km.toFixed(1)} km</span>
+                      <span>{groupedRoutes.overall_total_distance.toFixed(1)} km</span>
                     </div>
                   </div>
 
                   <ScrollArea className="h-[420px] pr-4">
-                    <div className="space-y-2">
+                    <div className="space-y-4">
                       <h4 className="font-medium text-sm text-muted-foreground">
                         Optimeret rute:
                       </h4>
-                      {routePlan.assignments.map((assignment, index) => (
-                        <div
-                          key={assignment.inspection_id}
-                          className="flex items-start gap-3 p-3 border rounded-lg bg-card"
-                        >
-                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold text-sm">
-                            {index + 1}
-                          </div>
-                          <div className="flex-1 space-y-1">
-                            <div className="font-medium text-sm">
-                              {assignment.inspector_name}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {assignment.inspection_address || inspections.find(i => i.id === assignment.inspection_id)?.address}
-                            </div>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <Clock className="h-3 w-3" />
-                              {assignment.start_time} - {assignment.end_time}
-                            </div>
-                            {assignment.travel_from_previous_mins > 0 && (
-                              <div className="text-xs text-muted-foreground">
-                                ↳ {assignment.travel_from_previous_mins} min kørsel
+
+                      {/* Grouped by Inspector */}
+                      {groupedRoutes.inspector_routes.map((inspectorRoute) => (
+                        <InspectorRouteGroup
+                          key={inspectorRoute.inspector_id}
+                          inspectorRoute={inspectorRoute}
+                          inspectionsMap={inspectionsMap}
+                        />
+                      ))}
+
+                      {/* Unassigned Inspections */}
+                      {groupedRoutes.unassigned_inspections.length > 0 && (
+                        <div className="border-t pt-4 mt-4">
+                          <h4 className="font-medium text-sm text-muted-foreground mb-3 flex items-center gap-2">
+                            <Package className="h-4 w-4" />
+                            Ikke tildelt ({groupedRoutes.unassigned_inspections.length})
+                          </h4>
+                          <div className="space-y-2">
+                            {groupedRoutes.unassigned_inspections.map((inspection) => (
+                              <div
+                                key={inspection.id}
+                                className="p-3 border rounded-lg bg-muted/50"
+                              >
+                                <div className="text-sm font-medium">
+                                  {inspection.address}
+                                </div>
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  {inspection.inspection_type}
+                                </div>
                               </div>
-                            )}
+                            ))}
                           </div>
                         </div>
-                      ))}
+                      )}
                     </div>
                   </ScrollArea>
                 </>
