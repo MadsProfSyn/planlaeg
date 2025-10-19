@@ -23,6 +23,8 @@ export interface ScheduledFilters {
   dateFrom?: string;
   dateTo?: string;
   status?: string;
+  types?: string[];
+  globalSearch?: string;
 }
 
 export async function getProposedAssignments(

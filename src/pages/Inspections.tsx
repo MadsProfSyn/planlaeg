@@ -4,7 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MondayItemsTable } from "@/components/inspections/MondayItemsTable";
 import { InspectionsPagination } from "@/components/inspections/InspectionsPagination";
-import { SearchBar } from "@/components/filters/SearchBar";
+import { InspectionsFiltersBar } from "@/components/inspections/InspectionsFiltersBar";
 import { getMondayItems, createMondayItem, updateMondayItem, deleteMondayItem, getRegions, type MondayItemFilters, type MondayItem } from "@/lib/supabase";
 import { transformMondayItemsToInspections } from "@/lib/vrp";
 import { useToast } from "@/hooks/use-toast";
@@ -30,6 +30,9 @@ export default function InspectionsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [currentPage, setCurrentPage] = React.useState(1);
   const [selectedIds, setSelectedIds] = React.useState<number[]>([]);
+  const [selectedRegion, setSelectedRegion] = React.useState("all");
+  const [dateFrom, setDateFrom] = React.useState<string | undefined>();
+  const [dateTo, setDateTo] = React.useState<string | undefined>();
   const [filters, setFilters] = React.useState<MondayItemFilters>({});
   const [isPlanningModalOpen, setIsPlanningModalOpen] = React.useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false);
@@ -44,17 +47,25 @@ export default function InspectionsPage() {
   const initialSearchQuery = searchParams.get("q") || "";
   const [searchQuery, setSearchQuery] = React.useState(initialSearchQuery);
 
-  // Update filters when search query changes
+  // Fetch regions
+  const { data: regions = [] } = useQuery({
+    queryKey: ["regions"],
+    queryFn: getRegions,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Update filters when any filter changes
   React.useEffect(() => {
-    setFilters((prev) => ({
-      ...prev,
+    const newFilters: MondayItemFilters = {
       searchQuery: searchQuery || undefined,
-    }));
-    // Reset to first page when search changes
-    if (searchQuery !== initialSearchQuery) {
-      setCurrentPage(1);
-    }
-  }, [searchQuery]);
+      dateFrom: dateFrom,
+      dateTo: dateTo,
+      regions: selectedRegion !== "all" ? [selectedRegion] : undefined,
+    };
+    setFilters(newFilters);
+    // Reset to first page when filters change
+    setCurrentPage(1);
+  }, [searchQuery, dateFrom, dateTo, selectedRegion]);
 
   // Update URL when search query changes
   React.useEffect(() => {
@@ -246,6 +257,18 @@ export default function InspectionsPage() {
     setSearchQuery("");
   };
 
+  const handleDateChange = (from?: string, to?: string) => {
+    setDateFrom(from);
+    setDateTo(to);
+  };
+
+  const handleClearAllFilters = () => {
+    setSearchQuery("");
+    setSelectedRegion("all");
+    setDateFrom(undefined);
+    setDateTo(undefined);
+  };
+
   const items = mondayData?.data || [];
   const totalCount = mondayData?.count || 0;
   const totalPages = mondayData?.totalPages || 1;
@@ -295,14 +318,19 @@ export default function InspectionsPage() {
 
       <Card className="rounded-2xl shadow-sm mb-6">
         <CardContent className="p-6 bg-muted/20">
-          <SearchBar
-            value={searchQuery}
-            onChange={handleSearchChange}
-            onClear={handleSearchClear}
-            placeholder="Søg (kunde, reg.nr., adresse)"
-            isLoading={isLoading && isSearchActive}
-            resultCount={isSearchActive ? totalCount : undefined}
-            className="max-w-md"
+          <InspectionsFiltersBar
+            searchQuery={searchQuery}
+            onSearchChange={handleSearchChange}
+            onSearchClear={handleSearchClear}
+            regions={regions}
+            selectedRegion={selectedRegion}
+            onRegionChange={setSelectedRegion}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            onDateChange={handleDateChange}
+            onClearAll={handleClearAllFilters}
+            resultCount={totalCount}
+            isLoading={isLoading}
           />
         </CardContent>
       </Card>

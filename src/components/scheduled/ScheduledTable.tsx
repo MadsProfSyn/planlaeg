@@ -9,13 +9,28 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CalendarCheck } from "lucide-react";
+import { CalendarCheck, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { formatDateForDisplay } from "@/lib/date-utils";
 import type { ProposedAssignment } from "@/lib/scheduled";
+
+export type SortColumn =
+  | "inspector_name"
+  | "inspection_address"
+  | "inspection_type"
+  | "scheduled_date"
+  | "start_time"
+  | "inspection_department"
+  | "status"
+  | "sequence_in_route";
+
+export type SortDirection = "asc" | "desc";
 
 interface ScheduledTableProps {
   assignments: ProposedAssignment[];
   isLoading?: boolean;
+  sortColumn?: SortColumn | null;
+  sortDirection?: SortDirection;
+  onSort?: (column: SortColumn) => void;
 }
 
 const getStatusVariant = (status: string) => {
@@ -49,7 +64,26 @@ const getTypeVariant = (type: string) => {
 export function ScheduledTable({
   assignments,
   isLoading = false,
+  sortColumn = null,
+  sortDirection = "asc",
+  onSort,
 }: ScheduledTableProps) {
+  const getSortIcon = (column: SortColumn) => {
+    if (sortColumn !== column) {
+      return <ArrowUpDown className="h-4 w-4 text-muted-foreground" />;
+    }
+    return sortDirection === "asc" ? (
+      <ArrowUp className="h-4 w-4" />
+    ) : (
+      <ArrowDown className="h-4 w-4" />
+    );
+  };
+
+  const handleHeaderClick = (column: SortColumn) => {
+    if (onSort) {
+      onSort(column);
+    }
+  };
   if (isLoading) {
     return (
       <div className="space-y-3">
@@ -84,14 +118,78 @@ export function ScheduledTable({
       <Table>
         <TableHeader className="bg-muted/50 sticky top-0 z-10">
           <TableRow className="hover:bg-transparent">
-            <TableHead className="h-12 font-semibold">Tildelt</TableHead>
-            <TableHead className="h-12 font-semibold">Adresse</TableHead>
-            <TableHead className="h-12 font-semibold">Type</TableHead>
-            <TableHead className="h-12 font-semibold">Dato</TableHead>
-            <TableHead className="h-12 font-semibold">Tidspunkt</TableHead>
-            <TableHead className="h-12 font-semibold">Afdeling</TableHead>
-            <TableHead className="h-12 font-semibold">Status</TableHead>
-            <TableHead className="text-center h-12 font-semibold">Sekv.</TableHead>
+            <TableHead
+              className="h-12 font-semibold cursor-pointer hover:bg-muted/70 transition-colors select-none"
+              onClick={() => handleHeaderClick("inspector_name")}
+            >
+              <div className="flex items-center gap-2">
+                Tildelt
+                {getSortIcon("inspector_name")}
+              </div>
+            </TableHead>
+            <TableHead
+              className="h-12 font-semibold cursor-pointer hover:bg-muted/70 transition-colors select-none"
+              onClick={() => handleHeaderClick("inspection_address")}
+            >
+              <div className="flex items-center gap-2">
+                Adresse
+                {getSortIcon("inspection_address")}
+              </div>
+            </TableHead>
+            <TableHead
+              className="h-12 font-semibold cursor-pointer hover:bg-muted/70 transition-colors select-none"
+              onClick={() => handleHeaderClick("inspection_type")}
+            >
+              <div className="flex items-center gap-2">
+                Type
+                {getSortIcon("inspection_type")}
+              </div>
+            </TableHead>
+            <TableHead
+              className="h-12 font-semibold cursor-pointer hover:bg-muted/70 transition-colors select-none"
+              onClick={() => handleHeaderClick("scheduled_date")}
+            >
+              <div className="flex items-center gap-2">
+                Dato
+                {getSortIcon("scheduled_date")}
+              </div>
+            </TableHead>
+            <TableHead
+              className="h-12 font-semibold cursor-pointer hover:bg-muted/70 transition-colors select-none"
+              onClick={() => handleHeaderClick("start_time")}
+            >
+              <div className="flex items-center gap-2">
+                Tidspunkt
+                {getSortIcon("start_time")}
+              </div>
+            </TableHead>
+            <TableHead
+              className="h-12 font-semibold cursor-pointer hover:bg-muted/70 transition-colors select-none"
+              onClick={() => handleHeaderClick("inspection_department")}
+            >
+              <div className="flex items-center gap-2">
+                Afdeling
+                {getSortIcon("inspection_department")}
+              </div>
+            </TableHead>
+            <TableHead
+              className="h-12 font-semibold cursor-pointer hover:bg-muted/70 transition-colors select-none"
+              onClick={() => handleHeaderClick("status")}
+            >
+              <div className="flex items-center gap-2">
+                Status
+                {getSortIcon("status")}
+              </div>
+            </TableHead>
+            <TableHead
+              className="text-center h-12 font-semibold cursor-pointer hover:bg-muted/70 transition-colors select-none"
+              onClick={() => handleHeaderClick("sequence_in_route")}
+            >
+              <div className="flex items-center justify-center gap-2">
+                Sekv.
+                {getSortIcon("sequence_in_route")}
+              </div>
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>

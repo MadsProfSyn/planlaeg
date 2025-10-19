@@ -18,7 +18,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Calendar, Clock, MapPin, User, AlertCircle, CheckCircle2, Loader2, Package } from "lucide-react";
-import { useVrpOptimization } from "@/hooks/useVrpOptimization";
+import { useVrpOptimization, type VrpProgress } from "@/hooks/useVrpOptimization";
+import { Progress } from "@/components/ui/progress";
 import { approveVrpAssignments, getInspectionsByIds, groupAssignmentsByInspector } from "@/lib/vrp";
 import { useToast } from "@/hooks/use-toast";
 import { InspectorRouteGroup } from "./InspectorRouteGroup";
@@ -52,7 +53,13 @@ export function PlanlaegSynModal({
   }, [inspections]);
 
   // Use VRP optimization hook
-  const { routePlan, isLoading: isLoadingRoutes, error: routeError } = useVrpOptimization({
+  const {
+    routePlan,
+    isLoading: isLoadingRoutes,
+    error: vrpError,
+    refetch: refetchVrp,
+    progress,
+  } = useVrpOptimization({
     inspectionIds: selectedInspectionIds,
     targetDates,
     enabled: open && inspections.length > 0,
@@ -287,16 +294,30 @@ export function PlanlaegSynModal({
 
               {isLoadingRoutes ? (
                 <div className="space-y-4">
-                  <Skeleton className="h-16 w-full" />
+                  {/* Progress Indicator */}
+                  <div className="space-y-3 p-4 border rounded-lg bg-muted/20">
+                    <div className="flex items-center gap-3">
+                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                      <div className="flex-1">
+                        <div className="text-sm font-medium mb-2">
+                          {progress.message || "Forbereder..."}
+                        </div>
+                        <Progress value={progress.percentage} className="h-2" />
+                      </div>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      Dette kan tage op til 30 sekunder
+                    </div>
+                  </div>
                   <Skeleton className="h-64 w-full" />
                 </div>
-              ) : routeError ? (
+              ) : vrpError ? (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
                     Kunne ikke hente rute. Prøv igen.
                     <br />
-                    <span className="text-xs">{routeError}</span>
+                    <span className="text-xs">{vrpError}</span>
                   </AlertDescription>
                 </Alert>
               ) : groupedRoutes ? (
