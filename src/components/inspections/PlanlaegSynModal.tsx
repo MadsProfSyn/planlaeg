@@ -29,6 +29,15 @@ import type { VrpAssignment } from "@/types/vrp";
 import { ErrorBoundary } from "@/components/utility/ErrorBoundary";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+
+type InspectorBase = {
+  id: string;
+  full_name: string;
+  address: string | null;
+  lat: number | null;
+  lng: number | null;
+};
 
 interface PlanlaegSynModalProps {
   open: boolean;
@@ -51,6 +60,9 @@ export function PlanlaegSynModal({
   const [selectedInspectorId, setSelectedInspectorId] = useState<string | null>(null);
   const [groupingError, setGroupingError] = useState<string | null>(null);
   const [isMapExpanded, setIsMapExpanded] = useState(false);
+  const [inspectorBases, setInspectorBases] = useState<Map<string, InspectorBase>>(new Map());
+  const [isFetchingBases, setIsFetchingBases] = useState(false);
+  const [roundtripEnabled, setRoundtripEnabled] = useState(true);
 
   // Extract unique target dates from inspections
   const targetDates = React.useMemo(() => {
@@ -241,6 +253,38 @@ export function PlanlaegSynModal({
   const inspectionsMap = React.useMemo(() => {
     return new Map(inspections.map((i) => [i.id, i]));
   }, [inspections]);
+
+  // Fetch inspector base addresses for map
+  useEffect(() => {
+    if (!groupedRoutes) return;
+    const ids = groupedRoutes.inspector_routes.map((r) => r.inspector_id);
+    if (ids.length === 0) return;
+
+    let isCancelled = false;
+    (async () => {
+      setIsFetchingBases(true);
+      const { data, error } = await supabase
+        .from("inspectors")
+        .select("id, full_name, address, lat, lng")
+        .in("id", ids);
+
+      if (!isCancelled) {
+        if (error) {
+          console.error("Failed to fetch inspector bases", error);
+          setInspectorBases(new Map());
+        } else {
+          const m = new Map<string, InspectorBase>();
+          (data || []).forEach((row) => m.set(row.id, row));
+          setInspectorBases(m);
+        }
+        setIsFetchingBases(false);
+      }
+    })();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [groupedRoutes]);
 
   return (
     <ErrorBoundary name="PlanlaegSynModal">
@@ -489,7 +533,22 @@ export function PlanlaegSynModal({
                     />
                     
                     {/* Optional: Interactive map view */}
-                    <Collapsible open={isMapExpanded} onOpenChange={setIsMapExpanded} className="mt-2">
+                    <div className="flex items-center gap-3 mt-4 mb-2">
+                      <label className="text-sm flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={roundtripEnabled}
+                          onChange={(e) => setRoundtripEnabled(e.target.checked)}
+                          className="rounded border-gray-300"
+                        />
+                        Inkludér retur til base
+                      </label>
+                      {isFetchingBases && (
+                        <span className="text-xs text-muted-foreground">Henter base-adresser…</span>
+                      )}
+                    </div>
+                    
+                    <Collapsible open={isMapExpanded} onOpenChange={setIsMapExpanded}>
                       <CollapsibleTrigger className="text-sm font-medium cursor-pointer hover:text-primary flex items-center gap-2">
                         <MapPin className="h-4 w-4" />
                         Vis interaktivt kort (valgfrit)
@@ -502,6 +561,8 @@ export function PlanlaegSynModal({
                             selectedInspectorId={selectedInspectorId}
                             inspectionsMap={inspectionsMap}
                             onInspectorSelect={setSelectedInspectorId}
+                            inspectorBases={inspectorBases}
+                            roundtrip={roundtripEnabled}
                           />
                         )}
                       </CollapsibleContent>

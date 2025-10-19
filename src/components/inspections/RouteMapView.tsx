@@ -12,6 +12,8 @@ interface RouteMapViewProps {
   selectedInspectorId: string | null;
   inspectionsMap: Map<string, any>;
   onInspectorSelect: (inspectorId: string | null) => void;
+  inspectorBases: Map<string, { id: string; full_name: string; address: string | null; lat: number | null; lng: number | null }>;
+  roundtrip?: boolean;
 }
 
 const INSPECTOR_COLORS = [
@@ -30,6 +32,8 @@ export function RouteMapView({
   selectedInspectorId,
   inspectionsMap,
   onInspectorSelect,
+  inspectorBases,
+  roundtrip = true,
 }: RouteMapViewProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -86,6 +90,7 @@ export function RouteMapView({
       map.current.on('load', () => {
         console.log("✅ Map loaded successfully");
         setMapLoaded(true);
+        setTimeout(() => map.current?.resize(), 50);
       });
 
       // Listen for errors
@@ -151,6 +156,7 @@ export function RouteMapView({
     });
 
     const allCoords: [number, number][] = [];
+    let anyCoords = false;
 
     // Add route lines and markers for each inspector
     inspectorRoutes.forEach((route, routeIndex) => {
@@ -158,17 +164,78 @@ export function RouteMapView({
       const isRouteSelected =
         !selectedInspectorId || selectedInspectorId === route.inspector_id;
 
+      const base = inspectorBases.get(route.inspector_id);
+      const baseCoord = (base?.lat && base?.lng) ? [base.lng, base.lat] as [number, number] : null;
+
       // Create route line coordinates
       const coordinates: [number, number][] = [];
+      
+      // Start at base if available
+      if (baseCoord) {
+        coordinates.push(baseCoord);
+        allCoords.push(baseCoord);
+        anyCoords = true;
+      }
+
+      // Add all inspection waypoints
       route.assignments
         .sort((a, b) => a.sequence_in_route - b.sequence_in_route)
         .forEach((assignment) => {
           const inspection = inspectionsMap.get(assignment.inspection_id);
           if (inspection?.lat && inspection?.lng) {
-            coordinates.push([inspection.lng, inspection.lat]);
-            allCoords.push([inspection.lng, inspection.lat]);
+            const coord: [number, number] = [inspection.lng, inspection.lat];
+            coordinates.push(coord);
+            allCoords.push(coord);
+            anyCoords = true;
           }
         });
+
+      // Return to base if roundtrip enabled
+      if (roundtrip && baseCoord) {
+        coordinates.push(baseCoord);
+      }
+
+      // Add base marker if available
+      if (baseCoord && map.current) {
+        const el = document.createElement("div");
+        el.style.cssText = `
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          background: #111;
+          color: #fff;
+          font-size: 16px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 2px solid white;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          cursor: pointer;
+        `;
+        el.textContent = "🏠";
+        
+        const popup = new mapboxgl.Popup({ offset: 25, closeButton: false, closeOnClick: false })
+          .setHTML(`
+            <div style="padding: 8px;">
+              <div style="font-weight: 600; margin-bottom: 4px;">Base: ${base?.full_name || "Synskonsulent"}</div>
+              <div style="font-size: 12px; color: #666;">${base?.address || ""}</div>
+            </div>
+          `);
+        
+        const marker = new mapboxgl.Marker({ element: el })
+          .setLngLat(baseCoord)
+          .setPopup(popup)
+          .addTo(map.current);
+        
+        el.addEventListener("mouseenter", () => {
+          popup.addTo(map.current!);
+        });
+        el.addEventListener("mouseleave", () => {
+          popup.remove();
+        });
+        
+        markersRef.current.push(marker);
+      }
 
       // Add route line
       if (coordinates.length > 1 && map.current) {
@@ -287,13 +354,13 @@ export function RouteMapView({
             [Math.min(...lngs), Math.min(...lats)],
             [Math.max(...lngs), Math.max(...lats)],
           ],
-          { padding: 50, duration: 1000 }
+          { padding: 60, duration: 1000 }
         );
       } catch (e) {
         console.error("Failed to fit bounds", e);
       }
     }
-  }, [inspectorRoutes, inspectionsMap, selectedInspectorId, mapLoaded]);
+  }, [inspectorRoutes, inspectionsMap, selectedInspectorId, mapLoaded, inspectorBases, roundtrip]);
 
   // Zoom to selected inspector route
   useEffect(() => {
@@ -304,7 +371,16 @@ export function RouteMapView({
     );
     if (!selectedRoute) return;
 
+    const base = inspectorBases.get(selectedInspectorId);
+    const baseCoord = (base?.lat && base?.lng) ? [base.lng, base.lat] as [number, number] : null;
+
     const coords: [number, number][] = [];
+    
+    // Include base in zoom
+    if (baseCoord) {
+      coords.push(baseCoord);
+    }
+    
     selectedRoute.assignments.forEach((assignment) => {
       const inspection = inspectionsMap.get(assignment.inspection_id);
       if (inspection?.lat && inspection?.lng) {
@@ -328,7 +404,7 @@ export function RouteMapView({
     } catch (e) {
       console.error("Failed to fit bounds to selected route", e);
     }
-  }, [selectedInspectorId, inspectorRoutes, inspectionsMap, mapLoaded]);
+  }, [selectedInspectorId, inspectorRoutes, inspectionsMap, mapLoaded, inspectorBases]);
 
   return (
     <div className="relative h-[600px] w-full rounded-lg overflow-hidden border">
@@ -371,6 +447,42 @@ export function RouteMapView({
           </p>
         </div>
       )}
+
+      {/* No Coordinates Overlay */}
+      {mapLoaded && !initError && !tileLoadError && inspectorRoutes.length > 0 && (() => {
+        // Check if any route has valid coordinates
+        let hasAnyCoords = false;
+        for (const route of inspectorRoutes) {
+          const base = inspectorBases.get(route.inspector_id);
+          if (base?.lat && base?.lng) {
+            hasAnyCoords = true;
+            break;
+          }
+          for (const assignment of route.assignments) {
+            const inspection = inspectionsMap.get(assignment.inspection_id);
+            if (inspection?.lat && inspection?.lng) {
+              hasAnyCoords = true;
+              break;
+            }
+          }
+          if (hasAnyCoords) break;
+        }
+        
+        if (!hasAnyCoords) {
+          return (
+            <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
+              <div className="text-center max-w-sm p-6">
+                <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="font-semibold mb-2">Ingen geokodede adresser at vise</p>
+                <p className="text-sm text-muted-foreground">
+                  Sørg for at syn-adresser og synskonsulenter har lat/lng, og prøv igen.
+                </p>
+              </div>
+            </div>
+          );
+        }
+        return null;
+      })()}
 
       {/* Inspector Legend */}
       <div className="absolute top-4 right-4 bg-background rounded-lg shadow-lg p-3 space-y-2 max-w-[250px] border">
