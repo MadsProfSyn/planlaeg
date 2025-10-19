@@ -17,13 +17,15 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Calendar, Clock, MapPin, User, AlertCircle, CheckCircle2, Loader2, Package } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Calendar, Clock, MapPin, User, AlertCircle, CheckCircle2, Loader2, Package, ExternalLink } from "lucide-react";
 import { useVrpOptimization, type VrpProgress } from "@/hooks/useVrpOptimization";
 import { Progress } from "@/components/ui/progress";
 import { approveVrpAssignments, getInspectionsByIds, groupAssignmentsByInspector } from "@/lib/vrp";
 import { useToast } from "@/hooks/use-toast";
 import { InspectorRouteGroup } from "./InspectorRouteGroup";
 import { RouteMapView } from "./RouteMapView";
+import { RouteGoogleMapView } from "./RouteGoogleMapView";
 import { supabase } from "@/integrations/supabase/client";
 import type { VrpAssignment } from "@/types/vrp";
 
@@ -47,6 +49,8 @@ export function PlanlaegSynModal({
   const [loadingInspections, setLoadingInspections] = useState(false);
   const [selectedInspectorId, setSelectedInspectorId] = useState<string | null>(null);
   const [mapboxToken, setMapboxToken] = useState<string>("");
+  const [googleMapsToken, setGoogleMapsToken] = useState<string>("");
+  const [activeMapView, setActiveMapView] = useState<"mapbox" | "google">("google");
 
   // Extract unique target dates from inspections
   const targetDates = React.useMemo(() => {
@@ -104,33 +108,59 @@ export function PlanlaegSynModal({
     loadInspections();
   }, [open, selectedInspectionIds, toast]);
 
-  // Fetch Mapbox token when modal opens
+  // Fetch Map tokens when modal opens
   useEffect(() => {
     if (!open) return;
 
-    const fetchMapboxToken = async () => {
+    const fetchMapTokens = async () => {
+      console.log("[PlanlaegSynModal] Fetching map tokens...");
+      
+      // Fetch Mapbox token
       try {
-        const { data, error } = await supabase.functions.invoke('get-mapbox-token');
+        console.log("[PlanlaegSynModal] Calling get-mapbox-token edge function...");
+        const { data: mapboxData, error: mapboxError } = await supabase.functions.invoke('get-mapbox-token');
         
-        if (error) {
-          console.error('Error fetching Mapbox token:', error);
+        if (mapboxError) {
+          console.error('[PlanlaegSynModal] Mapbox token error:', mapboxError);
           toast({
-            title: "Kort advarsel",
-            description: "Kunne ikke indlæse kort. Funktionalitet begrænset.",
+            title: "Mapbox advarsel",
+            description: "Kunne ikke indlæse Mapbox kort.",
             variant: "default",
           });
-          return;
-        }
-        
-        if (data?.token) {
-          setMapboxToken(data.token);
+        } else if (mapboxData?.token) {
+          console.log("[PlanlaegSynModal] Mapbox token received successfully");
+          setMapboxToken(mapboxData.token);
+        } else {
+          console.warn("[PlanlaegSynModal] No Mapbox token in response");
         }
       } catch (err) {
-        console.error('Failed to fetch Mapbox token:', err);
+        console.error('[PlanlaegSynModal] Failed to fetch Mapbox token:', err);
+      }
+
+      // Fetch Google Maps token
+      try {
+        console.log("[PlanlaegSynModal] Calling get-google-maps-token edge function...");
+        const { data: googleData, error: googleError } = await supabase.functions.invoke('get-google-maps-token');
+        
+        if (googleError) {
+          console.error('[PlanlaegSynModal] Google Maps token error:', googleError);
+          toast({
+            title: "Google Maps advarsel",
+            description: "Kunne ikke indlæse Google Maps kort.",
+            variant: "default",
+          });
+        } else if (googleData?.token) {
+          console.log("[PlanlaegSynModal] Google Maps token received successfully");
+          setGoogleMapsToken(googleData.token);
+        } else {
+          console.warn("[PlanlaegSynModal] No Google Maps token in response");
+        }
+      } catch (err) {
+        console.error('[PlanlaegSynModal] Failed to fetch Google Maps token:', err);
       }
     };
 
-    fetchMapboxToken();
+    fetchMapTokens();
   }, [open, toast]);
 
   // Update datetime when VRP assignments are computed
@@ -231,6 +261,53 @@ export function PlanlaegSynModal({
   const inspectionsMap = React.useMemo(() => {
     return new Map(inspections.map((i) => [i.id, i]));
   }, [inspections]);
+
+  // Generate Google Maps deep link for selected inspector route
+  const generateGoogleMapsRouteUrl = (): string => {
+    if (!selectedInspectorId || !groupedRoutes) return "";
+
+    const selectedRoute = groupedRoutes.inspector_routes.find(
+      (r) => r.inspector_id === selectedInspectorId
+    );
+    if (!selectedRoute || selectedRoute.assignments.length === 0) return "";
+
+    const assignments = [...selectedRoute.assignments].sort(
+      (a, b) => a.sequence_in_route - b.sequence_in_route
+    );
+
+    const firstInspection = inspectionsMap.get(assignments[0].inspection_id);
+    const lastInspection = inspectionsMap.get(
+      assignments[assignments.length - 1].inspection_id
+    );
+
+    if (!firstInspection?.lat || !firstInspection?.lng || !lastInspection?.lat || !lastInspection?.lng) {
+      return "";
+    }
+
+    const waypoints = assignments
+      .slice(1, -1)
+      .map((a) => {
+        const insp = inspectionsMap.get(a.inspection_id);
+        return insp?.lat && insp?.lng ? `${insp.lat},${insp.lng}` : null;
+      })
+      .filter((w): w is string => w !== null)
+      .join("|");
+
+    let url = `https://www.google.com/maps/dir/?api=1&origin=${firstInspection.lat},${firstInspection.lng}&destination=${lastInspection.lat},${lastInspection.lng}&travelmode=driving`;
+    
+    if (waypoints) {
+      url += `&waypoints=${waypoints}`;
+    }
+
+    return url;
+  };
+
+  const openInGoogleMaps = () => {
+    const url = generateGoogleMapsRouteUrl();
+    if (url) {
+      window.open(url, "_blank");
+    }
+  };
 
   return (
     <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
@@ -439,17 +516,62 @@ export function PlanlaegSynModal({
                     Kort kan ikke vises
                   </AlertDescription>
                 </Alert>
-              ) : groupedRoutes && mapboxToken ? (
-                <RouteMapView
-                  inspectorRoutes={groupedRoutes.inspector_routes}
-                  selectedInspectorId={selectedInspectorId}
-                  inspectionsMap={inspectionsMap}
-                  onInspectorSelect={setSelectedInspectorId}
-                  mapboxToken={mapboxToken}
-                />
+              ) : groupedRoutes ? (
+                <div className="space-y-3">
+                  <Tabs value={activeMapView} onValueChange={(v) => setActiveMapView(v as "mapbox" | "google")}>
+                    <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="google">Google Maps</TabsTrigger>
+                      <TabsTrigger value="mapbox">Mapbox</TabsTrigger>
+                    </TabsList>
+                    
+                    <TabsContent value="google" className="mt-4">
+                      {googleMapsToken ? (
+                        <RouteGoogleMapView
+                          inspectorRoutes={groupedRoutes.inspector_routes}
+                          selectedInspectorId={selectedInspectorId}
+                          inspectionsMap={inspectionsMap}
+                          onInspectorSelect={setSelectedInspectorId}
+                          googleMapsApiKey={googleMapsToken}
+                        />
+                      ) : (
+                        <div className="h-[600px] border rounded-lg bg-muted/20 flex items-center justify-center">
+                          <p className="text-muted-foreground">Indlæser Google Maps...</p>
+                        </div>
+                      )}
+                    </TabsContent>
+                    
+                    <TabsContent value="mapbox" className="mt-4">
+                      {mapboxToken ? (
+                        <RouteMapView
+                          inspectorRoutes={groupedRoutes.inspector_routes}
+                          selectedInspectorId={selectedInspectorId}
+                          inspectionsMap={inspectionsMap}
+                          onInspectorSelect={setSelectedInspectorId}
+                          mapboxToken={mapboxToken}
+                        />
+                      ) : (
+                        <div className="h-[600px] border rounded-lg bg-muted/20 flex items-center justify-center">
+                          <p className="text-muted-foreground">Indlæser Mapbox...</p>
+                        </div>
+                      )}
+                    </TabsContent>
+                  </Tabs>
+
+                  {/* Open in Google Maps Button */}
+                  {selectedInspectorId && generateGoogleMapsRouteUrl() && (
+                    <Button
+                      onClick={openInGoogleMaps}
+                      className="w-full"
+                      variant="outline"
+                    >
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      Åbn rute i Google Maps
+                    </Button>
+                  )}
+                </div>
               ) : (
                 <div className="h-[600px] border rounded-lg bg-muted/20 flex items-center justify-center">
-                  <p className="text-muted-foreground">Venter på kort...</p>
+                  <p className="text-muted-foreground">Venter på ruteoversigt...</p>
                 </div>
               )}
             </div>
