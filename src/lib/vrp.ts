@@ -139,11 +139,32 @@ export async function getInspectionsByIds(inspectionIds: string[]) {
 }
 
 /**
+ * Haversine distance formula (km)
+ */
+function haversineDistance(
+  lat1: number, lng1: number,
+  lat2: number, lng2: number
+): number {
+  const R = 6371; // Earth's radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) *
+    Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+/**
  * Group VRP assignments by inspector for better route visualization
  */
 export function groupAssignmentsByInspector(
   routePlan: VrpRoutePlan,
-  inspections: any[]
+  inspections: any[],
+  inspectorBases?: Map<string, { id: string; full_name: string; address: string | null; lat: number | null; lng: number | null }>,
+  roundtripEnabled?: boolean
 ): import("@/types/vrp").GroupedRoutePlan {
   // Defensive defaults
   const assignments = routePlan?.assignments ?? [];
@@ -180,7 +201,7 @@ export function groupAssignmentsByInspector(
         0
       );
 
-      return {
+      const summary: import("@/types/vrp").InspectorRouteSummary = {
         inspector_id,
         inspector_name: sorted[0]?.inspector_name || "Ukendt",
         assignments: sorted,
@@ -188,6 +209,38 @@ export function groupAssignmentsByInspector(
         total_distance_km,
         total_inspections: sorted.length,
       };
+
+      // Calculate roundtrip distance if enabled and base data available
+      if (roundtripEnabled && inspectorBases) {
+        const base = inspectorBases.get(inspector_id);
+        if (base?.lat && base?.lng && base.address) {
+          summary.base_address = base.address;
+
+          const firstAssignment = sorted[0];
+          const lastAssignment = sorted[sorted.length - 1];
+
+          const firstInspection = inspections.find(i => i.id === firstAssignment.inspection_id);
+          const lastInspection = inspections.find(i => i.id === lastAssignment.inspection_id);
+
+          if (firstInspection?.lat && firstInspection?.lng && lastInspection?.lat && lastInspection?.lng) {
+            const distanceToFirst = haversineDistance(
+              base.lat, base.lng,
+              firstInspection.lat, firstInspection.lng
+            );
+
+            const distanceFromLast = haversineDistance(
+              lastInspection.lat, lastInspection.lng,
+              base.lat, base.lng
+            );
+
+            summary.distance_to_first_km = distanceToFirst;
+            summary.distance_from_last_km = distanceFromLast;
+            summary.roundtrip_distance_km = distanceToFirst + total_distance_km + distanceFromLast;
+          }
+        }
+      }
+
+      return summary;
     }
   );
 

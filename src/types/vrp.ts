@@ -71,6 +71,10 @@ export interface InspectorRouteSummary {
   total_time_mins: number;
   total_distance_km: number;
   total_inspections: number;
+  base_address?: string;
+  roundtrip_distance_km?: number;
+  distance_to_first_km?: number;
+  distance_from_last_km?: number;
 }
 
 export interface GroupedRoutePlan {

@@ -14,6 +14,7 @@ interface InspectorRouteGroupProps {
   inspectionsMap: Map<string, any>;
   isSelected?: boolean;
   onSelect?: () => void;
+  roundtripEnabled?: boolean;
 }
 
 export function InspectorRouteGroup({
@@ -21,6 +22,7 @@ export function InspectorRouteGroup({
   inspectionsMap,
   isSelected = false,
   onSelect,
+  roundtripEnabled = false,
 }: InspectorRouteGroupProps) {
   return (
     <Collapsible defaultOpen={true} className="border rounded-lg">
@@ -38,6 +40,14 @@ export function InspectorRouteGroup({
               <div className="font-semibold text-base">
                 {inspectorRoute.inspector_name}
               </div>
+              
+              {inspectorRoute.base_address && (
+                <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
+                  <MapPin className="h-3 w-3" />
+                  <span>Base: {inspectorRoute.base_address}</span>
+                </div>
+              )}
+              
               <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1">
                 <span className="flex items-center gap-1">
                   <Badge variant="secondary" className="font-normal">
@@ -50,7 +60,10 @@ export function InspectorRouteGroup({
                 </span>
                 <span className="flex items-center gap-1">
                   <MapPin className="h-3 w-3" />
-                  {inspectorRoute.total_distance_km.toFixed(1)} km
+                  {roundtripEnabled && inspectorRoute.roundtrip_distance_km 
+                    ? `${inspectorRoute.roundtrip_distance_km.toFixed(1)} km (retur inkl.)`
+                    : `${inspectorRoute.total_distance_km.toFixed(1)} km`
+                  }
                 </span>
               </div>
             </div>

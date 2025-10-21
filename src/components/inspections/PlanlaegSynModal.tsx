@@ -214,7 +214,7 @@ export function PlanlaegSynModal({
     try {
       setGroupingError(null);
       if (!routePlan) return null;
-      const result = groupAssignmentsByInspector(routePlan, inspections);
+      const result = groupAssignmentsByInspector(routePlan, inspections, inspectorBases, roundtripEnabled);
       return result;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -248,7 +248,7 @@ export function PlanlaegSynModal({
         overall_total_distance: (routePlan?.total_distance_km ?? 0),
       };
     }
-  }, [routePlan, inspections]);
+  }, [routePlan, inspections, inspectorBases, roundtripEnabled]);
 
   // Create inspection map for quick lookup
   const inspectionsMap = React.useMemo(() => {
@@ -446,6 +446,7 @@ export function PlanlaegSynModal({
                           inspectionsMap={inspectionsMap}
                           isSelected={selectedInspectorId === inspectorRoute.inspector_id}
                           onSelect={() => setSelectedInspectorId(inspectorRoute.inspector_id)}
+                          roundtripEnabled={roundtripEnabled}
                         />
                       ))}
 
