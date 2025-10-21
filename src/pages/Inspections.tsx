@@ -322,28 +322,6 @@ export default function InspectionsPage() {
             Tilføj Syn
           </Button>
 
-          {totalCount > 0 && (
-            <Button
-              onClick={() => setShowDeleteAllConfirm(true)}
-              variant="destructive"
-              size="lg"
-              className="gap-2"
-              disabled={isDeletingAll}
-            >
-              {isDeletingAll ? (
-                <>
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  Sletter...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="h-5 w-5" />
-                  Slet alle syn
-                </>
-              )}
-            </Button>
-          )}
-
           {selectedIds.length > 0 && (
             <Button
               onClick={handleOpenPlanningModal}
@@ -390,11 +368,25 @@ export default function InspectionsPage() {
         <CardHeader className="border-b">
           <CardTitle className="flex items-center justify-between text-lg">
             <span>Monday.com syn</span>
-            <span className="text-sm font-normal text-muted-foreground">
-              {isSearchActive && !isLoading
-                ? `${totalCount} resultat${totalCount !== 1 ? "er" : ""}`
-                : `${totalCount} syn i alt`}
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-normal text-muted-foreground">
+                {isSearchActive && !isLoading
+                  ? `${totalCount} resultat${totalCount !== 1 ? "er" : ""}`
+                  : `${totalCount} syn i alt`}
+              </span>
+              {totalCount > 0 && (
+                <Button
+                  onClick={() => setShowDeleteAllConfirm(true)}
+                  variant="ghost"
+                  size="sm"
+                  className="gap-2 text-destructive hover:text-destructive"
+                  disabled={isDeletingAll}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Slet alle syn
+                </Button>
+              )}
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent className="p-6">

@@ -551,25 +551,18 @@ export function PlanlaegSynModal({
                     <div ref={mapSectionRef} />
                     
                     {/* Optional: Interactive map view */}
-                    <Collapsible open={isMapExpanded} onOpenChange={setIsMapExpanded}>
-                      <CollapsibleTrigger className="text-sm font-medium cursor-pointer hover:text-primary flex items-center gap-2 p-2 rounded hover:bg-accent">
-                        <MapPin className="h-4 w-4" />
-                        Vis interaktivt kort (valgfrit)
-                        <ChevronDown className={cn("h-4 w-4 transition-transform", isMapExpanded && "rotate-180")} />
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="mt-2">
-                        {isMapExpanded && (
-                          <RouteMapView
-                            inspectorRoutes={groupedRoutes.inspector_routes}
-                            selectedInspectorId={selectedInspectorId}
-                            inspectionsMap={inspectionsMap}
-                            onInspectorSelect={setSelectedInspectorId}
-                            inspectorBases={inspectorBases}
-                            roundtrip={roundtripEnabled}
-                          />
-                        )}
-                      </CollapsibleContent>
-                    </Collapsible>
+                    {isMapExpanded && (
+                      <div className="mb-4">
+                        <RouteMapView
+                          inspectorRoutes={groupedRoutes.inspector_routes}
+                          selectedInspectorId={selectedInspectorId}
+                          inspectionsMap={inspectionsMap}
+                          onInspectorSelect={setSelectedInspectorId}
+                          inspectorBases={inspectorBases}
+                          roundtrip={roundtripEnabled}
+                        />
+                      </div>
+                    )}
 
                     <div className="flex items-center gap-3 pt-2">
                       <label className="text-sm flex items-center gap-2 cursor-pointer">

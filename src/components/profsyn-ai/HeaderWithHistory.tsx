@@ -55,7 +55,11 @@ export function HeaderWithHistory({
               </DropdownMenuItem>
             ) : (
               sessions.map(session => (
-                <DropdownMenuItem key={session.id} className="cursor-default hover:bg-muted/50 transition-colors">
+                <DropdownMenuItem 
+                  key={session.id} 
+                  className="cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => onLoadSession(session.id)}
+                >
                   <div className="flex items-center justify-between w-full gap-2">
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate">{session.title}</p>
@@ -63,28 +67,16 @@ export function HeaderWithHistory({
                         {formatTimestamp(session.lastUpdated)}
                       </p>
                     </div>
-                    <div className="flex gap-1 shrink-0">
-                      <Button 
-                        size="sm" 
-                        variant="ghost"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onLoadSession(session.id);
-                        }}
-                      >
-                        Åbn
-                      </Button>
-                      <Button 
-                        size="sm" 
-                        variant="ghost"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDeleteSession(session.id);
-                        }}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
+                    <Button 
+                      size="sm" 
+                      variant="ghost"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteSession(session.id);
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
                   </div>
                 </DropdownMenuItem>
               ))
