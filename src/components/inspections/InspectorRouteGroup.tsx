@@ -60,7 +60,7 @@ export function InspectorRouteGroup({
                 </span>
                 <span className="flex items-center gap-1">
                   <MapPin className="h-3 w-3" />
-                  {roundtripEnabled && inspectorRoute.roundtrip_distance_km 
+                  {roundtripEnabled && inspectorRoute.roundtrip_distance_km != null
                     ? `${inspectorRoute.roundtrip_distance_km.toFixed(1)} km (retur inkl.)`
                     : `${inspectorRoute.total_distance_km.toFixed(1)} km`
                   }

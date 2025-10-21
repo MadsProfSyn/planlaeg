@@ -214,7 +214,25 @@ export function PlanlaegSynModal({
     try {
       setGroupingError(null);
       if (!routePlan) return null;
+      
+      console.log('🔄 Recalculating groupedRoutes:', {
+        roundtripEnabled,
+        basesCount: inspectorBases.size,
+        inspectionsCount: inspections.length
+      });
+      
       const result = groupAssignmentsByInspector(routePlan, inspections, inspectorBases, roundtripEnabled);
+      
+      console.log('✅ Grouped routes:', {
+        routesCount: result.inspector_routes.length,
+        firstRoute: result.inspector_routes[0] ? {
+          inspector: result.inspector_routes[0].inspector_name,
+          baseAddress: result.inspector_routes[0].base_address,
+          regularDistance: result.inspector_routes[0].total_distance_km,
+          roundtripDistance: result.inspector_routes[0].roundtrip_distance_km
+        } : null
+      });
+      
       return result;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -257,8 +275,10 @@ export function PlanlaegSynModal({
 
   // Fetch inspector base addresses for map
   useEffect(() => {
-    if (!groupedRoutes) return;
-    const ids = groupedRoutes.inspector_routes.map((r) => r.inspector_id);
+    if (!routePlan?.assignments) return;
+    
+    // Extract unique inspector IDs from assignments
+    const ids = Array.from(new Set(routePlan.assignments.map(a => a.inspector_id)));
     if (ids.length === 0) return;
 
     let isCancelled = false;
@@ -285,7 +305,7 @@ export function PlanlaegSynModal({
     return () => {
       isCancelled = true;
     };
-  }, [groupedRoutes]);
+  }, [routePlan]);
 
   // Auto-open map on large screens when routes are ready
   useEffect(() => {
@@ -555,6 +575,7 @@ export function PlanlaegSynModal({
                     {isMapExpanded && (
                       <div className="mb-4">
                         <RouteMapView
+                          key="interactive-map"
                           inspectorRoutes={groupedRoutes.inspector_routes}
                           selectedInspectorId={selectedInspectorId}
                           inspectionsMap={inspectionsMap}

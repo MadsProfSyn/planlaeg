@@ -236,7 +236,11 @@ export function groupAssignmentsByInspector(
             summary.distance_to_first_km = distanceToFirst;
             summary.distance_from_last_km = distanceFromLast;
             summary.roundtrip_distance_km = distanceToFirst + total_distance_km + distanceFromLast;
+          } else {
+            console.warn(`Missing inspection coordinates for roundtrip calculation: ${inspector_id}`);
           }
+        } else {
+          console.warn(`Missing base data for inspector: ${inspector_id}`);
         }
       }
 
