@@ -1,4 +1,3 @@
-// Workfeed Shifts Sync - Last updated: 2025-01-22
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
@@ -75,13 +74,31 @@ serve(async (req) => {
 
     console.log(`Loaded ${inspectorMap.size} inspector mappings`);
 
-    // Load department mappings (roleID -> role name, departmentID -> dept name)
-    const { data: departments } = await supabaseClient.from("workfeed_departments").select("wf_department_id, name");
+    // Load department mappings: wf_department_id -> department name
+    console.log("Loading department mappings...");
+    const { data: departments } = await supabaseClient
+      .from("departments")
+      .select("wf_department_id, name");
 
     const departmentMap = new Map();
     for (const dept of departments || []) {
       departmentMap.set(dept.wf_department_id, dept.name);
     }
+
+    console.log(`Loaded ${departmentMap.size} department mappings`);
+
+    // Load role mappings: wf_role_id -> role abbreviation
+    console.log("Loading role mappings...");
+    const { data: roleMappings } = await supabaseClient
+      .from("role_mappings")
+      .select("wf_role_id, wf_role_name");
+
+    const roleMap = new Map();
+    for (const role of roleMappings || []) {
+      roleMap.set(role.wf_role_id, role.wf_role_name);
+    }
+
+    console.log(`Loaded ${roleMap.size} role mappings`);
 
     // Fetch shifts from Workfeed API
     const workfeedApiKey = Deno.env.get("WORKFEED_API_KEY");
@@ -121,28 +138,7 @@ serve(async (req) => {
     // Process each shift
     for (const shift of workfeedData) {
       try {
-        // Debug: Log shift structure for first 2 shifts
-        if (synced + skipped + unmapped + errors < 2) {
-          console.log(
-            "DEBUG - Raw shift data:",
-            JSON.stringify(
-              {
-                id: shift.id,
-                employeeID: shift.employeeID,
-                roleID: shift.roleID,
-                departmentID: shift.departmentID,
-                start: shift.start,
-                end: shift.end,
-                status: shift.status,
-                availableFields: Object.keys(shift),
-              },
-              null,
-              2,
-            ),
-          );
-        }
-
-        // Skip if no employeeID (capital ID!)
+        // Skip if no employeeID
         if (!shift.employeeID) {
           console.warn(`Shift ${shift.id} missing employeeID - skipping (unassigned shift)`);
           unmapped++;
@@ -176,7 +172,6 @@ serve(async (req) => {
         let endTimeLocal = null;
         let duration = null;
 
-        // Use 'start' and 'end' fields (not startDateTime/endDateTime)
         if (shift.start && shift.end) {
           try {
             startTimeLocal = toCopenhagenTime(shift.start);
@@ -193,6 +188,9 @@ serve(async (req) => {
         // Get department name from map
         const departmentName = departmentMap.get(shift.departmentID) || "Unknown";
 
+        // Get role abbreviation from map (IF, FF, PS, PA)
+        const roleAbbreviation = roleMap.get(shift.roleID) || "Unknown";
+
         // Prepare shift data
         const shiftData = {
           wf_shift_id: shift.id,
@@ -200,7 +198,7 @@ serve(async (req) => {
           inspector_id: inspector.id,
           inspector_name: inspector.name,
           department: departmentName,
-          type: shift.roleID || "Unknown", // Will store roleID for now
+          type: roleAbbreviation, // Now stores "IF", "FF", "PS", "PA" instead of roleID
           status: shift.released ? "RELEASED" : "ASSIGNED",
           date_local: dateLocal,
           start_utc: shift.start || null,
@@ -209,13 +207,8 @@ serve(async (req) => {
           end_time_local: endTimeLocal,
           duration_minutes: duration,
           wf_role_id: shift.roleID || null,
-          address: null, // Not provided in this API response
+          address: null,
         };
-
-        // Debug: Log prepared data for first successful shift
-        if (synced === 0) {
-          console.log("DEBUG - Prepared shift data:", JSON.stringify(shiftData, null, 2));
-        }
 
         // Upsert the shift
         const { error: upsertError } = await supabaseClient.from("supabase_shifts").upsert(shiftData, {
@@ -228,7 +221,9 @@ serve(async (req) => {
           errors++;
         } else {
           synced++;
-          console.log(`✓ Synced shift for ${inspector.name} on ${dateLocal} (${startTimeLocal}-${endTimeLocal})`);
+          if (synced <= 5) { // Log first 5 for verification
+            console.log(`✓ Synced ${roleAbbreviation} shift for ${inspector.name} at ${departmentName} on ${dateLocal}`);
+          }
         }
       } catch (shiftError) {
         console.error("Error processing shift:", shiftError);
