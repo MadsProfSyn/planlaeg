@@ -119,6 +119,12 @@ serve(async (req) => {
       .in('inspector_id', inspectorIds)
       .eq('is_active', true);
 
+    // Fetch capacity data for all inspectors on their available dates
+    const { data: capacityData } = await supabase
+      .from('inspector_capacity_view')
+      .select('inspector_id, date_local, scheduled_shifts, shift_details, booked_minutes, remaining_minutes, capacity_status')
+      .in('inspector_id', inspectorIds);
+
     // Build inspector details map
     const inspectorMap = new Map<string, any>();
     inspectorsData?.forEach((inspector: any) => {
@@ -134,6 +140,19 @@ serve(async (req) => {
         skillsMap.set(skill.inspector_id, []);
       }
       skillsMap.get(skill.inspector_id)?.push(skill.inspection_type);
+    });
+
+    // Build capacity map: key = "inspector_id|date_local"
+    const capacityMap = new Map<string, any>();
+    capacityData?.forEach((capacity: any) => {
+      const key = `${capacity.inspector_id}|${capacity.date_local}`;
+      capacityMap.set(key, {
+        scheduled_shifts: capacity.scheduled_shifts || 0,
+        shift_details: capacity.shift_details || [],
+        booked_minutes: capacity.booked_minutes || 0,
+        remaining_minutes: capacity.remaining_minutes,
+        capacity_status: capacity.capacity_status
+      });
     });
 
     // Transform data to match expected UI format
@@ -157,6 +176,15 @@ serve(async (req) => {
         tidspunkt_label = `Til ${row.end_time_local.substring(0, 5)}`;
       }
       
+      const capacityKey = `${row.inspector_id}|${row.date_local}`;
+      const capacityInfo = capacityMap.get(capacityKey) || {
+        scheduled_shifts: 0,
+        shift_details: [],
+        booked_minutes: 0,
+        remaining_minutes: null,
+        capacity_status: null
+      };
+
       return {
         availability_id: row.id,
         inspector_uuid: row.inspector_id,
@@ -167,7 +195,11 @@ serve(async (req) => {
         dato: row.date_local,
         start_tid: row.start_time_local,
         slut_tid: row.end_time_local,
-        tidspunkt_label
+        tidspunkt_label,
+        scheduled_shifts: capacityInfo.scheduled_shifts,
+        shift_details: capacityInfo.shift_details,
+        booked_minutes: capacityInfo.booked_minutes,
+        capacity_status: capacityInfo.capacity_status
       };
     }).filter((row: any) => row !== null);
 

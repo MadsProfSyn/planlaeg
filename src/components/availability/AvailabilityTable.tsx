@@ -10,8 +10,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
-import { ChevronUp, ChevronDown } from "lucide-react";
+import { ChevronUp, ChevronDown, Calendar } from "lucide-react";
 import { formatDateForDisplay } from "@/lib/date-utils";
+import { BookedShiftsDialog } from "./BookedShiftsDialog";
 
 export interface AvailableInspector {
   availability_id: string;
@@ -24,6 +25,16 @@ export interface AvailableInspector {
   start_tid: string | null;
   slut_tid: string | null;
   tidspunkt_label: string;
+  scheduled_shifts: number;
+  shift_details: Array<{
+    type: string;
+    start_time: string;
+    end_time: string;
+    duration_minutes: number;
+    address?: string;
+  }>;
+  booked_minutes?: number;
+  capacity_status?: string | null;
 }
 
 interface AvailabilityTableProps {
@@ -56,6 +67,12 @@ export function AvailabilityTable({
     return uniqueUuids.size;
   }, [data]);
 
+  const [selectedInspector, setSelectedInspector] = React.useState<{
+    name: string;
+    date: string;
+    shifts: any[];
+  } | null>(null);
+
   const handleSort = (column: string) => {
     const newDirection = sortBy === column && sortOrder === 'asc' ? 'desc' : 'asc';
     onSortChange(column, newDirection);
@@ -68,6 +85,14 @@ export function AvailabilityTable({
     return sortOrder === 'asc' ? 
       <ChevronUp className="ml-1 h-4 w-4 text-primary" /> : 
       <ChevronDown className="ml-1 h-4 w-4 text-primary" />;
+  };
+
+  const handleBookedShiftsClick = (inspector: AvailableInspector) => {
+    setSelectedInspector({
+      name: inspector.navn,
+      date: inspector.dato,
+      shifts: inspector.shift_details || [],
+    });
   };
 
   return (
@@ -133,18 +158,19 @@ export function AvailabilityTable({
                     </Button>
                   </TableHead>
                   <TableHead className="h-12 font-semibold">Tidspunkt</TableHead>
+                  <TableHead className="h-12 font-semibold">Bookede syn</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8">
+                    <TableCell colSpan={7} className="text-center py-8">
                       Indlæser...
                     </TableCell>
                   </TableRow>
                 ) : data.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-16 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-16 text-muted-foreground">
                       <div className="flex flex-col items-center">
                         <p className="text-base font-medium mb-1">Ingen resultater</p>
                         <p className="text-sm">Justér filtre eller søgning</p>
@@ -175,6 +201,19 @@ export function AvailabilityTable({
                         {formatDateForDisplay(inspector.dato)}
                       </TableCell>
                       <TableCell>{inspector.tidspunkt_label}</TableCell>
+                      <TableCell>
+                        {inspector.scheduled_shifts > 0 ? (
+                          <button
+                            onClick={() => handleBookedShiftsClick(inspector)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer text-sm font-semibold"
+                          >
+                            <Calendar className="h-3.5 w-3.5" />
+                            {inspector.scheduled_shifts}
+                          </button>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
@@ -215,6 +254,15 @@ export function AvailabilityTable({
           )}
         </CardContent>
       </Card>
+
+      {/* Booked shifts dialog */}
+      <BookedShiftsDialog
+        open={selectedInspector !== null}
+        onOpenChange={(open) => !open && setSelectedInspector(null)}
+        inspectorName={selectedInspector?.name || ""}
+        date={selectedInspector?.date || ""}
+        shifts={selectedInspector?.shifts || []}
+      />
     </div>
   );
 }
