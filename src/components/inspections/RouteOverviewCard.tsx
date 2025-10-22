@@ -1,4 +1,4 @@
-import { Clock, MapPin, MoveRight } from "lucide-react";
+import { Clock, MapPin, Car, Wrench } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import type { VrpAssignment } from "@/types/vrp";
 
@@ -6,6 +6,16 @@ interface RouteOverviewCardProps {
   assignment: VrpAssignment;
   sequence: number;
   address?: string;
+}
+
+// Helper function to subtract minutes from time string (HH:MM format)
+function subtractMinutes(timeStr: string, minutes: number): string {
+  const [hours, mins] = timeStr.split(':').map(Number);
+  const totalMins = hours * 60 + mins;
+  const newTotalMins = totalMins - minutes;
+  const newHours = Math.floor(newTotalMins / 60) % 24;
+  const newMins = newTotalMins % 60;
+  return `${String(newHours).padStart(2, '0')}:${String(newMins).padStart(2, '0')}`;
 }
 
 export function RouteOverviewCard({ assignment, sequence, address }: RouteOverviewCardProps) {
@@ -30,21 +40,29 @@ export function RouteOverviewCard({ assignment, sequence, address }: RouteOvervi
             <span>{address || assignment.inspection_address}</span>
           </div>
 
-          {/* Time range */}
-          <div className="flex items-center gap-2 text-sm">
-            <Clock className="h-4 w-4 text-muted-foreground" />
+          {/* Travel time - only show if > 0 */}
+          {assignment.travel_from_previous_mins > 0 && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Car className="h-4 w-4" />
+              <span>Rejsetid: {assignment.travel_from_previous_mins} min</span>
+            </div>
+          )}
+
+          {/* Arrival time - calculated */}
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Clock className="h-4 w-4" />
             <span>
-              {assignment.start_time} - {assignment.end_time}
+              Ankomst: {subtractMinutes(assignment.start_time, assignment.travel_from_previous_mins)}
             </span>
           </div>
 
-          {/* Travel time */}
-          {assignment.travel_from_previous_mins > 0 && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <MoveRight className="h-4 w-4" />
-              <span>{assignment.travel_from_previous_mins} min kørsel</span>
-            </div>
-          )}
+          {/* Inspection time */}
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Wrench className="h-4 w-4 text-primary" />
+            <span>
+              Syn: {assignment.start_time} - {assignment.end_time}
+            </span>
+          </div>
         </div>
       </div>
     </Card>
