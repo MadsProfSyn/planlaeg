@@ -19,6 +19,8 @@ export interface VrpAssignment {
   scheduled_date: string;
   start_time: string;
   end_time: string;
+  scheduled_at?: string;
+  scheduled_end?: string;
   sequence_in_route: number;
   travel_from_previous_mins: number;
   inspection_address?: string;

@@ -129,6 +129,8 @@ Deno.serve(async (req) => {
         scheduled_date: a.date,
         start_time: startTime,
         end_time: endTime,
+        scheduled_at: a.scheduled_at || `${a.date}T${startTime}`,
+        scheduled_end: a.scheduled_end || `${a.date}T${endTime}`,
         sequence_in_route: a.sequence,
         travel_from_previous_mins: a.travel_mins || 0,
         inspection_address: inspection?.address || "Ukendt adresse",

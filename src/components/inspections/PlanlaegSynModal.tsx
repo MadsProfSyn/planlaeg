@@ -127,7 +127,7 @@ export function PlanlaegSynModal({
 
     const updated: Record<string, string> = { ...datetimeByInspection };
     routePlan.assignments.forEach((assignment) => {
-      const datetime = `${assignment.scheduled_date}T${assignment.start_time}`;
+      const datetime = assignment.scheduled_at || `${assignment.scheduled_date}T${assignment.start_time}`;
       updated[assignment.inspection_id] = datetime;
     });
     setDatetimeByInspection(updated);
