@@ -31,5 +31,8 @@ verify_jwt = false
 [functions.sync-availability-cron]
 verify_jwt = false
 
+[functions.sync-shifts-cron]
+verify_jwt = false
+
 [functions.workfeed-ingest-availability]
 verify_jwt = false
