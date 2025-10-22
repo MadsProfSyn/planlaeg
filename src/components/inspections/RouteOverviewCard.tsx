@@ -18,7 +18,30 @@ function addMinutes(timeStr: string, minutes: number): string {
   return `${String(newHours).padStart(2, '0')}:${String(newMins).padStart(2, '0')}`;
 }
 
+// Helper function to round time up to nearest 5-minute interval
+function roundUpToNearest5(timeStr: string): string {
+  const [hours, mins] = timeStr.split(':').map(Number);
+  const roundedMins = Math.ceil(mins / 5) * 5;
+  if (roundedMins === 60) {
+    return `${String((hours + 1) % 24).padStart(2, '0')}:00`;
+  }
+  return `${String(hours).padStart(2, '0')}:${String(roundedMins).padStart(2, '0')}`;
+}
+
+// Helper function to calculate duration between two times in minutes
+function getTimeDifference(startTime: string, endTime: string): number {
+  const [startH, startM] = startTime.split(':').map(Number);
+  const [endH, endM] = endTime.split(':').map(Number);
+  return (endH * 60 + endM) - (startH * 60 + startM);
+}
+
 export function RouteOverviewCard({ assignment, sequence, address }: RouteOverviewCardProps) {
+  // Calculate actual inspection times
+  const arrivalTime = addMinutes(assignment.start_time, assignment.travel_from_previous_mins);
+  const inspectionStartTime = roundUpToNearest5(arrivalTime);
+  const inspectionDuration = getTimeDifference(assignment.start_time, assignment.end_time);
+  const inspectionEndTime = addMinutes(inspectionStartTime, inspectionDuration);
+
   return (
     <Card className="p-4 hover:shadow-md transition-shadow">
       <div className="flex items-start gap-3">
@@ -52,7 +75,7 @@ export function RouteOverviewCard({ assignment, sequence, address }: RouteOvervi
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Clock className="h-4 w-4" />
             <span>
-              Ankomst: {addMinutes(assignment.start_time, assignment.travel_from_previous_mins)}
+              Ankomst: {arrivalTime}
             </span>
           </div>
 
@@ -60,7 +83,7 @@ export function RouteOverviewCard({ assignment, sequence, address }: RouteOvervi
           <div className="flex items-center gap-2 text-sm font-medium">
             <Wrench className="h-4 w-4 text-primary" />
             <span>
-              Syn: {assignment.start_time} - {assignment.end_time}
+              Syn: {inspectionStartTime} - {inspectionEndTime}
             </span>
           </div>
         </div>
