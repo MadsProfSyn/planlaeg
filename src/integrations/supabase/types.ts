@@ -783,12 +783,15 @@ export type Database = {
           created_at: string | null
           date_local: string
           department: string
+          duration_minutes: number | null
+          end_time_local: string | null
           end_utc: string | null
           id: string
           inspection_id: string | null
           inspection_queue_id: string | null
           inspector_id: string
           inspector_name: string
+          start_time_local: string | null
           start_utc: string | null
           status: string
           type: string
@@ -801,12 +804,15 @@ export type Database = {
           created_at?: string | null
           date_local: string
           department: string
+          duration_minutes?: number | null
+          end_time_local?: string | null
           end_utc?: string | null
           id?: string
           inspection_id?: string | null
           inspection_queue_id?: string | null
           inspector_id: string
           inspector_name: string
+          start_time_local?: string | null
           start_utc?: string | null
           status?: string
           type: string
@@ -819,12 +825,15 @@ export type Database = {
           created_at?: string | null
           date_local?: string
           department?: string
+          duration_minutes?: number | null
+          end_time_local?: string | null
           end_utc?: string | null
           id?: string
           inspection_id?: string | null
           inspection_queue_id?: string | null
           inspector_id?: string
           inspector_name?: string
+          start_time_local?: string | null
           start_utc?: string | null
           status?: string
           type?: string
@@ -985,10 +994,7 @@ export type Database = {
       }
     }
     Functions: {
-      demote_admin: {
-        Args: { target_email: string }
-        Returns: undefined
-      }
+      demote_admin: { Args: { target_email: string }; Returns: undefined }
       get_or_create_inspector_uuid: {
         Args: { emp_name: string; wf_emp_id: string }
         Returns: string
@@ -997,26 +1003,6 @@ export type Database = {
         Args: { p_inspection_ids: string[]; p_target_dates: string[] }
         Returns: Json
       }
-      gtrgm_compress: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      gtrgm_decompress: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      gtrgm_in: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      gtrgm_options: {
-        Args: { "": unknown }
-        Returns: undefined
-      }
-      gtrgm_out: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1024,10 +1010,7 @@ export type Database = {
         }
         Returns: boolean
       }
-      promote_user: {
-        Args: { target_email: string }
-        Returns: undefined
-      }
+      promote_user: { Args: { target_email: string }; Returns: undefined }
       save_vrp_solution: {
         Args: {
           p_assignments: Json
@@ -1038,22 +1021,9 @@ export type Database = {
         }
         Returns: string
       }
-      set_limit: {
-        Args: { "": number }
-        Returns: number
-      }
-      show_limit: {
-        Args: Record<PropertyKey, never>
-        Returns: number
-      }
-      show_trgm: {
-        Args: { "": string }
-        Returns: string[]
-      }
-      sync_workfeed_availability_stub: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
+      sync_workfeed_availability_stub: { Args: never; Returns: undefined }
     }
     Enums: {
       app_role: "user" | "admin"
