@@ -31,6 +31,19 @@ function formatTime(timeStr: string): string {
   return timeStr.substring(0, 5);
 }
 
+// Helper to get color styling for inspection type
+function getTypeColor(type: string): string {
+  const typeMap: Record<string, string> = {
+    FF: "bg-[#1e3a8a] text-black", // Dark blue
+    IF: "bg-[#93c5fd] text-black", // Light blue
+    PS: "bg-[#92400e] text-black", // Brown
+    PA: "bg-[#9333ea] text-black", // Purple
+    TMS: "bg-[#ea580c] text-black", // Orange
+    AS: "bg-[#dc2626] text-black", // Red
+  };
+  return typeMap[type] || "bg-muted text-black";
+}
+
 export function BookedShiftsDialog({
   open,
   onOpenChange,
@@ -62,7 +75,7 @@ export function BookedShiftsDialog({
                   <div className="flex-1 space-y-2">
                     {/* Type badge */}
                     <div className="flex items-center gap-2">
-                      <Badge variant="default" className="text-sm">
+                      <Badge className={`text-sm ${getTypeColor(shift.type)}`}>
                         {shift.type}
                       </Badge>
                       <span className="text-sm text-muted-foreground">
