@@ -30,6 +30,16 @@ const INSPECTOR_COLORS = [
 // Cache for driving route legs
 const directionsCache = new Map<string, [number, number][]>();
 
+interface RouteLeg {
+  coords: [number, number][];
+  snapped: boolean;
+}
+
+interface BuiltRoute {
+  merged: [number, number][];
+  legs: RouteLeg[];
+}
+
 function legKey(a: [number, number], b: [number, number]) {
   return `${a[0].toFixed(5)},${a[1].toFixed(5)}->${b[0].toFixed(5)},${b[1].toFixed(5)}`;
 }
@@ -38,7 +48,8 @@ async function fetchLeg(
   from: [number, number],
   to: [number, number],
   token: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onAuthError?: () => void
 ): Promise<[number, number][] | null> {
   const key = legKey(from, to);
   if (directionsCache.has(key)) return directionsCache.get(key)!;
@@ -48,15 +59,24 @@ async function fetchLeg(
     return [from, to];
   }
 
-  const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${from[0]},${from[1]};${to[0]},${to[1]}?geometries=geojson&overview=full&steps=false&access_token=${token}`;
+  const url = `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${from[0]},${from[1]};${to[0]},${to[1]}?geometries=geojson&overview=full&steps=false&access_token=${token}`;
 
   try {
     const res = await fetch(url, { signal });
+    
+    // Handle auth errors
+    if (res.status === 401 || res.status === 403) {
+      console.error("Mapbox Directions API rejected token (401/403). Check token and domain allowlist.");
+      if (onAuthError) onAuthError();
+      return null;
+    }
+    
     if (!res.ok) {
       const msg = await res.text().catch(() => res.statusText);
       console.warn("Directions leg failed", { status: res.status, msg });
       return null;
     }
+    
     const data = await res.json();
     const coords = data?.routes?.[0]?.geometry?.coordinates as [number, number][] | undefined;
     if (coords && coords.length) {
@@ -71,46 +91,46 @@ async function fetchLeg(
   }
 }
 
-async function buildDrivingPolyline(
+async function buildDrivingPolylineWithLegs(
   coords: [number, number][],
   token: string,
-  signal?: AbortSignal
-): Promise<[number, number][]> {
-  if (coords.length < 2) return coords;
+  signal?: AbortSignal,
+  onAuthError?: () => void
+): Promise<BuiltRoute> {
+  if (coords.length < 2) return { merged: coords, legs: [] };
+  
   const merged: [number, number][] = [];
-  let failedLegs = 0;
+  const legs: RouteLeg[] = [];
   
   for (let i = 0; i < coords.length - 1; i++) {
     const from = coords[i];
     const to = coords[i + 1];
     
-    const leg = await fetchLeg(from, to, token, signal);
+    const leg = await fetchLeg(from, to, token, signal, onAuthError);
     
     if (leg && leg.length > 1) {
+      // Successfully snapped leg
       if (merged.length === 0) {
         merged.push(...leg);
       } else {
         merged.push(...leg.slice(1));
       }
+      legs.push({ coords: leg, snapped: true });
     } else {
-      failedLegs++;
-      // Fallback straight segment if leg failed
+      // Fallback straight segment
       if (merged.length === 0) {
         merged.push(from, to);
       } else {
         merged.push(to);
       }
+      legs.push({ coords: [from, to], snapped: false });
     }
     
-    // Small delay to spread requests
+    // Small delay to spread requests (avoid rate limits)
     await new Promise((r) => setTimeout(r, 100));
   }
   
-  if (failedLegs === coords.length - 1) {
-    console.warn("All legs failed; falling back to straight lines. Check Mapbox token restrictions or quota.");
-  }
-  
-  return merged;
+  return { merged, legs };
 }
 
 export function RouteMapView({
@@ -129,6 +149,7 @@ export function RouteMapView({
   const [mapLoaded, setMapLoaded] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
   const [tileLoadError, setTileLoadError] = useState(false);
+  const [directionsAuthError, setDirectionsAuthError] = useState(false);
 
   // Initialize map with OpenStreetMap tiles (no API key needed!)
   useEffect(() => {
@@ -144,9 +165,9 @@ export function RouteMapView({
 
     // Set Mapbox access token (required even for custom tile sources)
     const mapboxToken = import.meta.env.VITE_MAPBOX_PUBLIC_TOKEN;
-    if (!mapboxToken) {
-      console.error("❌ VITE_MAPBOX_PUBLIC_TOKEN is not set in environment variables");
-      setInitError("Mapbox token is missing. Please add VITE_MAPBOX_PUBLIC_TOKEN to your .env file.");
+    if (!mapboxToken || mapboxToken === "your_actual_mapbox_token_here" || !mapboxToken.startsWith("pk.")) {
+      console.error("❌ Invalid or missing Mapbox token");
+      setInitError("Ugyldig Mapbox token. Tilføj et gyldigt VITE_MAPBOX_PUBLIC_TOKEN (starter med pk.) i din .env fil og genstart.");
       return;
     }
 
@@ -243,17 +264,21 @@ export function RouteMapView({
 
     // Remove existing route layers
     inspectorRoutes.forEach((route) => {
-      const sourceId = `route-${route.inspector_id}`;
-      try {
-        if (map.current?.getLayer(sourceId)) {
-          map.current.removeLayer(sourceId);
+      const snappedId = `route-${route.inspector_id}-snapped`;
+      const fallbackId = `route-${route.inspector_id}-fallback`;
+      
+      [snappedId, fallbackId].forEach(layerId => {
+        try {
+          if (map.current?.getLayer(layerId)) {
+            map.current.removeLayer(layerId);
+          }
+          if (map.current?.getSource(layerId)) {
+            map.current.removeSource(layerId);
+          }
+        } catch (e) {
+          console.error("Failed to remove layer/source", layerId, e);
         }
-        if (map.current?.getSource(sourceId)) {
-          map.current.removeSource(sourceId);
-        }
-      } catch (e) {
-        console.error("Failed to remove layer/source", sourceId, e);
-      }
+      });
     });
 
     const allCoords: [number, number][] = [];
@@ -341,39 +366,66 @@ export function RouteMapView({
         markersRef.current.push(marker);
       }
 
-      // Add route line with actual driving route
+      // Add route line with actual driving route (two layers: snapped + fallback)
       if (coordinates.length > 1 && map.current) {
-        // Fetch actual driving route from Mapbox Directions API
         const addRouteToMap = async () => {
           const controller = new AbortController();
           abortControllersRef.current.push(controller);
           
-          let routeCoordinates = coordinates;
+          if (!mapboxToken) return;
           
-          if (mapboxToken) {
-            routeCoordinates = await buildDrivingPolyline(coordinates, mapboxToken, controller.signal);
-            console.log(`✅ Got driving route for ${route.inspector_name}: ${routeCoordinates.length} points`);
-          }
+          const built = await buildDrivingPolylineWithLegs(
+            coordinates, 
+            mapboxToken, 
+            controller.signal,
+            () => setDirectionsAuthError(true)
+          );
+          
+          console.log(`✅ Got driving route for ${route.inspector_name}: ${built.merged.length} points, ${built.legs.filter(l => l.snapped).length}/${built.legs.length} legs snapped`);
 
           if (!map.current) return;
 
+          // Create snapped legs feature collection
+          const snappedFC = {
+            type: "FeatureCollection" as const,
+            features: built.legs
+              .filter(l => l.snapped)
+              .map((l, idx) => ({
+                type: "Feature" as const,
+                properties: { idx },
+                geometry: { 
+                  type: "LineString" as const, 
+                  coordinates: l.coords 
+                }
+              }))
+          };
+
+          // Create fallback legs feature collection
+          const fallbackFC = {
+            type: "FeatureCollection" as const,
+            features: built.legs
+              .filter(l => !l.snapped)
+              .map((l, idx) => ({
+                type: "Feature" as const,
+                properties: { idx },
+                geometry: { 
+                  type: "LineString" as const, 
+                  coordinates: l.coords 
+                }
+              }))
+          };
+
           try {
-            map.current.addSource(`route-${route.inspector_id}`, {
+            // Add snapped route layer (solid line)
+            map.current.addSource(`route-${route.inspector_id}-snapped`, {
               type: "geojson",
-              data: {
-                type: "Feature",
-                properties: {},
-                geometry: {
-                  type: "LineString",
-                  coordinates: routeCoordinates,
-                },
-              },
+              data: snappedFC,
             });
 
             map.current.addLayer({
-              id: `route-${route.inspector_id}`,
+              id: `route-${route.inspector_id}-snapped`,
               type: "line",
-              source: `route-${route.inspector_id}`,
+              source: `route-${route.inspector_id}-snapped`,
               layout: {
                 "line-join": "round",
                 "line-cap": "round",
@@ -381,11 +433,33 @@ export function RouteMapView({
               paint: {
                 "line-color": color,
                 "line-width": selectedInspectorId === route.inspector_id ? 4 : 2,
-                "line-opacity": isRouteSelected ? 1 : 0.6,
+                "line-opacity": isRouteSelected ? 1 : 0.9,
+              },
+            });
+
+            // Add fallback route layer (dashed line)
+            map.current.addSource(`route-${route.inspector_id}-fallback`, {
+              type: "geojson",
+              data: fallbackFC,
+            });
+
+            map.current.addLayer({
+              id: `route-${route.inspector_id}-fallback`,
+              type: "line",
+              source: `route-${route.inspector_id}-fallback`,
+              layout: {
+                "line-join": "round",
+                "line-cap": "round",
+              },
+              paint: {
+                "line-color": color,
+                "line-width": selectedInspectorId === route.inspector_id ? 4 : 2,
+                "line-opacity": isRouteSelected ? 0.7 : 0.5,
+                "line-dasharray": [2, 2], // Dashed to indicate fallback
               },
             });
           } catch (e) {
-            console.error("Failed to add route layer", e);
+            console.error("Failed to add route layers", e);
           }
         };
 
@@ -565,6 +639,16 @@ export function RouteMapView({
           <p className="font-semibold mb-2">Kort-fliser kan ikke indlæses</p>
           <p className="text-sm">
             OpenStreetMap er muligvis utilgængelig. Tjek din internetforbindelse.
+          </p>
+        </div>
+      )}
+
+      {/* Directions Auth Error Warning */}
+      {directionsAuthError && mapLoaded && !initError && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-amber-500/90 text-white p-3 rounded-lg max-w-md text-center z-20 shadow-lg">
+          <p className="font-semibold mb-1">Mapbox Directions afvist (401/403)</p>
+          <p className="text-sm">
+            Tjek at din token er gyldig og at domænet er på allowlist.
           </p>
         </div>
       )}
