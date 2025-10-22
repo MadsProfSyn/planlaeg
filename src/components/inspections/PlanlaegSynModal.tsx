@@ -333,7 +333,7 @@ export function PlanlaegSynModal({
                 Detaljer pr. syn
               </h3>
 
-              <ScrollArea className="h-[500px] pr-4">
+              <ScrollArea className="h-[calc(100vh-280px)] max-h-[800px] pr-4">
                 {loadingInspections ? (
                   <div className="space-y-4">
                     {Array.from({ length: 3 }).map((_, i) => (
@@ -452,7 +452,7 @@ export function PlanlaegSynModal({
                     </div>
                   </div>
 
-                  <ScrollArea className="h-[420px] pr-4">
+                  <ScrollArea className="h-[calc(100vh-280px)] max-h-[800px] pr-4">
                     <div className="space-y-4">
                       <h4 className="font-medium text-sm text-muted-foreground">
                         Optimeret rute:
