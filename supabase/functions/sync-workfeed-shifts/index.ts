@@ -74,6 +74,14 @@ serve(async (req) => {
 
     console.log(`Loaded ${inspectorMap.size} inspector mappings`);
 
+    // Load department mappings (roleID -> role name, departmentID -> dept name)
+    const { data: departments } = await supabaseClient.from("workfeed_departments").select("wf_department_id, name");
+
+    const departmentMap = new Map();
+    for (const dept of departments || []) {
+      departmentMap.set(dept.wf_department_id, dept.name);
+    }
+
     // Fetch shifts from Workfeed API
     const workfeedApiKey = Deno.env.get("WORKFEED_API_KEY");
     const workfeedCompanyId = Deno.env.get("WORKFEED_COMPANY_ID") || "KASqUqisoJTrzapASxwG";
@@ -119,13 +127,12 @@ serve(async (req) => {
             JSON.stringify(
               {
                 id: shift.id,
-                employeeId: shift.employeeId,
-                employeeName: shift.employeeName,
-                departmentName: shift.departmentName,
-                roleName: shift.roleName,
+                employeeID: shift.employeeID,
+                roleID: shift.roleID,
+                departmentID: shift.departmentID,
+                start: shift.start,
+                end: shift.end,
                 status: shift.status,
-                startDateTime: shift.startDateTime,
-                endDateTime: shift.endDateTime,
                 availableFields: Object.keys(shift),
               },
               null,
@@ -134,17 +141,17 @@ serve(async (req) => {
           );
         }
 
-        // Skip if no employeeId
-        if (!shift.employeeId) {
-          console.warn(`Shift ${shift.id} missing employeeId - skipping (unassigned shift)`);
+        // Skip if no employeeID (capital ID!)
+        if (!shift.employeeID) {
+          console.warn(`Shift ${shift.id} missing employeeID - skipping (unassigned shift)`);
           unmapped++;
           continue;
         }
 
         // Look up inspector by wf_employee_id
-        const inspector = inspectorMap.get(shift.employeeId);
+        const inspector = inspectorMap.get(shift.employeeID);
         if (!inspector) {
-          console.warn(`No inspector found for wf_employee_id: ${shift.employeeId} (shift: ${shift.id})`);
+          console.warn(`No inspector found for wf_employee_id: ${shift.employeeID} (shift: ${shift.id})`);
           unmapped++;
           continue;
         }
@@ -168,36 +175,40 @@ serve(async (req) => {
         let endTimeLocal = null;
         let duration = null;
 
-        if (shift.startDateTime && shift.endDateTime) {
+        // Use 'start' and 'end' fields (not startDateTime/endDateTime)
+        if (shift.start && shift.end) {
           try {
-            startTimeLocal = toCopenhagenTime(shift.startDateTime);
-            endTimeLocal = toCopenhagenTime(shift.endDateTime);
-            duration = calculateDuration(shift.startDateTime, shift.endDateTime);
+            startTimeLocal = toCopenhagenTime(shift.start);
+            endTimeLocal = toCopenhagenTime(shift.end);
+            duration = calculateDuration(shift.start, shift.end);
           } catch (timeError) {
             console.error("Error converting times:", timeError);
           }
         }
 
-        // Extract date_local from startDateTime
-        const dateLocal = shift.startDateTime ? shift.startDateTime.split("T")[0] : fromDate;
+        // Extract date_local from start timestamp
+        const dateLocal = shift.start ? shift.start.split("T")[0] : fromDate;
+
+        // Get department name from map
+        const departmentName = departmentMap.get(shift.departmentID) || "Unknown";
 
         // Prepare shift data
         const shiftData = {
           wf_shift_id: shift.id,
-          wf_employee_id: shift.employeeId,
-          inspector_id: inspector.id, // Mapped UUID from our DB
-          inspector_name: inspector.name, // Use name from our DB
-          department: shift.departmentName || "Unknown",
-          type: shift.roleName || "Unknown",
-          status: shift.status || "ASSIGNED",
+          wf_employee_id: shift.employeeID,
+          inspector_id: inspector.id,
+          inspector_name: inspector.name,
+          department: departmentName,
+          type: shift.roleID || "Unknown", // Will store roleID for now
+          status: shift.released ? "RELEASED" : "ASSIGNED",
           date_local: dateLocal,
-          start_utc: shift.startDateTime || null,
-          end_utc: shift.endDateTime || null,
+          start_utc: shift.start || null,
+          end_utc: shift.end || null,
           start_time_local: startTimeLocal,
           end_time_local: endTimeLocal,
           duration_minutes: duration,
-          wf_role_id: shift.roleId || null,
-          address: shift.address || null,
+          wf_role_id: shift.roleID || null,
+          address: null, // Not provided in this API response
         };
 
         // Debug: Log prepared data for first successful shift
@@ -216,7 +227,7 @@ serve(async (req) => {
           errors++;
         } else {
           synced++;
-          console.log(`✓ Synced shift for ${inspector.name} on ${dateLocal}`);
+          console.log(`✓ Synced shift for ${inspector.name} on ${dateLocal} (${startTimeLocal}-${endTimeLocal})`);
         }
       } catch (shiftError) {
         console.error("Error processing shift:", shiftError);
