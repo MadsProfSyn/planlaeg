@@ -10,7 +10,6 @@ const corsHeaders = {
 // Convert UTC timestamp to Copenhagen local time
 function toCopenhagenTime(utcDateTimeStr: string): string {
   const date = new Date(utcDateTimeStr);
-  // Convert to Copenhagen timezone
   const copenhagenStr = date.toLocaleString("en-US", {
     timeZone: "Europe/Copenhagen",
     hour12: false,
@@ -18,7 +17,6 @@ function toCopenhagenTime(utcDateTimeStr: string): string {
     minute: "2-digit",
     second: "2-digit",
   });
-  // Extract just HH:MM:SS
   return copenhagenStr.split(", ")[1] || copenhagenStr;
 }
 
@@ -55,6 +53,26 @@ serve(async (req) => {
 
     console.log(`Syncing shifts for ${fromDate} to ${toDate}, forceSync: ${forceSync}`);
 
+    // Build inspector lookup map: wf_employee_id -> inspector details
+    const { data: inspectors, error: inspectorsError } = await supabaseClient
+      .from("inspectors")
+      .select("id, full_name, wf_employee_id")
+      .not("wf_employee_id", "is", null);
+
+    if (inspectorsError) {
+      throw new Error(`Failed to load inspectors: ${inspectorsError.message}`);
+    }
+
+    const inspectorMap = new Map();
+    for (const inspector of inspectors || []) {
+      inspectorMap.set(inspector.wf_employee_id, {
+        id: inspector.id,
+        name: inspector.full_name,
+      });
+    }
+
+    console.log(`Loaded ${inspectorMap.size} inspector mappings`);
+
     // Fetch shifts from Workfeed API
     const workfeedApiKey = Deno.env.get("WORKFEED_API_KEY");
     const workfeedCompanyId = Deno.env.get("WORKFEED_COMPANY_ID") || "KASqUqisoJTrzapASxwG";
@@ -88,10 +106,26 @@ serve(async (req) => {
     let synced = 0;
     let skipped = 0;
     let errors = 0;
+    let unmapped = 0;
 
     // Process each shift
     for (const shift of workfeedData) {
       try {
+        // Skip if no employeeId
+        if (!shift.employeeId) {
+          console.warn("Shift missing employeeId:", shift.id);
+          unmapped++;
+          continue;
+        }
+
+        // Look up inspector by wf_employee_id
+        const inspector = inspectorMap.get(shift.employeeId);
+        if (!inspector) {
+          console.warn(`No inspector found for wf_employee_id: ${shift.employeeId}`);
+          unmapped++;
+          continue;
+        }
+
         // Check if shift already exists (unless forcing sync)
         if (!forceSync && shift.id) {
           const { data: existing } = await supabaseClient
@@ -128,8 +162,8 @@ serve(async (req) => {
         const shiftData = {
           wf_shift_id: shift.id,
           wf_employee_id: shift.employeeId,
-          inspector_id: shift.employeeId, // Will need to map this to your inspector UUID
-          inspector_name: shift.employeeName || "Unknown",
+          inspector_id: inspector.id, // Mapped UUID
+          inspector_name: inspector.name, // Use name from our DB
           department: shift.departmentName || "Unknown",
           type: shift.roleName || "Unknown",
           status: shift.status || "ASSIGNED",
@@ -165,10 +199,11 @@ serve(async (req) => {
       success: true,
       synced,
       skipped,
+      unmapped,
       errors,
       total: workfeedData.length || 0,
       dateRange: { from: fromDate, to: toDate },
-      summary: `Synced ${synced} shifts, skipped ${skipped}, ${errors} errors`,
+      summary: `Synced ${synced} shifts, skipped ${skipped}, ${unmapped} unmapped employees, ${errors} errors`,
     };
 
     console.log("Sync completed:", response);
@@ -183,6 +218,7 @@ serve(async (req) => {
       success: false,
       synced: 0,
       skipped: 0,
+      unmapped: 0,
       errors: 1,
       total: 0,
       dateRange: { from: "", to: "" },
