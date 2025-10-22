@@ -54,6 +54,7 @@ serve(async (req) => {
     console.log(`Syncing shifts for ${fromDate} to ${toDate}, forceSync: ${forceSync}`);
 
     // Build inspector lookup map: wf_employee_id -> inspector details
+    console.log("Loading inspector mappings...");
     const { data: inspectors, error: inspectorsError } = await supabaseClient
       .from("inspectors")
       .select("id, full_name, wf_employee_id")
@@ -111,9 +112,31 @@ serve(async (req) => {
     // Process each shift
     for (const shift of workfeedData) {
       try {
+        // Debug: Log shift structure for first 2 shifts
+        if (synced + skipped + unmapped + errors < 2) {
+          console.log(
+            "DEBUG - Raw shift data:",
+            JSON.stringify(
+              {
+                id: shift.id,
+                employeeId: shift.employeeId,
+                employeeName: shift.employeeName,
+                departmentName: shift.departmentName,
+                roleName: shift.roleName,
+                status: shift.status,
+                startDateTime: shift.startDateTime,
+                endDateTime: shift.endDateTime,
+                availableFields: Object.keys(shift),
+              },
+              null,
+              2,
+            ),
+          );
+        }
+
         // Skip if no employeeId
         if (!shift.employeeId) {
-          console.warn("Shift missing employeeId:", shift.id);
+          console.warn(`Shift ${shift.id} missing employeeId - skipping (unassigned shift)`);
           unmapped++;
           continue;
         }
@@ -121,7 +144,7 @@ serve(async (req) => {
         // Look up inspector by wf_employee_id
         const inspector = inspectorMap.get(shift.employeeId);
         if (!inspector) {
-          console.warn(`No inspector found for wf_employee_id: ${shift.employeeId}`);
+          console.warn(`No inspector found for wf_employee_id: ${shift.employeeId} (shift: ${shift.id})`);
           unmapped++;
           continue;
         }
@@ -162,7 +185,7 @@ serve(async (req) => {
         const shiftData = {
           wf_shift_id: shift.id,
           wf_employee_id: shift.employeeId,
-          inspector_id: inspector.id, // Mapped UUID
+          inspector_id: inspector.id, // Mapped UUID from our DB
           inspector_name: inspector.name, // Use name from our DB
           department: shift.departmentName || "Unknown",
           type: shift.roleName || "Unknown",
@@ -177,6 +200,11 @@ serve(async (req) => {
           address: shift.address || null,
         };
 
+        // Debug: Log prepared data for first successful shift
+        if (synced === 0) {
+          console.log("DEBUG - Prepared shift data:", JSON.stringify(shiftData, null, 2));
+        }
+
         // Upsert the shift
         const { error: upsertError } = await supabaseClient.from("supabase_shifts").upsert(shiftData, {
           onConflict: "wf_shift_id",
@@ -188,6 +216,7 @@ serve(async (req) => {
           errors++;
         } else {
           synced++;
+          console.log(`✓ Synced shift for ${inspector.name} on ${dateLocal}`);
         }
       } catch (shiftError) {
         console.error("Error processing shift:", shiftError);
@@ -203,7 +232,7 @@ serve(async (req) => {
       errors,
       total: workfeedData.length || 0,
       dateRange: { from: fromDate, to: toDate },
-      summary: `Synced ${synced} shifts, skipped ${skipped}, ${unmapped} unmapped employees, ${errors} errors`,
+      summary: `Synced ${synced} shifts, skipped ${skipped}, ${unmapped} unmapped, ${errors} errors`,
     };
 
     console.log("Sync completed:", response);
