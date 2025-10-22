@@ -962,6 +962,26 @@ export type Database = {
         }
         Relationships: []
       }
+      inspector_capacity_view: {
+        Row: {
+          booked_minutes: number | null
+          capacity_status: string | null
+          date_local: string | null
+          department: string | null
+          end_time_local: string | null
+          inspector_id: string | null
+          inspector_name: string | null
+          is_available: boolean | null
+          percent_booked: number | null
+          remaining_minutes: number | null
+          scheduled_shifts: number | null
+          shift_details: Json | null
+          shift_types: string[] | null
+          start_time_local: string | null
+          total_minutes: number | null
+        }
+        Relationships: []
+      }
       vw_postcode_to_department: {
         Row: {
           afdeling: string | null

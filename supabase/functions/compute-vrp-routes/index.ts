@@ -45,12 +45,12 @@ Deno.serve(async (req) => {
     console.log("VRP input fetched:", {
       inspections_count: vrpInput?.inspections?.length || 0,
       inspectors_count: vrpInput?.inspectors?.length || 0,
-      existing_shifts_count: vrpInput?.existing_shifts?.length || 0,
+      inspector_capacity_count: vrpInput?.inspector_capacity?.length || 0,
     });
 
     const inspections = vrpInput?.inspections || [];
     const inspectors = vrpInput?.inspectors || [];
-    const existingShifts = vrpInput?.existing_shifts || [];
+    const inspectorCapacity = vrpInput?.inspector_capacity || [];
 
     // Call the external Railway VRP API for optimized route planning
     const railwayApiUrl = "https://web-production-1b301.up.railway.app/schedule";
