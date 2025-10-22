@@ -8,11 +8,11 @@ interface RouteOverviewCardProps {
   address?: string;
 }
 
-// Helper function to subtract minutes from time string (HH:MM format)
-function subtractMinutes(timeStr: string, minutes: number): string {
+// Helper function to add minutes to time string (HH:MM format)
+function addMinutes(timeStr: string, minutes: number): string {
   const [hours, mins] = timeStr.split(':').map(Number);
   const totalMins = hours * 60 + mins;
-  const newTotalMins = totalMins - minutes;
+  const newTotalMins = totalMins + minutes;
   const newHours = Math.floor(newTotalMins / 60) % 24;
   const newMins = newTotalMins % 60;
   return `${String(newHours).padStart(2, '0')}:${String(newMins).padStart(2, '0')}`;
@@ -52,7 +52,7 @@ export function RouteOverviewCard({ assignment, sequence, address }: RouteOvervi
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Clock className="h-4 w-4" />
             <span>
-              Ankomst: {subtractMinutes(assignment.start_time, assignment.travel_from_previous_mins)}
+              Ankomst: {addMinutes(assignment.start_time, assignment.travel_from_previous_mins)}
             </span>
           </div>
 
