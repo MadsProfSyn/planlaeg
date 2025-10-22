@@ -113,15 +113,24 @@ Deno.serve(async (req) => {
       const inspection = inspections.find((i: any) => i.id === a.inspection_id);
       const inspector = inspectors.find((i: any) => i.inspector_id === a.inspector_id);
       
+      // Defensive time handling with fallbacks
+      const startTime = a.start_time 
+        ? (typeof a.start_time === 'string' ? a.start_time.substring(0, 5) : String(a.start_time))
+        : "09:00";
+        
+      const endTime = a.end_time 
+        ? (typeof a.end_time === 'string' ? a.end_time.substring(0, 5) : String(a.end_time))
+        : "17:00";
+      
       return {
         inspection_id: a.inspection_id,
         inspector_id: a.inspector_id,
         inspector_name: a.inspector_name || inspector?.full_name || "Ukendt synskonsulent",
         scheduled_date: a.date,
-        start_time: a.start_time.substring(0, 5), // "09:00:00" → "09:00"
-        end_time: a.end_time.substring(0, 5),
+        start_time: startTime,
+        end_time: endTime,
         sequence_in_route: a.sequence,
-        travel_from_previous_mins: a.travel_mins,
+        travel_from_previous_mins: a.travel_mins || 0,
         inspection_address: inspection?.address || "Ukendt adresse",
         inspection_type: inspection?.type_code || a.inspection_type,
       };

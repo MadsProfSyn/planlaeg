@@ -10,7 +10,20 @@ interface RouteOverviewCardProps {
 
 // Helper function to add minutes to time string (HH:MM format)
 function addMinutes(timeStr: string, minutes: number): string {
-  const [hours, mins] = timeStr.split(':').map(Number);
+  if (!timeStr || typeof timeStr !== 'string' || !timeStr.includes(':')) {
+    console.warn('Invalid timeStr in addMinutes:', timeStr);
+    return "00:00";
+  }
+  
+  const parts = timeStr.split(':');
+  if (parts.length < 2) return "00:00";
+  
+  const [hours, mins] = parts.map(Number);
+  if (isNaN(hours) || isNaN(mins)) {
+    console.warn('NaN in time parsing:', { timeStr, hours, mins });
+    return "00:00";
+  }
+  
   const totalMins = hours * 60 + mins;
   const newTotalMins = totalMins + minutes;
   const newHours = Math.floor(newTotalMins / 60) % 24;
@@ -20,7 +33,17 @@ function addMinutes(timeStr: string, minutes: number): string {
 
 // Helper function to round time up to nearest 5-minute interval
 function roundUpToNearest5(timeStr: string): string {
-  const [hours, mins] = timeStr.split(':').map(Number);
+  if (!timeStr || typeof timeStr !== 'string' || !timeStr.includes(':')) {
+    console.warn('Invalid timeStr in roundUpToNearest5:', timeStr);
+    return "00:00";
+  }
+  
+  const parts = timeStr.split(':');
+  if (parts.length < 2) return "00:00";
+  
+  const [hours, mins] = parts.map(Number);
+  if (isNaN(hours) || isNaN(mins)) return "00:00";
+  
   const roundedMins = Math.ceil(mins / 5) * 5;
   if (roundedMins === 60) {
     return `${String((hours + 1) % 24).padStart(2, '0')}:00`;
@@ -30,8 +53,21 @@ function roundUpToNearest5(timeStr: string): string {
 
 // Helper function to calculate duration between two times in minutes
 function getTimeDifference(startTime: string, endTime: string): number {
-  const [startH, startM] = startTime.split(':').map(Number);
-  const [endH, endM] = endTime.split(':').map(Number);
+  if (!startTime || !endTime || typeof startTime !== 'string' || typeof endTime !== 'string') {
+    console.warn('Invalid time inputs in getTimeDifference:', { startTime, endTime });
+    return 60; // Default 1 hour
+  }
+  
+  const startParts = startTime.split(':');
+  const endParts = endTime.split(':');
+  
+  if (startParts.length < 2 || endParts.length < 2) return 60;
+  
+  const [startH, startM] = startParts.map(Number);
+  const [endH, endM] = endParts.map(Number);
+  
+  if (isNaN(startH) || isNaN(startM) || isNaN(endH) || isNaN(endM)) return 60;
+  
   return (endH * 60 + endM) - (startH * 60 + startM);
 }
 
