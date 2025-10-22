@@ -55,6 +55,16 @@ export function RouteMapView({
       return;
     }
 
+    // Set Mapbox access token (required even for custom tile sources)
+    const mapboxToken = import.meta.env.VITE_MAPBOX_PUBLIC_TOKEN;
+    if (!mapboxToken) {
+      console.error("❌ VITE_MAPBOX_PUBLIC_TOKEN is not set in environment variables");
+      setInitError("Mapbox token is missing. Please add VITE_MAPBOX_PUBLIC_TOKEN to your .env file.");
+      return;
+    }
+
+    mapboxgl.accessToken = mapboxToken;
+
     try {
       map.current = new mapboxgl.Map({
         container: mapContainer.current,
