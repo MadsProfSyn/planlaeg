@@ -27,6 +27,18 @@ function calculateDuration(startUtc: string, endUtc: string): number {
   return Math.round((end.getTime() - start.getTime()) / (1000 * 60));
 }
 
+// Extract address from comment message (first line)
+function extractAddress(comment: any): string | null {
+  if (!comment || !comment.message) return null;
+  
+  const firstLine = comment.message.split('\n')[0].trim();
+  // Only return if it looks like an address (not empty and has some structure)
+  if (firstLine.length > 5) {
+    return firstLine;
+  }
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -134,6 +146,7 @@ serve(async (req) => {
     let skipped = 0;
     let errors = 0;
     let unmapped = 0;
+    let addressesExtracted = 0;
 
     // Process each shift
     for (const shift of workfeedData) {
@@ -191,6 +204,12 @@ serve(async (req) => {
         // Get role abbreviation from map (IF, FF, PS, PA)
         const roleAbbreviation = roleMap.get(shift.roleID) || "Unknown";
 
+        // Extract address from comment (first line)
+        const address = extractAddress(shift.comment);
+        if (address) {
+          addressesExtracted++;
+        }
+
         // Prepare shift data
         const shiftData = {
           wf_shift_id: shift.id,
@@ -198,7 +217,7 @@ serve(async (req) => {
           inspector_id: inspector.id,
           inspector_name: inspector.name,
           department: departmentName,
-          type: roleAbbreviation, // Now stores "IF", "FF", "PS", "PA" instead of roleID
+          type: roleAbbreviation,
           status: shift.released ? "RELEASED" : "ASSIGNED",
           date_local: dateLocal,
           start_utc: shift.start || null,
@@ -207,7 +226,7 @@ serve(async (req) => {
           end_time_local: endTimeLocal,
           duration_minutes: duration,
           wf_role_id: shift.roleID || null,
-          address: null,
+          address: address, // Now extracts from comment
         };
 
         // Upsert the shift
@@ -221,8 +240,8 @@ serve(async (req) => {
           errors++;
         } else {
           synced++;
-          if (synced <= 5) { // Log first 5 for verification
-            console.log(`✓ Synced ${roleAbbreviation} shift for ${inspector.name} at ${departmentName} on ${dateLocal}`);
+          if (synced <= 3) { // Log first 3 for verification
+            console.log(`✓ Synced ${roleAbbreviation} shift for ${inspector.name} at ${address || 'no address'}`);
           }
         }
       } catch (shiftError) {
@@ -237,9 +256,10 @@ serve(async (req) => {
       skipped,
       unmapped,
       errors,
+      addressesExtracted,
       total: workfeedData.length || 0,
       dateRange: { from: fromDate, to: toDate },
-      summary: `Synced ${synced} shifts, skipped ${skipped}, ${unmapped} unmapped, ${errors} errors`,
+      summary: `Synced ${synced} shifts (${addressesExtracted} with addresses), skipped ${skipped}, ${unmapped} unmapped, ${errors} errors`,
     };
 
     console.log("Sync completed:", response);
@@ -256,6 +276,7 @@ serve(async (req) => {
       skipped: 0,
       unmapped: 0,
       errors: 1,
+      addressesExtracted: 0,
       total: 0,
       dateRange: { from: "", to: "" },
       summary: "Sync failed",
