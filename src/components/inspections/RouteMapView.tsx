@@ -27,36 +27,90 @@ const INSPECTOR_COLORS = [
   "#F97316", // Orange
 ];
 
-// Fetch driving route from Mapbox Directions API
-async function fetchDrivingRoute(
-  coordinates: [number, number][],
-  accessToken: string
+// Cache for driving route legs
+const directionsCache = new Map<string, [number, number][]>();
+
+function legKey(a: [number, number], b: [number, number]) {
+  return `${a[0].toFixed(5)},${a[1].toFixed(5)}->${b[0].toFixed(5)},${b[1].toFixed(5)}`;
+}
+
+async function fetchLeg(
+  from: [number, number],
+  to: [number, number],
+  token: string,
+  signal?: AbortSignal
 ): Promise<[number, number][] | null> {
-  if (coordinates.length < 2) return coordinates;
+  const key = legKey(from, to);
+  if (directionsCache.has(key)) return directionsCache.get(key)!;
+
+  // Skip degenerate legs
+  if (from[0] === to[0] && from[1] === to[1]) {
+    return [from, to];
+  }
+
+  const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${from[0]},${from[1]};${to[0]},${to[1]}?geometries=geojson&overview=full&steps=false&access_token=${token}`;
 
   try {
-    // Mapbox Directions API supports up to 25 waypoints
-    const coords = coordinates.slice(0, 25);
-    const coordinatesString = coords.map(c => `${c[0]},${c[1]}`).join(';');
-    
-    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordinatesString}?geometries=geojson&access_token=${accessToken}`;
-    
-    const response = await fetch(url);
-    if (!response.ok) {
-      console.warn("Failed to fetch driving route:", response.statusText);
+    const res = await fetch(url, { signal });
+    if (!res.ok) {
+      const msg = await res.text().catch(() => res.statusText);
+      console.warn("Directions leg failed", { status: res.status, msg });
       return null;
     }
-    
-    const data = await response.json();
-    if (data.routes && data.routes[0] && data.routes[0].geometry) {
-      return data.routes[0].geometry.coordinates as [number, number][];
+    const data = await res.json();
+    const coords = data?.routes?.[0]?.geometry?.coordinates as [number, number][] | undefined;
+    if (coords && coords.length) {
+      directionsCache.set(key, coords);
+      return coords;
     }
-    
     return null;
-  } catch (error) {
-    console.error("Error fetching driving route:", error);
+  } catch (err: any) {
+    if (err?.name === "AbortError") return null;
+    console.error("Directions leg error", err);
     return null;
   }
+}
+
+async function buildDrivingPolyline(
+  coords: [number, number][],
+  token: string,
+  signal?: AbortSignal
+): Promise<[number, number][]> {
+  if (coords.length < 2) return coords;
+  const merged: [number, number][] = [];
+  let failedLegs = 0;
+  
+  for (let i = 0; i < coords.length - 1; i++) {
+    const from = coords[i];
+    const to = coords[i + 1];
+    
+    const leg = await fetchLeg(from, to, token, signal);
+    
+    if (leg && leg.length > 1) {
+      if (merged.length === 0) {
+        merged.push(...leg);
+      } else {
+        merged.push(...leg.slice(1));
+      }
+    } else {
+      failedLegs++;
+      // Fallback straight segment if leg failed
+      if (merged.length === 0) {
+        merged.push(from, to);
+      } else {
+        merged.push(to);
+      }
+    }
+    
+    // Small delay to spread requests
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  
+  if (failedLegs === coords.length - 1) {
+    console.warn("All legs failed; falling back to straight lines. Check Mapbox token restrictions or quota.");
+  }
+  
+  return merged;
 }
 
 export function RouteMapView({
@@ -70,6 +124,7 @@ export function RouteMapView({
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
+  const abortControllersRef = useRef<AbortController[]>([]);
   const [hoveredMarkerId, setHoveredMarkerId] = useState<string | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
@@ -178,6 +233,10 @@ export function RouteMapView({
       return;
     }
   
+    // Cancel in-flight directions calls from previous render
+    abortControllersRef.current.forEach((c) => c.abort());
+    abortControllersRef.current = [];
+
     // Clear existing markers
     markersRef.current.forEach((marker) => marker.remove());
     markersRef.current = [];
@@ -286,16 +345,14 @@ export function RouteMapView({
       if (coordinates.length > 1 && map.current) {
         // Fetch actual driving route from Mapbox Directions API
         const addRouteToMap = async () => {
+          const controller = new AbortController();
+          abortControllersRef.current.push(controller);
+          
           let routeCoordinates = coordinates;
           
           if (mapboxToken) {
-            const drivingRoute = await fetchDrivingRoute(coordinates, mapboxToken);
-            if (drivingRoute && drivingRoute.length > 0) {
-              routeCoordinates = drivingRoute;
-              console.log(`✅ Got driving route for ${route.inspector_name}: ${drivingRoute.length} points`);
-            } else {
-              console.log(`⚠️ Using straight line for ${route.inspector_name} (API failed)`);
-            }
+            routeCoordinates = await buildDrivingPolyline(coordinates, mapboxToken, controller.signal);
+            console.log(`✅ Got driving route for ${route.inspector_name}: ${routeCoordinates.length} points`);
           }
 
           if (!map.current) return;
