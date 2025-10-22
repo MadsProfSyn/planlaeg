@@ -27,6 +27,38 @@ const INSPECTOR_COLORS = [
   "#F97316", // Orange
 ];
 
+// Fetch driving route from Mapbox Directions API
+async function fetchDrivingRoute(
+  coordinates: [number, number][],
+  accessToken: string
+): Promise<[number, number][] | null> {
+  if (coordinates.length < 2) return coordinates;
+
+  try {
+    // Mapbox Directions API supports up to 25 waypoints
+    const coords = coordinates.slice(0, 25);
+    const coordinatesString = coords.map(c => `${c[0]},${c[1]}`).join(';');
+    
+    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordinatesString}?geometries=geojson&access_token=${accessToken}`;
+    
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.warn("Failed to fetch driving route:", response.statusText);
+      return null;
+    }
+    
+    const data = await response.json();
+    if (data.routes && data.routes[0] && data.routes[0].geometry) {
+      return data.routes[0].geometry.coordinates as [number, number][];
+    }
+    
+    return null;
+  } catch (error) {
+    console.error("Error fetching driving route:", error);
+    return null;
+  }
+}
+
 export function RouteMapView({
   inspectorRoutes,
   selectedInspectorId,
@@ -168,8 +200,11 @@ export function RouteMapView({
     const allCoords: [number, number][] = [];
     let anyCoords = false;
 
+    // Get Mapbox token for Directions API
+    const mapboxToken = import.meta.env.VITE_MAPBOX_PUBLIC_TOKEN;
+
     // Add route lines and markers for each inspector
-    inspectorRoutes.forEach((route, routeIndex) => {
+    inspectorRoutes.forEach(async (route, routeIndex) => {
       const color = INSPECTOR_COLORS[routeIndex % INSPECTOR_COLORS.length];
       const isRouteSelected =
         !selectedInspectorId || selectedInspectorId === route.inspector_id;
@@ -247,38 +282,57 @@ export function RouteMapView({
         markersRef.current.push(marker);
       }
 
-      // Add route line
+      // Add route line with actual driving route
       if (coordinates.length > 1 && map.current) {
-        try {
-          map.current.addSource(`route-${route.inspector_id}`, {
-            type: "geojson",
-            data: {
-              type: "Feature",
-              properties: {},
-              geometry: {
-                type: "LineString",
-                coordinates,
-              },
-            },
-          });
+        // Fetch actual driving route from Mapbox Directions API
+        const addRouteToMap = async () => {
+          let routeCoordinates = coordinates;
+          
+          if (mapboxToken) {
+            const drivingRoute = await fetchDrivingRoute(coordinates, mapboxToken);
+            if (drivingRoute && drivingRoute.length > 0) {
+              routeCoordinates = drivingRoute;
+              console.log(`✅ Got driving route for ${route.inspector_name}: ${drivingRoute.length} points`);
+            } else {
+              console.log(`⚠️ Using straight line for ${route.inspector_name} (API failed)`);
+            }
+          }
 
-          map.current.addLayer({
-            id: `route-${route.inspector_id}`,
-            type: "line",
-            source: `route-${route.inspector_id}`,
-            layout: {
-              "line-join": "round",
-              "line-cap": "round",
-            },
-            paint: {
-              "line-color": color,
-              "line-width": selectedInspectorId === route.inspector_id ? 4 : 2,
-              "line-opacity": isRouteSelected ? 1 : 0.6,
-            },
-          });
-        } catch (e) {
-          console.error("Failed to add route layer", e);
-        }
+          if (!map.current) return;
+
+          try {
+            map.current.addSource(`route-${route.inspector_id}`, {
+              type: "geojson",
+              data: {
+                type: "Feature",
+                properties: {},
+                geometry: {
+                  type: "LineString",
+                  coordinates: routeCoordinates,
+                },
+              },
+            });
+
+            map.current.addLayer({
+              id: `route-${route.inspector_id}`,
+              type: "line",
+              source: `route-${route.inspector_id}`,
+              layout: {
+                "line-join": "round",
+                "line-cap": "round",
+              },
+              paint: {
+                "line-color": color,
+                "line-width": selectedInspectorId === route.inspector_id ? 4 : 2,
+                "line-opacity": isRouteSelected ? 1 : 0.6,
+              },
+            });
+          } catch (e) {
+            console.error("Failed to add route layer", e);
+          }
+        };
+
+        addRouteToMap();
       }
 
       // Add numbered markers
