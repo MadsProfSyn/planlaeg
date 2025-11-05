@@ -49,8 +49,24 @@ export interface VrpComputeRequest {
 
 export interface VrpComputeResponse {
   success: boolean;
-  route_plan: VrpRoutePlan | null;
+  route_plan?: VrpRoutePlan | null;
+  job_id?: string;
+  status?: string;
+  blocked?: boolean;
   error?: string;
+}
+
+export interface VrpJobResponse {
+  job_id: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+}
+
+export interface VrpJobStatusResponse {
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  result?: VrpRoutePlan;
+  error?: string;
+  progress?: number;
+  message?: string;
 }
 
 export interface VrpApprovalRequest {

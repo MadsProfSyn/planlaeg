@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { computeVrpRoutes } from "@/lib/vrp";
+import { computeVrpRoutes, pollVrpJobStatus } from "@/lib/vrp";
 import type { VrpRoutePlan } from "@/types/vrp";
 
 interface UseVrpOptimizationOptions {
@@ -10,9 +10,10 @@ interface UseVrpOptimizationOptions {
 }
 
 export interface VrpProgress {
-  stage: "idle" | "loading" | "computing" | "ready";
+  stage: "idle" | "loading" | "queued" | "computing" | "ready";
   percentage: number;
   message: string;
+  jobId?: string;
 }
 
 export function useVrpOptimization({
@@ -29,6 +30,8 @@ export function useVrpOptimization({
     percentage: 0,
     message: "",
   });
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [jobStatus, setJobStatus] = useState<'pending' | 'running' | 'completed' | 'failed' | null>(null);
 
   const fetchRoutes = useCallback(async () => {
     if (!enabled || inspectionIds.length === 0) {
@@ -38,37 +41,52 @@ export function useVrpOptimization({
 
     setIsLoading(true);
     setError(null);
+    setJobId(null);
+    setJobStatus(null);
+    
     setProgress({
       stage: "loading",
       percentage: 20,
-      message: "Indlæser syn data...",
+      message: "Starter ruteberegning...",
     });
 
     try {
-      // Simulate progress updates
-      setTimeout(() => {
+      const result = await computeVrpRoutes(inspectionIds, targetDates);
+      
+      // Check if this is a job queue response
+      if ('job_id' in result) {
+        if (result.blocked) {
+          setError("En anden VRP-beregning kører. Vent venligst.");
+          setProgress({ stage: "idle", percentage: 0, message: "" });
+          setIsLoading(false);
+          return;
+        }
+        
+        // Job queued - start polling
+        setJobId(result.job_id);
+        setJobStatus(result.status as any);
         setProgress({
-          stage: "computing",
-          percentage: 60,
-          message: "Beregner optimale ruter...",
+          stage: "queued",
+          percentage: 40,
+          message: "Job sat i kø...",
+          jobId: result.job_id,
         });
-      }, 500);
-
-      const plan = await computeVrpRoutes(inspectionIds, targetDates);
-      
-      setProgress({
-        stage: "ready",
-        percentage: 100,
-        message: "Klar til visning",
-      });
-      
-      setRoutePlan(plan);
+        // Don't set isLoading to false - polling will continue
+      } else {
+        // Immediate result (backwards compatible)
+        setRoutePlan(result);
+        setProgress({
+          stage: "ready",
+          percentage: 100,
+          message: "Klar til visning",
+        });
+        setIsLoading(false);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       setError(message);
       setRoutePlan(null);
       setProgress({ stage: "idle", percentage: 0, message: "" });
-    } finally {
       setIsLoading(false);
     }
   }, [inspectionIds, targetDates, enabled]);
@@ -85,6 +103,63 @@ export function useVrpOptimization({
     return () => clearTimeout(timeoutId);
   }, [fetchRoutes, enabled, debounceMs]);
 
+  // Poll for job status
+  useEffect(() => {
+    if (!jobId || jobStatus === 'completed' || jobStatus === 'failed') {
+      return;
+    }
+
+    console.log('Starting poll for job:', jobId, 'status:', jobStatus);
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const statusResponse = await pollVrpJobStatus(jobId);
+        console.log('Poll result:', statusResponse.status);
+        
+        setJobStatus(statusResponse.status);
+
+        if (statusResponse.status === 'running') {
+          setProgress({
+            stage: "computing",
+            percentage: statusResponse.progress || 70,
+            message: "Beregner optimale ruter...",
+            jobId,
+          });
+        }
+
+        if (statusResponse.status === 'completed') {
+          if (statusResponse.result) {
+            setRoutePlan(statusResponse.result);
+            setProgress({
+              stage: "ready",
+              percentage: 100,
+              message: "Klar til visning",
+              jobId,
+            });
+          }
+          setIsLoading(false);
+          clearInterval(pollInterval);
+        }
+
+        if (statusResponse.status === 'failed') {
+          setError(statusResponse.error || "VRP job failed");
+          setRoutePlan(null);
+          setIsLoading(false);
+          setProgress({ stage: "idle", percentage: 0, message: "" });
+          clearInterval(pollInterval);
+        }
+      } catch (error) {
+        console.error("Error polling job status:", error);
+        // Don't stop polling on temporary network errors
+      }
+    }, 2000); // Poll every 2 seconds
+
+    return () => {
+      console.log('Clearing poll interval for job:', jobId);
+      clearInterval(pollInterval);
+    };
+  }, [jobId, jobStatus]);
+
   const refetch = useCallback(() => {
     fetchRoutes();
   }, [fetchRoutes]);
@@ -95,5 +170,7 @@ export function useVrpOptimization({
     error,
     refetch,
     progress,
+    jobId,
+    jobStatus,
   };
 }

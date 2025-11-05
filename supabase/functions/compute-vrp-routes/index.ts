@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
     const inspectorCapacity = vrpInput?.inspector_capacity || [];
 
     // Call the external Railway VRP API for optimized route planning
-    const railwayApiUrl = "https://web-production-1b301.up.railway.app/schedule";
+    const railwayApiUrl = "https://web-production-1b301.up.railway.app/api/schedule";
     
     console.log("Calling external VRP API:", railwayApiUrl);
 
@@ -79,6 +79,23 @@ Deno.serve(async (req) => {
 
       railwayData = await railwayResponse.json();
 
+      // Check if this is a job queue response (has job_id)
+      if (railwayData.job_id) {
+        console.log("VRP job queued:", railwayData.job_id);
+        
+        // Return job info to frontend for polling
+        return new Response(
+          JSON.stringify({
+            success: true,
+            job_id: railwayData.job_id,
+            status: railwayData.status || "pending",
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
       console.log("VRP API response:", {
         assignments_count: railwayData.assignments?.length || 0,
         total_scheduled: railwayData.metrics?.total_scheduled,
@@ -91,6 +108,21 @@ Deno.serve(async (req) => {
 
     } catch (error: any) {
       console.error("Railway VRP API error:", error);
+      
+      // Handle 409 blocked response
+      if (error.message?.includes("409")) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "En anden VRP-beregning kører. Vent venligst.",
+            blocked: true,
+          }),
+          {
+            status: 409,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
       
       // Provide user-friendly error messages
       let userMessage = "Kunne ikke beregne rute. Prøv igen.";

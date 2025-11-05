@@ -80,6 +80,8 @@ export function PlanlaegSynModal({
     error: vrpError,
     refetch: refetchVrp,
     progress,
+    jobId,
+    jobStatus,
   } = useVrpOptimization({
     inspectionIds: selectedInspectionIds,
     targetDates,
@@ -410,19 +412,29 @@ export function PlanlaegSynModal({
 
               {isLoadingRoutes ? (
                 <div className="space-y-4">
-                  {/* Progress Indicator */}
-                  <div className="space-y-3 p-4 border rounded-lg bg-muted/20">
-                    <div className="flex items-center gap-3">
-                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
-                      <div className="flex-1">
-                        <div className="text-sm font-medium mb-2">
-                          {progress.message || "Forbereder..."}
-                        </div>
-                        <Progress value={progress.percentage} className="h-2" />
-                      </div>
+                  {/* Enhanced Progress Indicator with Job Status */}
+                  <div className="space-y-2 p-4 border rounded-lg bg-muted/50">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      <span className="text-sm font-medium">
+                        {progress.stage === 'loading' && 'Starter beregning...'}
+                        {progress.stage === 'queued' && 'Job i kø...'}
+                        {progress.stage === 'computing' && 'Beregner ruter...'}
+                      </span>
+                      {jobId && (
+                        <Badge variant="outline" className="text-xs ml-auto">
+                          Job: {jobId.slice(0, 8)}...
+                        </Badge>
+                      )}
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      Dette kan tage op til 30 sekunder
+                    <Progress value={progress.percentage} className="h-2" />
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{progress.message}</span>
+                      {jobStatus && (
+                        <Badge variant="secondary" className="text-xs">
+                          {jobStatus}
+                        </Badge>
+                      )}
                     </div>
                   </div>
                   <Skeleton className="h-64 w-full" />
