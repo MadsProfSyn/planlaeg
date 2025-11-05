@@ -30,6 +30,11 @@ Deno.serve(async (req) => {
     });
 
     // Call the database function to get VRP input data
+    console.log("Step 1: Calling get_vrp_input RPC with:", {
+      p_inspection_ids: inspection_ids,
+      p_target_dates: target_dates,
+    });
+
     const { data: vrpInput, error: inputError } = await supabase.rpc(
       "get_vrp_input",
       {
@@ -39,13 +44,20 @@ Deno.serve(async (req) => {
     );
 
     if (inputError) {
-      throw new Error(`Failed to get VRP input: ${inputError.message}`);
+      console.error("Step 1 FAILED: get_vrp_input RPC error:", {
+        message: inputError.message,
+        details: inputError.details,
+        hint: inputError.hint,
+        code: inputError.code,
+      });
+      throw new Error(`Failed to get VRP input: ${inputError.message} ${inputError.details || ''}`);
     }
 
-    console.log("VRP input fetched:", {
+    console.log("Step 1 SUCCESS: VRP input fetched:", {
       inspections_count: vrpInput?.inspections?.length || 0,
       inspectors_count: vrpInput?.inspectors?.length || 0,
       inspector_capacity_count: vrpInput?.inspector_capacity?.length || 0,
+      full_vrp_input: JSON.stringify(vrpInput, null, 2),
     });
 
     const inspections = vrpInput?.inspections || [];
@@ -55,7 +67,16 @@ Deno.serve(async (req) => {
     // Call the external Railway VRP API for optimized route planning
     const railwayApiUrl = "https://web-production-1b301.up.railway.app/api/schedule";
     
-    console.log("Calling external VRP API:", railwayApiUrl);
+    const requestPayload = {
+      inspection_ids,
+      target_dates,
+    };
+
+    console.log("Step 2: Calling external VRP API:", {
+      url: railwayApiUrl,
+      method: "POST",
+      payload: requestPayload,
+    });
 
     let railwayData: any;
     
@@ -65,19 +86,34 @@ Deno.serve(async (req) => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          inspection_ids,
-          target_dates,
-        }),
+        body: JSON.stringify(requestPayload),
         signal: AbortSignal.timeout(90000), // 90 second timeout
+      });
+
+      console.log("Step 2: Railway API response received:", {
+        status: railwayResponse.status,
+        statusText: railwayResponse.statusText,
+        ok: railwayResponse.ok,
+        headers: Object.fromEntries(railwayResponse.headers.entries()),
       });
 
       if (!railwayResponse.ok) {
         const errorText = await railwayResponse.text();
+        console.error("Step 2 FAILED: Railway API error response:", {
+          status: railwayResponse.status,
+          statusText: railwayResponse.statusText,
+          body: errorText,
+        });
         throw new Error(`VRP API returned ${railwayResponse.status}: ${errorText}`);
       }
 
       railwayData = await railwayResponse.json();
+      
+      console.log("Step 2 SUCCESS: Railway API response parsed:", {
+        has_job_id: !!railwayData.job_id,
+        has_assignments: !!railwayData.assignments,
+        full_response: JSON.stringify(railwayData, null, 2),
+      });
 
       // Check if this is a job queue response (has job_id)
       if (railwayData.job_id) {
@@ -107,15 +143,22 @@ Deno.serve(async (req) => {
       }
 
     } catch (error: any) {
-      console.error("Railway VRP API error:", error);
+      console.error("Step 2 FAILED: Railway VRP API error:", {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        cause: error.cause,
+      });
       
       // Handle 409 blocked response
       if (error.message?.includes("409")) {
+        console.log("Step 2: VRP job blocked (409)");
         return new Response(
           JSON.stringify({
             success: false,
             error: "En anden VRP-beregning kører. Vent venligst.",
             blocked: true,
+            debug_error: error.message,
           }),
           {
             status: 409,
@@ -124,20 +167,9 @@ Deno.serve(async (req) => {
         );
       }
       
-      // Provide user-friendly error messages
-      let userMessage = "Kunne ikke beregne rute. Prøv igen.";
-      
-      if (error.name === "TimeoutError" || error.message?.includes("timeout")) {
-        userMessage = "Rute-beregning tog for lang tid. Prøv med færre syn.";
-      } else if (error.message?.includes("fetch") || error.message?.includes("network")) {
-        userMessage = "Rute-serveren svarer ikke. Prøv igen om et øjeblik.";
-      } else if (error.message?.includes("tilgængelige")) {
-        userMessage = error.message;
-      } else if (error.message?.includes("no solution")) {
-        userMessage = "Kunne ikke finde optimal rute for de valgte syn.";
-      }
-      
-      throw new Error(userMessage);
+      // Return the actual error message for debugging
+      console.error("Step 2: Throwing error with full details");
+      throw new Error(`Railway API Error: ${error.message}`);
     }
 
     // Transform Railway API response to match our VrpRoutePlan interface
@@ -203,12 +235,21 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
-  } catch (error) {
-    console.error("VRP computation error:", error);
+  } catch (error: any) {
+    console.error("TOP LEVEL ERROR - VRP computation failed:", {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      cause: error.cause,
+      full_error: JSON.stringify(error, null, 2),
+    });
+    
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message,
+        error: error.message || "Unknown error occurred",
+        error_name: error.name,
+        error_stack: error.stack,
       }),
       {
         status: 500,
