@@ -48,6 +48,7 @@ export function ManageAvailabilityDrawer({ open, onOpenChange, onSuccess }: Mana
   const [updatingIds, setUpdatingIds] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [totalCount, setTotalCount] = useState(0);
   const observerTarget = useRef<HTMLDivElement>(null);
 
   const fetchConsultants = async (pageNum: number = 1, append: boolean = false) => {
@@ -82,6 +83,7 @@ export function ManageAvailabilityDrawer({ open, onOpenChange, onSuccess }: Mana
       }
       
       setHasMore(data?.hasMore || false);
+      setTotalCount(data?.total || 0);
       setPage(pageNum);
     } catch (error: any) {
       console.error("Error fetching consultants:", error);
@@ -244,7 +246,14 @@ export function ManageAvailabilityDrawer({ open, onOpenChange, onSuccess }: Mana
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="max-h-[90vh]">
         <DrawerHeader>
-          <DrawerTitle>Administrer synskonsulenter</DrawerTitle>
+          <div className="flex items-center justify-between">
+            <DrawerTitle>Administrer synskonsulenter</DrawerTitle>
+            {totalCount > 0 && (
+              <Badge variant="secondary" className="text-sm">
+                Viser {consultants.length} af {totalCount}
+              </Badge>
+            )}
+          </div>
         </DrawerHeader>
 
         <div className="px-4 space-y-4">
