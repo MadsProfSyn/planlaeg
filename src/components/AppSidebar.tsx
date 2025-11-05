@@ -1,4 +1,4 @@
-import { CalendarCheck, ClipboardList, Users, Shield, LayoutDashboard, User, FileText, Brain } from "lucide-react";
+import { CalendarCheck, ClipboardList, Users, UserX, Shield, LayoutDashboard, User, FileText, Brain } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -30,6 +30,12 @@ const navigationItems = [
     title: "Tilgængelige synskonsulenter",
     url: "/availability",
     icon: Users,
+  },
+  {
+    title: "Ikke tilgængelige synskonsulenter",
+    url: "/unavailable-consultants",
+    icon: UserX,
+    adminOnly: true,
   },
   {
     title: "ProfSyn AI",

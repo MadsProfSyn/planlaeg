@@ -1078,6 +1078,17 @@ export type Database = {
         }
         Returns: string
       }
+      set_consultant_availability: {
+        Args: {
+          p_date: string
+          p_end_time?: string
+          p_inspector_id: string
+          p_is_available: boolean
+          p_source?: string
+          p_start_time?: string
+        }
+        Returns: Json
+      }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
       sync_workfeed_availability_stub: { Args: never; Returns: undefined }
