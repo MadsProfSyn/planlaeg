@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
     const inspectorCapacity = vrpInput?.inspector_capacity || [];
 
     // Call the external Railway VRP API for optimized route planning
-    const railwayApiUrl = "https://web-production-1b301.up.railway.app/api/schedule";
+    const railwayApiUrl = "https://web-production-1b301.up.railway.app/schedule";
     
     const requestPayload = {
       inspection_ids,
