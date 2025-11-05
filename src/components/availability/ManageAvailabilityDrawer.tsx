@@ -244,8 +244,8 @@ export function ManageAvailabilityDrawer({ open, onOpenChange, onSuccess }: Mana
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="max-h-[90vh]">
-        <DrawerHeader>
+      <DrawerContent className="max-h-[90vh] flex flex-col">
+        <DrawerHeader className="flex-shrink-0">
           <div className="flex items-center justify-between">
             <DrawerTitle>Administrer synskonsulenter</DrawerTitle>
             {totalCount > 0 && (
@@ -256,7 +256,7 @@ export function ManageAvailabilityDrawer({ open, onOpenChange, onSuccess }: Mana
           </div>
         </DrawerHeader>
 
-        <div className="px-4 space-y-4">
+        <div className="px-4 space-y-4 flex-shrink-0">
           {/* Date Picker */}
           <div className="flex flex-col gap-2">
             <Label>Dato</Label>
@@ -342,7 +342,7 @@ export function ManageAvailabilityDrawer({ open, onOpenChange, onSuccess }: Mana
         </div>
 
         {/* Results */}
-        <ScrollArea className="flex-1 px-4 mt-4">
+        <ScrollArea className="flex-1 min-h-0 px-4 mt-4">
           {isLoading && consultants.length === 0 ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -453,7 +453,7 @@ export function ManageAvailabilityDrawer({ open, onOpenChange, onSuccess }: Mana
           )}
         </ScrollArea>
 
-        <DrawerFooter>
+        <DrawerFooter className="flex-shrink-0">
           <DrawerClose asChild>
             <Button variant="outline">Luk</Button>
           </DrawerClose>
