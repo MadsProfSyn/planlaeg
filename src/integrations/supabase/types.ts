@@ -429,6 +429,42 @@ export type Database = {
         }
         Relationships: []
       }
+      job_queue: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          error: string | null
+          id: string
+          job_type: string
+          params: Json | null
+          result: Json | null
+          started_at: string | null
+          status: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          error?: string | null
+          id?: string
+          job_type: string
+          params?: Json | null
+          result?: Json | null
+          started_at?: string | null
+          status: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          error?: string | null
+          id?: string
+          job_type?: string
+          params?: Json | null
+          result?: Json | null
+          started_at?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       mapbox_coords_cache: {
         Row: {
           lat: number
@@ -1014,6 +1050,7 @@ export type Database = {
       }
     }
     Functions: {
+      cleanup_old_jobs: { Args: { hours_old?: number }; Returns: number }
       demote_admin: { Args: { target_email: string }; Returns: undefined }
       get_or_create_inspector_uuid: {
         Args: { emp_name: string; wf_emp_id: string }
