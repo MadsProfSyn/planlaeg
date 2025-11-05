@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
     const inspectorCapacity = vrpInput?.inspector_capacity || [];
 
     // Call the external Railway VRP API for optimized route planning
-    const railwayApiUrl = "https://web-production-1b301.up.railway.app/schedule";
+    const railwayApiUrl = "https://web-production-1b301.up.railway.app/api/schedule";
     
     const requestPayload = {
       inspection_ids,
@@ -104,20 +104,71 @@ Deno.serve(async (req) => {
           statusText: railwayResponse.statusText,
           body: errorText,
         });
+        
+        // Handle 409 - another job is running
+        if (railwayResponse.status === 409) {
+          let errorData;
+          try {
+            errorData = JSON.parse(errorText);
+          } catch {
+            errorData = { message: errorText };
+          }
+          
+          console.log("Step 2: VRP job blocked (409) - another calculation is running");
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: "En anden VRP-beregning kører i øjeblikket. Vent venligst og prøv igen.",
+              blocked: true,
+              status: "blocked",
+              retry_after: errorData.retry_after || 30,
+            }),
+            {
+              status: 409,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            }
+          );
+        }
+        
         throw new Error(`VRP API returned ${railwayResponse.status}: ${errorText}`);
       }
 
       railwayData = await railwayResponse.json();
       
       console.log("Step 2 SUCCESS: Railway API response parsed:", {
+        status: railwayData.status,
         has_job_id: !!railwayData.job_id,
-        has_assignments: !!railwayData.assignments,
+        has_vrp_run_id: !!railwayData.vrp_run_id,
+        has_summary: !!railwayData.summary,
         full_response: JSON.stringify(railwayData, null, 2),
       });
 
-      // Check if this is a job queue response (has job_id)
-      if (railwayData.job_id) {
-        console.log("VRP job queued:", railwayData.job_id);
+      // Check if response indicates completed job
+      if (railwayData.status === "completed" && railwayData.vrp_run_id) {
+        console.log("VRP job completed immediately:", {
+          job_id: railwayData.job_id,
+          vrp_run_id: railwayData.vrp_run_id,
+          summary: railwayData.summary,
+        });
+        
+        // Return completed job info to frontend
+        return new Response(
+          JSON.stringify({
+            success: true,
+            job_id: railwayData.job_id,
+            vrp_run_id: railwayData.vrp_run_id,
+            status: "completed",
+            summary: railwayData.summary,
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+      
+      // Check if this is a queued job response
+      if (railwayData.job_id && railwayData.status !== "completed") {
+        console.log("VRP job queued/pending:", railwayData.job_id);
         
         // Return job info to frontend for polling
         return new Response(
@@ -132,7 +183,8 @@ Deno.serve(async (req) => {
         );
       }
 
-      console.log("VRP API response:", {
+      // If we get here, it means we got an old-style response with assignments
+      console.log("VRP API response (legacy format):", {
         assignments_count: railwayData.assignments?.length || 0,
         total_scheduled: railwayData.metrics?.total_scheduled,
         execution_seconds: railwayData.metrics?.execution_seconds,
@@ -149,23 +201,6 @@ Deno.serve(async (req) => {
         stack: error.stack,
         cause: error.cause,
       });
-      
-      // Handle 409 blocked response
-      if (error.message?.includes("409")) {
-        console.log("Step 2: VRP job blocked (409)");
-        return new Response(
-          JSON.stringify({
-            success: false,
-            error: "En anden VRP-beregning kører. Vent venligst.",
-            blocked: true,
-            debug_error: error.message,
-          }),
-          {
-            status: 409,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
       
       // Return the actual error message for debugging
       console.error("Step 2: Throwing error with full details");
