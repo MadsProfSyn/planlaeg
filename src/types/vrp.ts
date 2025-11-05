@@ -70,6 +70,7 @@ export interface VrpJobStatusResponse {
   progress?: number;
   message?: string;
   summary?: VrpSummary;
+  vrp_run_id?: string;
 }
 
 export interface VrpSummary {

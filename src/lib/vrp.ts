@@ -6,6 +6,7 @@ import type {
   VrpApprovalResponse,
   VrpRoutePlan,
   VrpJobStatusResponse,
+  VrpAssignment,
 } from "@/types/vrp";
 
 /**
@@ -176,6 +177,96 @@ export async function getInspectionsByIds(inspectionIds: string[]) {
   }
 
   return data || [];
+}
+
+/**
+ * Fetch VRP assignments from database by vrp_run_id and reconstruct VrpRoutePlan
+ */
+export async function fetchAssignmentsByVrpRunId(vrpRunId: string): Promise<VrpRoutePlan> {
+  console.log('📦 Fetching assignments from database for VRP run:', vrpRunId);
+  
+  // Query proposed_assignments table
+  const { data: assignments, error } = await supabase
+    .from('proposed_assignments')
+    .select('*')
+    .eq('vrp_run_id', vrpRunId)
+    .order('scheduled_date')
+    .order('sequence_in_route');
+  
+  if (error) {
+    throw new Error(`Failed to fetch assignments: ${error.message}`);
+  }
+  
+  if (!assignments || assignments.length === 0) {
+    throw new Error('No assignments found for this VRP run');
+  }
+
+  console.log('📊 Found assignments:', assignments.length);
+  
+  // Get unique inspector IDs
+  const inspectorIds = [...new Set(assignments.map(a => a.inspector_id))];
+  
+  // Fetch inspector details
+  const { data: inspectors, error: inspectorError } = await supabase
+    .from('inspectors')
+    .select('id, full_name')
+    .in('id', inspectorIds);
+  
+  if (inspectorError) {
+    console.warn('Failed to fetch inspector names:', inspectorError);
+  }
+  
+  const inspectorMap = new Map(inspectors?.map(i => [i.id, i.full_name]) || []);
+  
+  // Fetch inspection details for addresses
+  const inspectionIds = [...new Set(assignments.map(a => a.inspection_id))];
+  const { data: inspections, error: inspectionError } = await supabase
+    .from('inspection_queue')
+    .select('id, address, inspection_type')
+    .in('id', inspectionIds);
+  
+  if (inspectionError) {
+    console.warn('Failed to fetch inspection details:', inspectionError);
+  }
+  
+  const inspectionMap = new Map(inspections?.map(i => [i.id, i]) || []);
+  
+  // Transform database rows to VrpAssignment format
+  const vrpAssignments: VrpAssignment[] = assignments.map(a => {
+    const inspection = inspectionMap.get(a.inspection_id);
+    return {
+      inspection_id: a.inspection_id,
+      inspector_id: a.inspector_id,
+      inspector_name: inspectorMap.get(a.inspector_id) || 'Ukendt',
+      scheduled_date: a.scheduled_date,
+      start_time: a.start_time,
+      end_time: a.end_time,
+      sequence_in_route: a.sequence_in_route,
+      travel_from_previous_mins: a.travel_from_previous_mins || 0,
+      inspection_address: inspection?.address,
+      inspection_type: inspection?.inspection_type,
+      scheduled_at: `${a.scheduled_date}T${a.start_time}`,
+      scheduled_end: `${a.scheduled_date}T${a.end_time}`,
+    };
+  });
+  
+  // Calculate totals from assignments
+  const totalTravelMins = vrpAssignments.reduce((sum, a) => sum + a.travel_from_previous_mins, 0);
+  
+  console.log('✅ Route plan loaded:', { 
+    assignmentsCount: vrpAssignments.length,
+    inspectors: inspectorIds.length,
+    totalTravelMins
+  });
+  
+  // Build VrpRoutePlan object
+  return {
+    ordered_syn_ids: vrpAssignments.map(a => a.inspection_id),
+    assignments: vrpAssignments,
+    total_distance_km: 0, // Not stored per assignment, use summary from response
+    total_eta_minutes: totalTravelMins,
+    legs: [], // Legs not stored in DB, but not needed for display
+  };
 }
 
 /**
