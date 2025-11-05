@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { computeVrpRoutes, pollVrpJobStatus } from "@/lib/vrp";
 import type { VrpRoutePlan } from "@/types/vrp";
+import { toast } from "@/hooks/use-toast";
 
 interface UseVrpOptimizationOptions {
   inspectionIds: string[];
@@ -53,6 +54,28 @@ export function useVrpOptimization({
     try {
       const result = await computeVrpRoutes(inspectionIds, targetDates);
       
+      // Check if this is a completed job response (immediate completion)
+      if ('job_id' in result && result.status === 'completed') {
+        // Job completed immediately
+        console.log('VRP job completed immediately:', result);
+        
+        if (result.summary) {
+          // Show success toast with metrics
+          toast({
+            title: "Ruteberegning fuldført",
+            description: `${result.summary.total_scheduled} syn planlagt. Total distance: ${result.summary.total_travel_km.toFixed(1)} km, tid: ${result.summary.total_travel_minutes} min.`,
+          });
+        }
+        
+        setProgress({
+          stage: "ready",
+          percentage: 100,
+          message: "Klar til visning",
+        });
+        setIsLoading(false);
+        return;
+      }
+      
       // Check if this is a job queue response
       if ('job_id' in result) {
         if (result.blocked) {
@@ -73,13 +96,15 @@ export function useVrpOptimization({
         });
         // Don't set isLoading to false - polling will continue
       } else {
-        // Immediate result (backwards compatible)
-        setRoutePlan(result);
-        setProgress({
-          stage: "ready",
-          percentage: 100,
-          message: "Klar til visning",
-        });
+        // Immediate result (backwards compatible) - result is VrpRoutePlan
+        if ('assignments' in result) {
+          setRoutePlan(result);
+          setProgress({
+            stage: "ready",
+            percentage: 100,
+            message: "Klar til visning",
+          });
+        }
         setIsLoading(false);
       }
     } catch (err) {
@@ -128,15 +153,28 @@ export function useVrpOptimization({
         }
 
         if (statusResponse.status === 'completed') {
-          if (statusResponse.result) {
-            setRoutePlan(statusResponse.result);
-            setProgress({
-              stage: "ready",
-              percentage: 100,
-              message: "Klar til visning",
-              jobId,
+          console.log('VRP job completed via polling:', statusResponse);
+          
+          // Check if we have the new format with summary
+          if (statusResponse.summary) {
+            // Show success toast with metrics
+            toast({
+              title: "Ruteberegning fuldført",
+              description: `${statusResponse.summary.total_scheduled} syn planlagt. Total distance: ${statusResponse.summary.total_travel_km.toFixed(1)} km, tid: ${statusResponse.summary.total_travel_minutes} min.`,
             });
           }
+          
+          // Set route plan if available (backwards compatible)
+          if (statusResponse.result) {
+            setRoutePlan(statusResponse.result);
+          }
+          
+          setProgress({
+            stage: "ready",
+            percentage: 100,
+            message: "Klar til visning",
+            jobId,
+          });
           setIsLoading(false);
           clearInterval(pollInterval);
         }

@@ -5,6 +5,7 @@ import type {
   VrpApprovalRequest,
   VrpApprovalResponse,
   VrpRoutePlan,
+  VrpJobStatusResponse,
 } from "@/types/vrp";
 
 /**
@@ -13,7 +14,7 @@ import type {
 export async function computeVrpRoutes(
   inspectionIds: string[],
   targetDates: string[]
-): Promise<VrpRoutePlan | { job_id: string; status: string; blocked?: boolean }> {
+): Promise<VrpRoutePlan | VrpComputeResponse> {
   const { data, error } = await supabase.functions.invoke<VrpComputeResponse>(
     "compute-vrp-routes",
     {
@@ -30,14 +31,19 @@ export async function computeVrpRoutes(
 
   if (!data?.success) {
     if (data?.blocked) {
-      return { job_id: "", status: "blocked", blocked: true };
+      return { 
+        success: false,
+        job_id: "", 
+        status: "blocked", 
+        blocked: true 
+      };
     }
     throw new Error(data?.error || "Failed to compute routes");
   }
 
-  // If job queue response (has job_id), return it
+  // If job queue response (has job_id), return the full response
   if (data.job_id) {
-    return { job_id: data.job_id, status: data.status || "pending" };
+    return data;
   }
 
   // Otherwise return route_plan (backwards compatible)
@@ -51,12 +57,7 @@ export async function computeVrpRoutes(
 /**
  * Poll Railway API for VRP job status
  */
-export async function pollVrpJobStatus(jobId: string): Promise<{
-  status: 'pending' | 'running' | 'completed' | 'failed';
-  result?: VrpRoutePlan;
-  error?: string;
-  progress?: number;
-}> {
+export async function pollVrpJobStatus(jobId: string): Promise<VrpJobStatusResponse> {
   const railwayUrl = "https://web-production-1b301.up.railway.app";
   
   const response = await fetch(`${railwayUrl}/api/job-status/${jobId}`, {

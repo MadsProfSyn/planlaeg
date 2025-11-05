@@ -54,6 +54,8 @@ export interface VrpComputeResponse {
   status?: string;
   blocked?: boolean;
   error?: string;
+  vrp_run_id?: string;
+  summary?: VrpSummary;
 }
 
 export interface VrpJobResponse {
@@ -67,6 +69,15 @@ export interface VrpJobStatusResponse {
   error?: string;
   progress?: number;
   message?: string;
+  summary?: VrpSummary;
+}
+
+export interface VrpSummary {
+  total_scheduled: number;
+  total_unscheduled: number;
+  total_travel_minutes: number;
+  total_travel_km: number;
+  execution_seconds: number;
 }
 
 export interface VrpApprovalRequest {
