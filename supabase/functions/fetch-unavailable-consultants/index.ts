@@ -13,6 +13,8 @@ interface RequestBody {
   showAvailable?: boolean;
   showUnavailable?: boolean;
   departments?: string[];
+  page?: number;
+  pageSize?: number;
 }
 
 Deno.serve(async (req) => {
@@ -35,7 +37,11 @@ Deno.serve(async (req) => {
       showAvailable = true,
       showUnavailable = true,
       departments = [],
+      page = 1,
+      pageSize = 50,
     } = body;
+    
+    const offset = (page - 1) * pageSize;
 
     console.log("Fetching unavailable consultants for:", {
       date,
@@ -44,6 +50,8 @@ Deno.serve(async (req) => {
       showAvailable,
       showUnavailable,
       departments,
+      page,
+      pageSize,
     });
 
     // Build the SQL query
@@ -219,8 +227,19 @@ Deno.serve(async (req) => {
       }
 
       console.log(`Found ${filtered.length} consultants after filtering`);
+      
+      const totalCount = filtered.length;
+      const paginatedData = filtered.slice(offset, offset + pageSize);
+      const hasMore = offset + pageSize < totalCount;
 
-      return new Response(JSON.stringify({ data: filtered, count: filtered.length }), {
+      return new Response(JSON.stringify({ 
+        data: paginatedData, 
+        count: paginatedData.length,
+        total: totalCount,
+        hasMore,
+        page,
+        pageSize
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -259,10 +278,21 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`Returning ${filtered.length} consultants`);
+    console.log(`Returning ${filtered.length} consultants (total before pagination)`);
+    
+    const totalCount = filtered.length;
+    const paginatedData = filtered.slice(offset, offset + pageSize);
+    const hasMore = offset + pageSize < totalCount;
 
     return new Response(
-      JSON.stringify({ data: filtered, count: filtered.length }),
+      JSON.stringify({ 
+        data: paginatedData, 
+        count: paginatedData.length,
+        total: totalCount,
+        hasMore,
+        page,
+        pageSize
+      }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }

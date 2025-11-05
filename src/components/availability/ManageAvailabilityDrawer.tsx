@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { format } from "date-fns";
 import { da } from "date-fns/locale";
 import { Calendar, Search, Users, CheckCircle, Loader2 } from "lucide-react";
@@ -44,10 +44,22 @@ export function ManageAvailabilityDrawer({ open, onOpenChange, onSuccess }: Mana
   const [showUnavailable, setShowUnavailable] = useState(true);
   const [consultants, setConsultants] = useState<ConsultantWithAvailability[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [updatingIds, setUpdatingIds] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const observerTarget = useRef<HTMLDivElement>(null);
 
-  const fetchConsultants = async () => {
-    setIsLoading(true);
+  const fetchConsultants = async (pageNum: number = 1, append: boolean = false) => {
+    if (append) {
+      setIsLoadingMore(true);
+    } else {
+      setIsLoading(true);
+      setConsultants([]);
+      setPage(1);
+      setHasMore(true);
+    }
+    
     try {
       const { data, error } = await supabase.functions.invoke("fetch-unavailable-consultants", {
         body: {
@@ -56,24 +68,64 @@ export function ManageAvailabilityDrawer({ open, onOpenChange, onSuccess }: Mana
           skills: selectedSkills,
           showAvailable,
           showUnavailable,
+          page: pageNum,
+          pageSize: 50,
         },
       });
 
       if (error) throw error;
-      setConsultants(data?.data || []);
+      
+      if (append) {
+        setConsultants(prev => [...prev, ...(data?.data || [])]);
+      } else {
+        setConsultants(data?.data || []);
+      }
+      
+      setHasMore(data?.hasMore || false);
+      setPage(pageNum);
     } catch (error: any) {
       console.error("Error fetching consultants:", error);
       toast.error("Kunne ikke hente synskonsulenter");
     } finally {
       setIsLoading(false);
+      setIsLoadingMore(false);
     }
   };
+  
+  const loadMore = useCallback(() => {
+    if (!isLoadingMore && hasMore) {
+      fetchConsultants(page + 1, true);
+    }
+  }, [page, hasMore, isLoadingMore]);
 
   useEffect(() => {
     if (open) {
-      fetchConsultants();
+      fetchConsultants(1, false);
     }
   }, [open, selectedDate, searchQuery, selectedSkills, showAvailable, showUnavailable]);
+  
+  // Infinite scroll observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !isLoadingMore) {
+          loadMore();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    const currentTarget = observerTarget.current;
+    if (currentTarget) {
+      observer.observe(currentTarget);
+    }
+
+    return () => {
+      if (currentTarget) {
+        observer.unobserve(currentTarget);
+      }
+    };
+  }, [hasMore, isLoadingMore, loadMore]);
 
   const handleMakeAvailable = async (inspectorId: string, inspectorName: string) => {
     setUpdatingIds((prev) => new Set(prev).add(inspectorId));
@@ -282,15 +334,15 @@ export function ManageAvailabilityDrawer({ open, onOpenChange, onSuccess }: Mana
 
         {/* Results */}
         <ScrollArea className="flex-1 px-4 mt-4">
-          {isLoading ? (
+          {isLoading && consultants.length === 0 ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
-          ) : filteredConsultants.length === 0 ? (
+          ) : filteredConsultants.length === 0 && !isLoading ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <Users className="h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-lg font-medium">Ingen synskonsulenter matcher</p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-lg font-medium">Ingen synskonsulenter matcher de valgte filtre</p>
+              <p className="text-sm text-muted-foreground mt-2">
                 Prøv at justere dine filtre eller søgning
               </p>
             </div>
@@ -370,6 +422,24 @@ export function ManageAvailabilityDrawer({ open, onOpenChange, onSuccess }: Mana
                   </div>
                 </div>
               ))}
+              
+              {/* Infinite scroll trigger */}
+              {hasMore && (
+                <div ref={observerTarget} className="flex justify-center py-4">
+                  {isLoadingMore && (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      <span className="text-sm">Henter flere...</span>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {!hasMore && consultants.length > 0 && (
+                <div className="text-center py-4 text-sm text-muted-foreground">
+                  Alle synskonsulenter er hentet
+                </div>
+              )}
             </div>
           )}
         </ScrollArea>
