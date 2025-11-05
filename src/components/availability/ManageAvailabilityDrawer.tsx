@@ -244,7 +244,7 @@ export function ManageAvailabilityDrawer({ open, onOpenChange, onSuccess }: Mana
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="max-h-[90vh] flex flex-col">
+      <DrawerContent className="h-[90vh] flex flex-col">
         <DrawerHeader className="flex-shrink-0">
           <div className="flex items-center justify-between">
             <DrawerTitle>Administrer synskonsulenter</DrawerTitle>
@@ -274,6 +274,10 @@ export function ManageAvailabilityDrawer({ open, onOpenChange, onSuccess }: Mana
                   onSelect={(date) => date && setSelectedDate(date)}
                   locale={da}
                   disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                  classNames={{
+                    day_today: "" // Remove today's special styling
+                  }}
+                  className="pointer-events-auto"
                 />
               </PopoverContent>
             </Popover>
