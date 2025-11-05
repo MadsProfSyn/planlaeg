@@ -241,6 +241,14 @@ export function ManageAvailabilityDrawer({ open, onOpenChange, onSuccess }: Mana
   const isPastDate = selectedDate < new Date(new Date().setHours(0, 0, 0, 0));
 
   const filteredConsultants = consultants;
+  
+  // Split consultants by availability status
+  const availableConsultants = filteredConsultants.filter(c => c.availability_status === "available");
+  const unavailableConsultants = filteredConsultants.filter(c => c.availability_status !== "available");
+
+  // Check filter toggles
+  const showAvailableSection = showAvailable;
+  const showUnavailableSection = showUnavailable;
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
@@ -360,81 +368,154 @@ export function ManageAvailabilityDrawer({ open, onOpenChange, onSuccess }: Mana
               </p>
             </div>
           ) : (
-            <div className="space-y-2 pb-4">
-              {filteredConsultants.map((consultant) => (
-                <div
-                  key={consultant.inspector_id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex items-center gap-4 flex-1 min-w-0">
-                    <Avatar>
-                      <AvatarFallback>{getInitials(consultant.full_name)}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-medium truncate">{consultant.full_name}</p>
-                        <Badge variant={getStatusBadgeVariant(consultant.availability_status)}>
-                          {getStatusLabel(consultant.availability_status)}
-                        </Badge>
-                        {consultant.source === "override" && (
-                          <Badge variant="outline" className="text-xs">
-                            Manuelt tilføjet
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground truncate">{consultant.email}</p>
-                      {consultant.skills.length > 0 && (
-                        <div className="flex gap-1 mt-1 flex-wrap">
-                          {consultant.skills.map((skill) => (
-                            <Badge key={skill} variant="secondary" className="text-xs">
-                              {skill}
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                      {consultant.booked_shifts_count > 0 && (
-                        <p className="text-xs text-amber-600 mt-1">
-                          Allerede booket {consultant.booked_shifts_count}{" "}
-                          {consultant.booked_shifts_count === 1 ? "gang" : "gange"} i dag
-                        </p>
-                      )}
-                    </div>
+            <div className="space-y-6 pb-4">
+              {/* Available Consultants Section */}
+              {showAvailableSection && availableConsultants.length > 0 && (
+                <div>
+                  <div className="sticky top-0 z-10 bg-green-50 dark:bg-green-950/20 border-l-4 border-green-500 px-4 py-3 mb-3 rounded-r-lg">
+                    <h3 className="text-lg font-bold text-green-700 dark:text-green-400 flex items-center gap-2">
+                      Tilgængelige synskonsulenter
+                      <Badge className="bg-green-600 text-white hover:bg-green-600">
+                        {availableConsultants.length}
+                      </Badge>
+                    </h3>
                   </div>
-                  <div className="flex items-center gap-2 ml-4">
-                    {consultant.availability_status !== "available" ? (
-                      <Button
-                        onClick={() => handleMakeAvailable(consultant.inspector_id, consultant.full_name)}
-                        disabled={isPastDate || updatingIds.has(consultant.inspector_id)}
-                        size="sm"
+                  <div className="space-y-2">
+                    {availableConsultants.map((consultant) => (
+                      <div
+                        key={consultant.inspector_id}
+                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
                       >
-                        {updatingIds.has(consultant.inspector_id) ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          "Gør tilgængelig"
-                        )}
-                      </Button>
-                    ) : consultant.source === "override" ? (
-                      <Button
-                        onClick={() => handleMakeUnavailable(consultant.inspector_id, consultant.full_name)}
-                        disabled={isPastDate || updatingIds.has(consultant.inspector_id)}
-                        size="sm"
-                        variant="outline"
-                      >
-                        {updatingIds.has(consultant.inspector_id) ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          "Gør ikke tilgængelig"
-                        )}
-                      </Button>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <CheckCircle className="h-4 w-4 text-green-600" />
-                        <span className="text-sm text-muted-foreground">Tilgængelig via WorkFeed</span>
+                        <div className="flex items-center gap-4 flex-1 min-w-0">
+                          <Avatar>
+                            <AvatarFallback>{getInitials(consultant.full_name)}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-medium truncate">{consultant.full_name}</p>
+                              <Badge variant={getStatusBadgeVariant(consultant.availability_status)}>
+                                {getStatusLabel(consultant.availability_status)}
+                              </Badge>
+                              {consultant.source === "override" && (
+                                <Badge variant="outline" className="text-xs">
+                                  Manuelt tilføjet
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-sm text-muted-foreground truncate">{consultant.email}</p>
+                            {consultant.skills.length > 0 && (
+                              <div className="flex gap-1 mt-1 flex-wrap">
+                                {consultant.skills.map((skill) => (
+                                  <Badge key={skill} variant="secondary" className="text-xs">
+                                    {skill}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                            {consultant.booked_shifts_count > 0 && (
+                              <p className="text-xs text-amber-600 mt-1">
+                                Allerede booket {consultant.booked_shifts_count}{" "}
+                                {consultant.booked_shifts_count === 1 ? "gang" : "gange"} i dag
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 ml-4">
+                          {consultant.source === "override" ? (
+                            <Button
+                              onClick={() => handleMakeUnavailable(consultant.inspector_id, consultant.full_name)}
+                              disabled={isPastDate || updatingIds.has(consultant.inspector_id)}
+                              size="sm"
+                              variant="outline"
+                            >
+                              {updatingIds.has(consultant.inspector_id) ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                "Gør ikke tilgængelig"
+                              )}
+                            </Button>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <CheckCircle className="h-4 w-4 text-green-600" />
+                              <span className="text-sm text-muted-foreground">Tilgængelig via WorkFeed</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    )}
+                    ))}
                   </div>
                 </div>
-              ))}
+              )}
+
+              {/* Unavailable Consultants Section */}
+              {showUnavailableSection && unavailableConsultants.length > 0 && (
+                <div>
+                  <div className="sticky top-0 z-10 bg-red-50 dark:bg-red-950/20 border-l-4 border-red-500 px-4 py-3 mb-3 rounded-r-lg">
+                    <h3 className="text-lg font-bold text-red-600 dark:text-red-400 flex items-center gap-2">
+                      Ikke tilgængelige
+                      <Badge className="bg-red-600 text-white hover:bg-red-600">
+                        {unavailableConsultants.length}
+                      </Badge>
+                    </h3>
+                  </div>
+                  <div className="space-y-2">
+                    {unavailableConsultants.map((consultant) => (
+                      <div
+                        key={consultant.inspector_id}
+                        className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-4 flex-1 min-w-0">
+                          <Avatar>
+                            <AvatarFallback>{getInitials(consultant.full_name)}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <p className="font-medium truncate">{consultant.full_name}</p>
+                              <Badge variant={getStatusBadgeVariant(consultant.availability_status)}>
+                                {getStatusLabel(consultant.availability_status)}
+                              </Badge>
+                              {consultant.source === "override" && (
+                                <Badge variant="outline" className="text-xs">
+                                  Manuelt tilføjet
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-sm text-muted-foreground truncate">{consultant.email}</p>
+                            {consultant.skills.length > 0 && (
+                              <div className="flex gap-1 mt-1 flex-wrap">
+                                {consultant.skills.map((skill) => (
+                                  <Badge key={skill} variant="secondary" className="text-xs">
+                                    {skill}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                            {consultant.booked_shifts_count > 0 && (
+                              <p className="text-xs text-amber-600 mt-1">
+                                Allerede booket {consultant.booked_shifts_count}{" "}
+                                {consultant.booked_shifts_count === 1 ? "gang" : "gange"} i dag
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 ml-4">
+                          <Button
+                            onClick={() => handleMakeAvailable(consultant.inspector_id, consultant.full_name)}
+                            disabled={isPastDate || updatingIds.has(consultant.inspector_id)}
+                            size="sm"
+                          >
+                            {updatingIds.has(consultant.inspector_id) ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              "Gør tilgængelig"
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               
               {/* Infinite scroll trigger */}
               {hasMore && (
