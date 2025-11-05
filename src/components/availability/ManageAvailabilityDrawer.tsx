@@ -192,7 +192,7 @@ export function ManageAvailabilityDrawer({ open, onOpenChange, onSuccess }: Mana
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="max-h-[90vh]">
         <DrawerHeader>
-          <DrawerTitle>Gør synskonsulent tilgængelig</DrawerTitle>
+          <DrawerTitle>Administrer synskonsulenter</DrawerTitle>
         </DrawerHeader>
 
         <div className="px-4 space-y-4">
@@ -348,7 +348,7 @@ export function ManageAvailabilityDrawer({ open, onOpenChange, onSuccess }: Mana
                           "Gør tilgængelig"
                         )}
                       </Button>
-                    ) : (
+                    ) : consultant.source === "override" ? (
                       <Button
                         onClick={() => handleMakeUnavailable(consultant.inspector_id, consultant.full_name)}
                         disabled={isPastDate || updatingIds.has(consultant.inspector_id)}
@@ -361,6 +361,11 @@ export function ManageAvailabilityDrawer({ open, onOpenChange, onSuccess }: Mana
                           "Gør ikke tilgængelig"
                         )}
                       </Button>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                        <span className="text-sm text-muted-foreground">Tilgængelig via WorkFeed</span>
+                      </div>
                     )}
                   </div>
                 </div>

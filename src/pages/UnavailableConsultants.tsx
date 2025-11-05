@@ -13,10 +13,10 @@ export default function UnavailableConsultants() {
         <div>
           <div className="flex items-center gap-3">
             <UserX className="h-8 w-8 text-primary" />
-            <h1 className="text-3xl font-bold">Ikke tilgængelige synskonsulenter</h1>
+            <h1 className="text-3xl font-bold">Tilføj synskonsulenter</h1>
           </div>
           <p className="text-muted-foreground mt-2">
-            Administrer tilgængelighed for synskonsulenter der ikke er tilgængelige
+            Se og administrer tilgængelighed for alle synskonsulenter
           </p>
         </div>
         <Button onClick={() => setDrawerOpen(true)} size="lg" className="gap-2">
@@ -86,16 +86,17 @@ export default function UnavailableConsultants() {
           </div>
 
           <div className="space-y-2">
-            <h3 className="font-semibold">Trin 3: Gør tilgængelig</h3>
+            <h3 className="font-semibold">Trin 3: Administrer tilgængelighed</h3>
             <p className="text-sm text-muted-foreground">
-              Klik på "Gør tilgængelig" knappen ved siden af en konsulent for at markere dem som tilgængelige for den valgte dato.
-              Ændringen træder straks i kraft og konsulenten bliver bookbar til inspektioner.
+              Klik på "Gør tilgængelig" knappen for at markere en konsulent som tilgængelig for den valgte dato.
+              Du kan kun fjerne tilgængelighed for opslag du selv har tilføjet - ikke data fra WorkFeed.
             </p>
           </div>
 
           <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-lg p-4 mt-4">
             <p className="text-sm text-amber-900 dark:text-amber-200">
               <strong>Bemærk:</strong> Du kan ikke ændre tilgængelighed for tidligere datoer. Kun fremtidige datoer kan redigeres.
+              Du kan ikke fjerne tilgængelighed der kommer fra WorkFeed - kun dine egne tilføjelser kan fjernes.
             </p>
           </div>
         </CardContent>
