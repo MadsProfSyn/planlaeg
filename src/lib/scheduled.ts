@@ -11,11 +11,15 @@ export interface ProposedAssignment {
   travel_from_previous_mins: number;
   status: string;
   created_at: string;
+  assignment_source?: string;
+  manual_override_at?: string;
+  manual_override_by?: string;
   // Joined data
   inspector_name?: string;
   inspection_address?: string;
   inspection_type?: string;
   inspection_department?: string;
+  manual_override_user_name?: string;
 }
 
 export interface ScheduledFilters {
@@ -36,7 +40,8 @@ export async function getProposedAssignments(
       `
       *,
       inspectors!inner(full_name),
-      inspection_queue!inner(address, inspection_type, department)
+      inspection_queue!inner(address, inspection_type, department),
+      profiles!manual_override_by(full_name)
     `
     )
     .order("scheduled_date", { ascending: true })
@@ -73,6 +78,52 @@ export async function getProposedAssignments(
       inspection_address: item.inspection_queue?.address,
       inspection_type: item.inspection_queue?.inspection_type,
       inspection_department: item.inspection_queue?.department,
+      manual_override_user_name: item.profiles?.full_name,
     })) || []
   );
+}
+
+export async function reassignInspector(
+  assignmentId: string,
+  newInspectorId: string
+): Promise<any> {
+  const { data, error } = await supabase.functions.invoke("reassign-inspector", {
+    body: {
+      assignment_id: assignmentId,
+      new_inspector_id: newInspectorId,
+    },
+  });
+
+  if (error) {
+    throw new Error(`Failed to reassign inspector: ${error.message}`);
+  }
+
+  return data;
+}
+
+export async function getAvailableInspectors(date: string): Promise<any[]> {
+  const { data, error } = await supabase
+    .from("inspectors")
+    .select(
+      `
+      *,
+      supabase_availability!inner(
+        is_available,
+        start_time_local,
+        end_time_local,
+        source,
+        availability_time_ranges(start_time, end_time)
+      ),
+      inspector_skills(inspection_type)
+    `
+    )
+    .eq("is_active", true)
+    .eq("supabase_availability.date_local", date)
+    .eq("supabase_availability.is_available", true);
+
+  if (error) {
+    throw new Error(`Failed to fetch available inspectors: ${error.message}`);
+  }
+
+  return data || [];
 }

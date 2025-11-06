@@ -8,9 +8,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CalendarCheck, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { CalendarCheck, ArrowUpDown, ArrowUp, ArrowDown, UserCog } from "lucide-react";
 import { formatDateForDisplay } from "@/lib/date-utils";
+import { InspectorSelector } from "./InspectorSelector";
+import { reassignInspector } from "@/lib/scheduled";
+import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 import type { ProposedAssignment } from "@/lib/scheduled";
 
 export type SortColumn =
@@ -68,6 +73,11 @@ export function ScheduledTable({
   sortDirection = "asc",
   onSort,
 }: ScheduledTableProps) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [selectorOpen, setSelectorOpen] = React.useState(false);
+  const [selectedAssignment, setSelectedAssignment] = React.useState<ProposedAssignment | null>(null);
+
   const getSortIcon = (column: SortColumn) => {
     if (sortColumn !== column) {
       return <ArrowUpDown className="h-4 w-4 text-muted-foreground" />;
@@ -82,6 +92,32 @@ export function ScheduledTable({
   const handleHeaderClick = (column: SortColumn) => {
     if (onSort) {
       onSort(column);
+    }
+  };
+
+  const handleReassignClick = (assignment: ProposedAssignment) => {
+    setSelectedAssignment(assignment);
+    setSelectorOpen(true);
+  };
+
+  const handleInspectorSelect = async (inspectorId: string, inspectorName: string) => {
+    if (!selectedAssignment) return;
+
+    try {
+      await reassignInspector(selectedAssignment.id, inspectorId);
+      
+      toast({
+        title: "Inspektør skiftet",
+        description: `Syn tildelt til ${inspectorName}`,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["proposed-assignments"] });
+    } catch (error: any) {
+      toast({
+        title: "Fejl",
+        description: error.message || "Kunne ikke skifte inspektør",
+        variant: "destructive",
+      });
     }
   };
   if (isLoading) {
@@ -190,6 +226,9 @@ export function ScheduledTable({
                 {getSortIcon("sequence_in_route")}
               </div>
             </TableHead>
+            <TableHead className="h-12 font-semibold w-[120px]">
+              Handlinger
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -199,7 +238,14 @@ export function ScheduledTable({
               className={`h-14 hover:bg-muted/30 transition-colors ${index % 2 === 0 ? 'bg-muted/10' : ''}`}
             >
               <TableCell className="font-medium">
-                {assignment.inspector_name || "Ikke tildelt"}
+                <div className="flex items-center gap-2">
+                  {assignment.inspector_name || "Ikke tildelt"}
+                  {assignment.assignment_source === "manual" && (
+                    <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/20">
+                      Manuelt
+                    </Badge>
+                  )}
+                </div>
               </TableCell>
               <TableCell>{assignment.inspection_address}</TableCell>
               <TableCell>
@@ -231,10 +277,31 @@ export function ScheduledTable({
                   {assignment.sequence_in_route}
                 </Badge>
               </TableCell>
+              <TableCell>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => handleReassignClick(assignment)}
+                  className="h-8"
+                >
+                  <UserCog className="h-4 w-4 mr-1" />
+                  Skift
+                </Button>
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
       </Table>
+
+      {selectedAssignment && (
+        <InspectorSelector
+          open={selectorOpen}
+          onOpenChange={setSelectorOpen}
+          date={selectedAssignment.scheduled_date}
+          inspectionType={selectedAssignment.inspection_type || ""}
+          onSelect={handleInspectorSelect}
+        />
+      )}
     </div>
   );
 }

@@ -1,11 +1,13 @@
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CalendarCheck } from "lucide-react";
+import { CalendarCheck, Table as TableIcon, Map } from "lucide-react";
 import { ScheduledTable, type SortColumn, type SortDirection } from "@/components/scheduled/ScheduledTable";
 import { ScheduledFiltersBar } from "@/components/scheduled/ScheduledFiltersBar";
+import { InspectorRoutesView } from "@/components/scheduled/InspectorRoutesView";
 import { getProposedAssignments, type ScheduledFilters, type ProposedAssignment } from "@/lib/scheduled";
 import { useToast } from "@/hooks/use-toast";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function ScheduledPage() {
   const { toast } = useToast();
@@ -21,6 +23,15 @@ export default function ScheduledPage() {
   // Sort states
   const [sortColumn, setSortColumn] = React.useState<SortColumn | null>(null);
   const [sortDirection, setSortDirection] = React.useState<SortDirection>("asc");
+
+  // View state
+  const [view, setView] = React.useState<"table" | "routes">(
+    () => (localStorage.getItem("scheduledView") as "table" | "routes") || "table"
+  );
+
+  React.useEffect(() => {
+    localStorage.setItem("scheduledView", view);
+  }, [view]);
 
   // Build filters object for backend
   const backendFilters: ScheduledFilters = React.useMemo(() => {
@@ -164,19 +175,37 @@ export default function ScheduledPage() {
         <CardHeader className="border-b">
           <CardTitle className="flex items-center justify-between text-lg">
             <span>Planlagte syn</span>
-            <span className="text-sm font-normal text-muted-foreground">
-              {sortedAssignments.length} planlagte
-            </span>
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-normal text-muted-foreground">
+                {sortedAssignments.length} planlagte
+              </span>
+              <Tabs value={view} onValueChange={(v) => setView(v as "table" | "routes")}>
+                <TabsList className="h-9">
+                  <TabsTrigger value="table" className="text-xs">
+                    <TableIcon className="h-4 w-4 mr-1" />
+                    Tabel
+                  </TabsTrigger>
+                  <TabsTrigger value="routes" className="text-xs">
+                    <Map className="h-4 w-4 mr-1" />
+                    Ruter
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent className="p-6">
-          <ScheduledTable
-            assignments={sortedAssignments}
-            isLoading={isLoading}
-            sortColumn={sortColumn}
-            sortDirection={sortDirection}
-            onSort={handleSort}
-          />
+          {view === "table" ? (
+            <ScheduledTable
+              assignments={sortedAssignments}
+              isLoading={isLoading}
+              sortColumn={sortColumn}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+            />
+          ) : (
+            <InspectorRoutesView assignments={sortedAssignments} />
+          )}
         </CardContent>
       </Card>
     </div>

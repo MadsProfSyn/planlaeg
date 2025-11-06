@@ -613,11 +613,14 @@ export type Database = {
       }
       proposed_assignments: {
         Row: {
+          assignment_source: string | null
           created_at: string | null
           end_time: string
           id: string
           inspection_id: string
           inspector_id: string
+          manual_override_at: string | null
+          manual_override_by: string | null
           scheduled_date: string
           sequence_in_route: number | null
           start_time: string
@@ -626,11 +629,14 @@ export type Database = {
           vrp_run_id: string
         }
         Insert: {
+          assignment_source?: string | null
           created_at?: string | null
           end_time: string
           id?: string
           inspection_id: string
           inspector_id: string
+          manual_override_at?: string | null
+          manual_override_by?: string | null
           scheduled_date: string
           sequence_in_route?: number | null
           start_time: string
@@ -639,11 +645,14 @@ export type Database = {
           vrp_run_id: string
         }
         Update: {
+          assignment_source?: string | null
           created_at?: string | null
           end_time?: string
           id?: string
           inspection_id?: string
           inspector_id?: string
+          manual_override_at?: string | null
+          manual_override_by?: string | null
           scheduled_date?: string
           sequence_in_route?: number | null
           start_time?: string
@@ -671,6 +680,13 @@ export type Database = {
             columns: ["inspector_id"]
             isOneToOne: false
             referencedRelation: "inspectors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposed_assignments_manual_override_by_fkey"
+            columns: ["manual_override_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -1106,6 +1122,14 @@ export type Database = {
         Returns: boolean
       }
       promote_user: { Args: { target_email: string }; Returns: undefined }
+      reassign_inspector_manual: {
+        Args: {
+          p_assignment_id: string
+          p_new_inspector_id: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
       save_vrp_solution: {
         Args: {
           p_assignments: Json

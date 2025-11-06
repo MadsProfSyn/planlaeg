@@ -63,7 +63,18 @@ Deno.serve(async (req) => {
       throw new Error(`Failed to create VRP run: ${runError.message}`);
     }
 
-    // 2. Insert proposed assignments
+    // 2. Delete old VRP assignments (but preserve manual assignments)
+    const { error: deleteError } = await supabase
+      .from("proposed_assignments")
+      .delete()
+      .in("inspection_id", inspection_ids)
+      .eq("assignment_source", "vrp");
+
+    if (deleteError) {
+      console.warn("Failed to delete old VRP assignments:", deleteError.message);
+    }
+
+    // 3. Insert new proposed assignments from VRP
     const proposedAssignments = assignments.map((assignment) => ({
       vrp_run_id,
       inspection_id: assignment.inspection_id,
@@ -74,6 +85,7 @@ Deno.serve(async (req) => {
       sequence_in_route: assignment.sequence_in_route,
       travel_from_previous_mins: assignment.travel_from_previous_mins,
       status: "PROPOSED",
+      assignment_source: "vrp",
     }));
 
     const { error: assignmentError } = await supabase
@@ -86,7 +98,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 3. Update inspection_queue status
+    // 4. Update inspection_queue status
     const { error: updateError } = await supabase
       .from("inspection_queue")
       .update({ status: "IN_VRP" })
