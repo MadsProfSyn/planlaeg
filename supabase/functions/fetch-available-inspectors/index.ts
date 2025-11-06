@@ -18,6 +18,7 @@ interface FilterParams {
   pageSize: number;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
+  no_pagination?: boolean;
 }
 
 serve(async (req) => {
@@ -45,7 +46,8 @@ serve(async (req) => {
       page = 1,
       pageSize = 500,
       sortBy = 'dato',
-      sortOrder = 'asc'
+      sortOrder = 'asc',
+      no_pagination = false
     } = params;
 
     const offset = (page - 1) * pageSize;
@@ -93,8 +95,10 @@ serve(async (req) => {
     // Add secondary sort
     query = query.order('start_time_local', { ascending: true });
 
-    // Apply pagination
-    query = query.range(offset, offset + pageSize - 1);
+    // Apply pagination (unless disabled)
+    if (!no_pagination) {
+      query = query.range(offset, offset + pageSize - 1);
+    }
 
     const { data, error, count } = await query;
 

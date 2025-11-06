@@ -25,6 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import { InspectorRouteGroup } from "./InspectorRouteGroup";
 import { RouteMapView } from "./RouteMapView";
 import { SimpleFallbackMap } from "./SimpleFallbackMap";
+import { InspectorSelectorWithFilters } from "./InspectorSelectorWithFilters";
 import type { VrpAssignment } from "@/types/vrp";
 import { ErrorBoundary } from "@/components/utility/ErrorBoundary";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -64,6 +65,14 @@ export function PlanlaegSynModal({
   const [isFetchingBases, setIsFetchingBases] = useState(false);
   const [roundtripEnabled, setRoundtripEnabled] = useState(true);
   const mapSectionRef = useRef<HTMLDivElement | null>(null);
+  
+  // Manual inspector assignments (before VRP approval)
+  const [manualAssignments, setManualAssignments] = useState<Record<string, {
+    inspectorId: string;
+    inspectorName: string;
+  } | null>>({});
+  const [inspectorSelectorOpen, setInspectorSelectorOpen] = useState(false);
+  const [selectedInspectionForAssignment, setSelectedInspectionForAssignment] = useState<any | null>(null);
 
   // Extract unique target dates from inspections
   const targetDates = React.useMemo(() => {
@@ -170,15 +179,31 @@ export function PlanlaegSynModal({
 
     try {
       // Create assignments from route plan with user-edited datetimes
+      // Merge manual assignments with VRP assignments
       const assignments: VrpAssignment[] = routePlan.assignments.map((assignment) => {
+        const manualAssignment = manualAssignments[assignment.inspection_id];
         const userDatetime = datetimeByInspection[assignment.inspection_id];
         const [date, time] = userDatetime.split("T");
         
-        return {
-          ...assignment,
-          scheduled_date: date,
-          start_time: time,
-        };
+        if (manualAssignment) {
+          // Use manual assignment
+          return {
+            ...assignment,
+            inspector_id: manualAssignment.inspectorId,
+            inspector_name: manualAssignment.inspectorName,
+            scheduled_date: date,
+            start_time: time,
+            assignment_source: 'manual',
+          };
+        } else {
+          // Use VRP assignment
+          return {
+            ...assignment,
+            scheduled_date: date,
+            start_time: time,
+            assignment_source: 'vrp',
+          };
+        }
       });
 
       const vrpRunId = crypto.randomUUID();
@@ -205,6 +230,55 @@ export function PlanlaegSynModal({
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const openInspectorSelector = (inspection: any) => {
+    setSelectedInspectionForAssignment(inspection);
+    setInspectorSelectorOpen(true);
+  };
+
+  const handleInspectorSelect = (inspectorId: string | null, inspectorName: string | null) => {
+    if (!selectedInspectionForAssignment) return;
+    
+    if (inspectorId && inspectorName) {
+      setManualAssignments(prev => ({
+        ...prev,
+        [selectedInspectionForAssignment.id]: {
+          inspectorId,
+          inspectorName
+        }
+      }));
+      
+      toast({
+        title: "Inspektør valgt",
+        description: `${inspectorName} er valgt til dette syn`,
+      });
+    } else {
+      // Clear manual assignment (use VRP)
+      setManualAssignments(prev => {
+        const updated = { ...prev };
+        delete updated[selectedInspectionForAssignment.id];
+        return updated;
+      });
+      
+      toast({
+        title: "Automatisk tildeling",
+        description: "VRP vil tildele en inspektør automatisk",
+      });
+    }
+  };
+
+  const clearManualAssignment = (inspectionId: string) => {
+    setManualAssignments(prev => {
+      const updated = { ...prev };
+      delete updated[inspectionId];
+      return updated;
+    });
+    
+    toast({
+      title: "Tildeling fjernet",
+      description: "VRP vil tildele en inspektør automatisk",
+    });
   };
 
   const hasMissingData = inspections.some(
@@ -367,13 +441,77 @@ export function PlanlaegSynModal({
                             </div>
                           </div>
 
-                          {assignment && (
-                            <div className="flex items-center gap-2 text-sm">
-                              <User className="h-4 w-4 text-primary" />
-                              <span className="font-medium">Tildelt:</span>
-                              <span>{assignment.inspector_name}</span>
-                            </div>
-                          )}
+                          {/* Manual or VRP Assignment Display */}
+                          <div className="space-y-2 p-3 bg-muted/30 rounded-lg">
+                            {manualAssignments[inspection.id] ? (
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <User className="h-4 w-4 text-blue-600" />
+                                  <span className="font-medium text-sm">
+                                    {manualAssignments[inspection.id].inspectorName}
+                                  </span>
+                                  <Badge 
+                                    variant="secondary" 
+                                    className="bg-blue-500/10 text-blue-700 border-blue-500/20"
+                                  >
+                                    Manuelt valgt
+                                  </Badge>
+                                </div>
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => openInspectorSelector(inspection)}
+                                  >
+                                    Ændre
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => clearManualAssignment(inspection.id)}
+                                  >
+                                    Fjern
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : assignment ? (
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <User className="h-4 w-4 text-primary" />
+                                  <span className="text-sm">
+                                    {assignment.inspector_name}
+                                  </span>
+                                  <Badge 
+                                    variant="secondary" 
+                                    className="bg-green-500/10 text-green-700 border-green-500/20"
+                                  >
+                                    VRP planlagt
+                                  </Badge>
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => openInspectorSelector(inspection)}
+                                >
+                                  Vælg inspektør
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-muted-foreground">
+                                  {isLoadingRoutes ? "Beregner..." : "VRP tildeler automatisk"}
+                                </span>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => openInspectorSelector(inspection)}
+                                  disabled={isLoadingRoutes}
+                                >
+                                  Vælg inspektør
+                                </Button>
+                              </div>
+                            )}
+                          </div>
 
                           <div className="space-y-2">
                             <Label htmlFor={`datetime-${inspection.id}`}>
@@ -650,9 +788,21 @@ export function PlanlaegSynModal({
               </>
             )}
           </Button>
-        </DialogFooter>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Inspector Selector Modal */}
+      {selectedInspectionForAssignment && (
+        <InspectorSelectorWithFilters
+          open={inspectorSelectorOpen}
+          onOpenChange={setInspectorSelectorOpen}
+          inspectionType={selectedInspectionForAssignment.inspection_type}
+          preferredDate={selectedInspectionForAssignment.preferred_date}
+          onSelect={handleInspectorSelect}
+          currentSelection={manualAssignments[selectedInspectionForAssignment.id] || undefined}
+        />
+      )}
     </ErrorBoundary>
   );
 }
