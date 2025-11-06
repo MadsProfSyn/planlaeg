@@ -72,6 +72,20 @@ Deno.serve(async (req) => {
         WHERE date_local = $1
         AND status IN ('ASSIGNED', 'booked')
         GROUP BY inspector_id
+      ),
+      time_ranges AS (
+        SELECT 
+          sa.id as availability_id,
+          json_agg(
+            json_build_object(
+              'start_time', atr.start_time::text,
+              'end_time', atr.end_time::text
+            ) ORDER BY atr.start_time
+          ) as ranges
+        FROM supabase_availability sa
+        INNER JOIN availability_time_ranges atr ON atr.availability_id = sa.id
+        WHERE sa.date_local = $1
+        GROUP BY sa.id
       )
       SELECT 
         i.id as inspector_id,
@@ -84,14 +98,15 @@ Deno.serve(async (req) => {
           WHEN sa.is_available = true THEN 'available'
           ELSE 'unavailable'
         END as availability_status,
+        sa.id as availability_id,
         sa.source,
-        sa.start_time_local,
-        sa.end_time_local,
+        tr.ranges as time_ranges,
         COALESCE(bs.shift_count, 0) as booked_shifts_count
       FROM inspectors i
       LEFT JOIN departments d ON d.id = i.department_id
       LEFT JOIN consultant_skills cs ON cs.inspector_id = i.id
       LEFT JOIN supabase_availability sa ON sa.inspector_id = i.id AND sa.date_local = $1
+      LEFT JOIN time_ranges tr ON tr.availability_id = sa.id
       LEFT JOIN booked_shifts bs ON bs.inspector_id = i.id
       WHERE i.is_active = true
       ORDER BY i.full_name
@@ -133,6 +148,27 @@ Deno.serve(async (req) => {
       if (availError) {
         throw availError;
       }
+
+      // Fetch time ranges
+      const availabilityIds = availability?.map(a => a.id) || [];
+      const { data: timeRanges, error: timeRangesError } = await supabase
+        .from("availability_time_ranges")
+        .select("*")
+        .in("availability_id", availabilityIds);
+
+      if (timeRangesError) {
+        throw timeRangesError;
+      }
+
+      // Group time ranges by availability_id
+      const rangesByAvailability = timeRanges?.reduce((acc, tr) => {
+        if (!acc[tr.availability_id]) acc[tr.availability_id] = [];
+        acc[tr.availability_id].push({
+          start_time: tr.start_time,
+          end_time: tr.end_time
+        });
+        return acc;
+      }, {} as Record<string, any[]>) || {};
 
       // Fetch skills
       const { data: skillsData, error: skillsError } = await supabase
@@ -185,9 +221,9 @@ Deno.serve(async (req) => {
             : avail.is_available
             ? "available"
             : "unavailable",
+          availability_id: avail?.id || null,
           source: avail?.source || null,
-          start_time_local: avail?.start_time_local || null,
-          end_time_local: avail?.end_time_local || null,
+          time_ranges: avail ? (rangesByAvailability[avail.id] || null) : null,
           booked_shifts_count: shiftsByInspector[i.id] || 0,
         };
       }) || [];
@@ -233,7 +269,7 @@ Deno.serve(async (req) => {
       const hasMore = offset + pageSize < totalCount;
 
       return new Response(JSON.stringify({ 
-        data: paginatedData, 
+        consultants: paginatedData, 
         count: paginatedData.length,
         total: totalCount,
         hasMore,
@@ -286,7 +322,7 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({ 
-        data: paginatedData, 
+        consultants: paginatedData, 
         count: paginatedData.length,
         total: totalCount,
         hasMore,

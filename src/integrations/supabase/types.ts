@@ -52,6 +52,38 @@ export type Database = {
           },
         ]
       }
+      availability_time_ranges: {
+        Row: {
+          availability_id: string
+          created_at: string | null
+          end_time: string
+          id: string
+          start_time: string
+        }
+        Insert: {
+          availability_id: string
+          created_at?: string | null
+          end_time: string
+          id?: string
+          start_time: string
+        }
+        Update: {
+          availability_id?: string
+          created_at?: string | null
+          end_time?: string
+          id?: string
+          start_time?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "availability_time_ranges_availability_id_fkey"
+            columns: ["availability_id"]
+            isOneToOne: false
+            referencedRelation: "supabase_availability"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       departments: {
         Row: {
           created_at: string | null
@@ -938,7 +970,9 @@ export type Database = {
           solution_json: Json | null
           status: string | null
           target_dates: string[]
+          total_travel_km: number | null
           total_travel_minutes: number | null
+          triggered_by: string | null
         }
         Insert: {
           approved_at?: string | null
@@ -952,7 +986,9 @@ export type Database = {
           solution_json?: Json | null
           status?: string | null
           target_dates: string[]
+          total_travel_km?: number | null
           total_travel_minutes?: number | null
+          triggered_by?: string | null
         }
         Update: {
           approved_at?: string | null
@@ -966,7 +1002,9 @@ export type Database = {
           solution_json?: Json | null
           status?: string | null
           target_dates?: string[]
+          total_travel_km?: number | null
           total_travel_minutes?: number | null
+          triggered_by?: string | null
         }
         Relationships: []
       }
@@ -1086,6 +1124,16 @@ export type Database = {
           p_is_available: boolean
           p_source?: string
           p_start_time?: string
+        }
+        Returns: Json
+      }
+      set_consultant_availability_with_ranges: {
+        Args: {
+          p_date: string
+          p_inspector_id: string
+          p_is_available: boolean
+          p_source?: string
+          p_time_ranges?: Json
         }
         Returns: Json
       }
