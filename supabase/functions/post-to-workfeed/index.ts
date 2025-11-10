@@ -196,25 +196,10 @@ Deno.serve(async (req) => {
 
     console.log(`[post-to-workfeed] Processing shift: ${shiftId}`);
 
-    // 1. Get shift data with inspection details
+    // 1. Fetch shift data
     const { data: shift, error: shiftError } = await supabase
       .from("supabase_shifts")
-      .select(`
-        *,
-        inspection:inspection_queue(
-          address,
-          notes,
-          obs,
-          tenant_name
-        ),
-        inspector:inspectors(
-          wf_employee_id,
-          full_name,
-          department:departments(
-            wf_department_id
-          )
-        )
-      `)
+      .select("*")
       .eq("id", shiftId)
       .single();
 
@@ -222,36 +207,81 @@ Deno.serve(async (req) => {
       throw new Error(`Shift not found: ${shiftError?.message}`);
     }
 
+    // 2. Fetch inspection data (using inspection_queue_id from shift)
+    const { data: inspection, error: inspectionError } = await supabase
+      .from("inspection_queue")
+      .select("address, notes, obs, tenant_name")
+      .eq("id", shift.inspection_queue_id)
+      .single();
+
+    if (inspectionError) {
+      console.warn('[post-to-workfeed] Could not fetch inspection:', inspectionError);
+    }
+
+    // 3. Fetch inspector data
+    const { data: inspector, error: inspectorError } = await supabase
+      .from("inspectors")
+      .select("wf_employee_id, full_name, department_id")
+      .eq("id", shift.inspector_id)
+      .single();
+
+    if (inspectorError || !inspector) {
+      throw new Error(`Inspector not found: ${inspectorError?.message}`);
+    }
+
+    // 4. Fetch department data (using department_id from inspector)
+    const { data: department, error: departmentError } = await supabase
+      .from("departments")
+      .select("wf_department_id")
+      .eq("id", inspector.department_id)
+      .single();
+
+    if (departmentError || !department) {
+      throw new Error(`Department not found for inspector: ${departmentError?.message}`);
+    }
+
+    // 5. Combine into expected structure
+    const enrichedShift = {
+      ...shift,
+      inspection: inspection || {},
+      inspector: {
+        ...inspector,
+        department: department
+      }
+    };
+
     console.log(`[post-to-workfeed] Shift data:`, {
-      inspector: shift.inspector_name,
-      date: shift.date_local,
-      type: shift.type,
-      department: shift.department,
+      inspector: enrichedShift.inspector_name,
+      date: enrichedShift.date_local,
+      type: enrichedShift.type,
+      department: enrichedShift.department,
+      has_inspection_data: !!enrichedShift.inspection?.address,
+      has_department_id: !!enrichedShift.inspector?.department?.wf_department_id,
     });
 
     // 2. Get wf_department_id from inspector's department
-    const wfDepartmentId = shift.inspector?.department?.wf_department_id;
+    const wfDepartmentId = enrichedShift.inspector?.department?.wf_department_id;
     if (!wfDepartmentId) {
       throw new Error(
-        `Inspector ${shift.inspector_name} department not found or missing wf_department_id`
+        `Inspector ${enrichedShift.inspector_name} department not found or missing wf_department_id`
       );
     }
 
-    console.log(`[post-to-workfeed] Using wf_department_id: ${wfDepartmentId} for ${shift.inspector_name}`);
+    console.log(`[post-to-workfeed] Using wf_department_id: ${wfDepartmentId} for ${enrichedShift.inspector_name}`);
 
     // 3. Get WorkFeed role ID using wf_department_id
-    const roleID = await getWorkfeedRoleId(wfDepartmentId, shift.type);
+    const roleID = await getWorkfeedRoleId(wfDepartmentId, enrichedShift.type);
     
-    console.log(`[post-to-workfeed] ✅ Found role ID: ${roleID} for ${shift.type}`);
+    console.log(`[post-to-workfeed] ✅ Found role ID: ${roleID} for ${enrichedShift.type}`);
 
     // 4. Convert local time to UTC (Copenhagen = UTC+1 in winter, UTC+2 in summer)
     // We assume the times in DB are already in local Copenhagen time
-    const startUTC = new Date(`${shift.date_local}T${shift.start_time_local}+01:00`).toISOString();
-    const endUTC = new Date(`${shift.date_local}T${shift.end_time_local}+01:00`).toISOString();
+    const startUTC = new Date(`${enrichedShift.date_local}T${enrichedShift.start_time_local}+01:00`).toISOString();
+    const endUTC = new Date(`${enrichedShift.date_local}T${enrichedShift.end_time_local}+01:00`).toISOString();
 
     console.log(`[post-to-workfeed] Time conversion:`, {
-      local_start: `${shift.date_local}T${shift.start_time_local}`,
-      local_end: `${shift.date_local}T${shift.end_time_local}`,
+      local_start: `${enrichedShift.date_local}T${enrichedShift.start_time_local}`,
+      local_end: `${enrichedShift.date_local}T${enrichedShift.end_time_local}`,
       utc_start: startUTC,
       utc_end: endUTC,
     });
@@ -261,9 +291,9 @@ Deno.serve(async (req) => {
       roleID: roleID,
       start: startUTC,
       end: endUTC,
-      employeeID: shift.wf_employee_id,
+      employeeID: enrichedShift.wf_employee_id,
       released: true,
-      comment: buildWorkfeedComment(shift.inspection),
+      comment: buildWorkfeedComment(enrichedShift.inspection),
     };
 
     console.log(`[post-to-workfeed] POSTing to WorkFeed:`, workfeedPayload);
@@ -297,7 +327,7 @@ Deno.serve(async (req) => {
         status: "ASSIGNED",
         start_utc: startUTC,
         end_utc: endUTC,
-        sync_attempts: shift.sync_attempts + 1,
+        sync_attempts: enrichedShift.sync_attempts + 1,
         last_sync_attempt: new Date().toISOString(),
       })
       .eq("id", shiftId);
