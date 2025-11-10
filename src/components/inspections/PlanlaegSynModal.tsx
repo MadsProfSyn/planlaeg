@@ -10,6 +10,16 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -68,6 +78,10 @@ export function PlanlaegSynModal({
   const [roundtripEnabled, setRoundtripEnabled] = useState(true);
   const mapButtonRef = useRef<HTMLButtonElement>(null);
   
+  // Exit confirmation state
+  const [showExitConfirmation, setShowExitConfirmation] = useState(false);
+  const [pendingClose, setPendingClose] = useState(false);
+  
   // WorkFeed sync state
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncProgress, setSyncProgress] = useState({
@@ -107,6 +121,9 @@ export function PlanlaegSynModal({
     targetDates,
     enabled: open && inspections.length > 0,
   });
+
+  // Check if VRP results exist
+  const hasVrpResults = routePlan && routePlan.assignments && routePlan.assignments.length > 0;
 
   // Load inspection details when modal opens
   useEffect(() => {
@@ -360,6 +377,27 @@ export function PlanlaegSynModal({
     });
   };
 
+  // Handle close with confirmation if VRP results exist
+  const handleCloseAttempt = () => {
+    if (hasVrpResults && !isSubmitting && !isSyncing) {
+      setShowExitConfirmation(true);
+      setPendingClose(true);
+    } else {
+      onClose();
+    }
+  };
+
+  const handleConfirmExit = () => {
+    setShowExitConfirmation(false);
+    setPendingClose(false);
+    onClose();
+  };
+
+  const handleCancelExit = () => {
+    setShowExitConfirmation(false);
+    setPendingClose(false);
+  };
+
   const hasMissingData = inspections.some(
     (inspection) => !datetimeByInspection[inspection.id]
   );
@@ -465,7 +503,7 @@ export function PlanlaegSynModal({
 
   return (
     <ErrorBoundary name="PlanlaegSynModal">
-      <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
+      <Dialog open={open} onOpenChange={(open) => !open && handleCloseAttempt()}>
         <DialogContent className="max-w-[95vw] max-h-[90vh] flex flex-col">
           <DialogHeader>
             <div className="flex items-center justify-between">
@@ -587,27 +625,27 @@ export function PlanlaegSynModal({
                                     VRP planlagt
                                   </Badge>
                                 </div>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => openInspectorSelector(inspection)}
-                                >
-                                  Vælg inspektør
-                                </Button>
+                                 <Button
+                                   size="sm"
+                                   variant="outline"
+                                   onClick={() => openInspectorSelector(inspection)}
+                                 >
+                                   Vælg anden inspektør
+                                 </Button>
                               </div>
                             ) : (
                               <div className="flex items-center justify-between">
                                 <span className="text-sm text-muted-foreground">
                                   {isLoadingRoutes ? "Beregner..." : "VRP tildeler automatisk"}
                                 </span>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => openInspectorSelector(inspection)}
-                                  disabled={isLoadingRoutes}
-                                >
-                                  Vælg inspektør
-                                </Button>
+                                 <Button
+                                   size="sm"
+                                   variant="outline"
+                                   onClick={() => openInspectorSelector(inspection)}
+                                   disabled={isLoadingRoutes}
+                                 >
+                                   Vælg anden inspektør
+                                 </Button>
                               </div>
                             )}
                           </div>
@@ -783,11 +821,13 @@ export function PlanlaegSynModal({
           )}
           
           <div className="flex w-full justify-end gap-2">
-            <DialogClose asChild>
-              <Button variant="outline" disabled={isSubmitting || isSyncing}>
-                Annullér
-              </Button>
-            </DialogClose>
+            <Button 
+              variant="outline" 
+              disabled={isSubmitting || isSyncing}
+              onClick={handleCloseAttempt}
+            >
+              Annullér
+            </Button>
             <Button
               onClick={handleApprove}
               disabled={hasMissingData || isSubmitting || isSyncing || !routePlan}
@@ -849,6 +889,24 @@ export function PlanlaegSynModal({
           isFetchingBases={isFetchingBases}
         />
       )}
+
+      {/* Exit Confirmation Dialog */}
+      <AlertDialog open={showExitConfirmation} onOpenChange={setShowExitConfirmation}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Bekræft at forlade planlægning</AlertDialogTitle>
+            <AlertDialogDescription>
+              Du har genererede ruter. Vil du forlade denne visning? Ugemte ændringer kan gå tabt.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleCancelExit}>Bliv</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmExit} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Forlad
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </ErrorBoundary>
   );
 }
@@ -902,30 +960,25 @@ function MapModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100] bg-background/95 backdrop-blur-sm"
-      onClick={onClose}
+      className="fixed inset-0 z-[100] bg-background"
       aria-modal="true"
       role="dialog"
       aria-label="Kortvisning"
     >
-      <div className="relative h-screen w-screen p-6">
-        {/* Close button */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="absolute top-4 right-4 z-10 bg-background shadow-lg hover:bg-muted"
-          onClick={onClose}
-          aria-label="Luk kortvisning"
-        >
-          <X className="h-5 w-5" />
-        </Button>
-
-        {/* Header */}
-        <div className="mb-4 flex items-center justify-between bg-background/80 backdrop-blur p-4 rounded-lg shadow-sm">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <MapPin className="h-5 w-5" />
-            Kortvisning
-          </h2>
+      {/* Header Overlay */}
+      <div className="absolute top-0 left-0 right-0 z-20 bg-background/95 backdrop-blur-sm border-b">
+        <div className="flex items-center justify-between p-4">
+          <Button
+            variant="outline"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
+            className="flex items-center gap-2"
+          >
+            <X className="h-4 w-4" />
+            Tilbage til ruteoversigt
+          </Button>
           
           <div className="flex items-center gap-3">
             <label className="text-sm flex items-center gap-2 cursor-pointer">
@@ -942,22 +995,19 @@ function MapModal({
             )}
           </div>
         </div>
+      </div>
 
-        {/* Map content */}
-        <div 
-          className="h-[calc(100vh-120px)] bg-background rounded-lg shadow-xl overflow-hidden border"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <RouteMapView
-            key="modal-map"
-            inspectorRoutes={groupedRoutes.inspector_routes}
-            selectedInspectorId={selectedInspectorId}
-            inspectionsMap={inspectionsMap}
-            onInspectorSelect={onInspectorSelect}
-            inspectorBases={inspectorBases}
-            roundtrip={roundtripEnabled}
-          />
-        </div>
+      {/* Map content - Full viewport */}
+      <div className="absolute inset-0 pt-[73px]">
+        <RouteMapView
+          key="modal-map"
+          inspectorRoutes={groupedRoutes.inspector_routes}
+          selectedInspectorId={selectedInspectorId}
+          inspectionsMap={inspectionsMap}
+          onInspectorSelect={onInspectorSelect}
+          inspectorBases={inspectorBases}
+          roundtrip={roundtripEnabled}
+        />
       </div>
     </div>
   );

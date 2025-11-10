@@ -8,9 +8,13 @@ import {
   useSensors,
   DragStartEvent,
   DragEndEvent,
+  DragOverEvent,
 } from "@dnd-kit/core";
-import { useDroppable } from "@dnd-kit/core";
-import { useDraggable } from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { ProposedAssignment, reassignInspector } from "@/lib/scheduled";
 import { InspectionCard } from "./InspectionCard";
@@ -26,6 +30,43 @@ interface InspectorRoutesViewProps {
   assignments: ProposedAssignment[];
 }
 
+// Sortable wrapper for inspection cards
+function SortableInspectionCard({
+  assignment,
+  onReassign,
+}: {
+  assignment: ProposedAssignment;
+  onReassign: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: assignment.id,
+    data: assignment,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} {...listeners} {...attributes}>
+      <InspectionCard assignment={assignment} isDragging={isDragging} onReassign={onReassign} />
+    </div>
+  );
+}
+
+// Drop indicator component
+function DropIndicator({ position }: { position: number }) {
+  return (
+    <div className="relative h-1 my-1">
+      <div className="absolute inset-0 bg-primary rounded-full opacity-50" />
+      <div className="absolute -top-2 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-xs px-2 py-0.5 rounded-full whitespace-nowrap">
+        Slip her
+      </div>
+    </div>
+  );
+}
+
 function DraggableInspectionCard({
   assignment,
   onReassign,
@@ -33,7 +74,7 @@ function DraggableInspectionCard({
   assignment: ProposedAssignment;
   onReassign: () => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({
     id: assignment.id,
     data: assignment,
   });
@@ -54,14 +95,17 @@ function InspectorLane({
   inspectorName,
   assignments,
   onReassignClick,
+  dropIndicatorPosition,
 }: {
   inspectorId: string;
   inspectorName: string;
   assignments: ProposedAssignment[];
   onReassignClick: (assignment: ProposedAssignment) => void;
+  dropIndicatorPosition: number | null;
 }) {
-  const { setNodeRef, isOver } = useDroppable({
+  const { setNodeRef, isOver } = useSortable({
     id: inspectorId,
+    data: { type: 'lane', inspectorId },
   });
 
   const totalTime = assignments.reduce((sum, a) => {
@@ -117,19 +161,24 @@ function InspectorLane({
       </div>
 
       <div className="p-3 space-y-2 min-h-[200px]">
-        {assignments.length === 0 ? (
-          <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">
-            Ingen syn tildelt
-          </div>
-        ) : (
-          assignments.map((assignment) => (
-            <DraggableInspectionCard
-              key={assignment.id}
-              assignment={assignment}
-              onReassign={() => onReassignClick(assignment)}
-            />
-          ))
-        )}
+        <SortableContext items={assignments.map(a => a.id)} strategy={verticalListSortingStrategy}>
+          {assignments.length === 0 ? (
+            <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">
+              Ingen syn tildelt
+            </div>
+          ) : (
+            assignments.map((assignment, index) => (
+              <React.Fragment key={assignment.id}>
+                {dropIndicatorPosition === index && <DropIndicator position={index} />}
+                <SortableInspectionCard
+                  assignment={assignment}
+                  onReassign={() => onReassignClick(assignment)}
+                />
+              </React.Fragment>
+            ))
+          )}
+          {dropIndicatorPosition === assignments.length && <DropIndicator position={assignments.length} />}
+        </SortableContext>
       </div>
     </div>
   );
@@ -142,6 +191,10 @@ export function InspectorRoutesView({ assignments }: InspectorRoutesViewProps) {
   const [activeId, setActiveId] = React.useState<string | null>(null);
   const [selectorOpen, setSelectorOpen] = React.useState(false);
   const [selectedAssignment, setSelectedAssignment] = React.useState<ProposedAssignment | null>(null);
+  const [dropIndicator, setDropIndicator] = React.useState<{
+    inspectorId: string;
+    position: number;
+  } | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -179,18 +232,67 @@ export function InspectorRoutesView({ assignments }: InspectorRoutesViewProps) {
     setActiveId(event.active.id as string);
   };
 
+  const handleDragOver = (event: DragOverEvent) => {
+    const { active, over } = event;
+    if (!over) {
+      setDropIndicator(null);
+      return;
+    }
+
+    const activeAssignment = assignments.find(a => a.id === active.id);
+    const overData = over.data.current;
+
+    if (!activeAssignment) return;
+
+    // Determine drop position
+    if (overData?.type === 'lane') {
+      // Dropped on empty space in lane
+      const targetInspectorId = overData.inspectorId;
+      const targetGroup = groupedAssignments.find(g => g.inspectorId === targetInspectorId);
+      setDropIndicator({
+        inspectorId: targetInspectorId,
+        position: targetGroup?.assignments.length || 0,
+      });
+    } else {
+      // Dropped on another assignment
+      const overAssignment = assignments.find(a => a.id === over.id);
+      if (overAssignment) {
+        const targetGroup = groupedAssignments.find(g => g.inspectorId === overAssignment.inspector_id);
+        const overIndex = targetGroup?.assignments.findIndex(a => a.id === over.id);
+        if (overIndex !== undefined && overIndex >= 0) {
+          setDropIndicator({
+            inspectorId: overAssignment.inspector_id,
+            position: overIndex,
+          });
+        }
+      }
+    }
+  };
+
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveId(null);
+    setDropIndicator(null);
 
     if (!over || active.id === over.id) return;
 
     const assignmentId = active.id as string;
-    const newInspectorId = over.id as string;
-
-    // Find the assignment being moved
     const assignment = assignments.find((a) => a.id === assignmentId);
-    if (!assignment || assignment.inspector_id === newInspectorId) return;
+    if (!assignment) return;
+
+    // Determine target inspector
+    let newInspectorId: string;
+    const overData = over.data.current;
+    
+    if (overData?.type === 'lane') {
+      newInspectorId = overData.inspectorId;
+    } else {
+      const overAssignment = assignments.find(a => a.id === over.id);
+      if (!overAssignment) return;
+      newInspectorId = overAssignment.inspector_id;
+    }
+
+    if (assignment.inspector_id === newInspectorId) return;
 
     // Find the new inspector name
     const newInspectorGroup = groupedAssignments.find((g) => g.inspectorId === newInspectorId);
@@ -242,25 +344,34 @@ export function InspectorRoutesView({ assignments }: InspectorRoutesViewProps) {
 
   const activeAssignment = activeId ? assignments.find((a) => a.id === activeId) : null;
 
+  // Create sortable items for all lanes
+  const allInspectorIds = groupedAssignments.map(g => g.inspectorId);
+
   return (
     <>
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
         onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-4 overflow-x-auto pb-4">
-          {groupedAssignments.map((group) => (
-            <InspectorLane
-              key={group.inspectorId}
-              inspectorId={group.inspectorId}
-              inspectorName={group.inspectorName}
-              assignments={group.assignments}
-              onReassignClick={handleReassignClick}
-            />
-          ))}
-        </div>
+        <SortableContext items={allInspectorIds} strategy={verticalListSortingStrategy}>
+          <div className="flex gap-4 overflow-x-auto pb-4">
+            {groupedAssignments.map((group) => (
+              <InspectorLane
+                key={group.inspectorId}
+                inspectorId={group.inspectorId}
+                inspectorName={group.inspectorName}
+                assignments={group.assignments}
+                onReassignClick={handleReassignClick}
+                dropIndicatorPosition={
+                  dropIndicator?.inspectorId === group.inspectorId ? dropIndicator.position : null
+                }
+              />
+            ))}
+          </div>
+        </SortableContext>
 
         <DragOverlay>
           {activeAssignment ? (

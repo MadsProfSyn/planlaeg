@@ -201,7 +201,7 @@ export function InspectorSelectorWithFilters({
       <DialogContent className="max-w-5xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-xl">
-            Vælg inspektør for {inspectionType}
+            Vælg anden inspektør for {inspectionType}
           </DialogTitle>
         </DialogHeader>
 
