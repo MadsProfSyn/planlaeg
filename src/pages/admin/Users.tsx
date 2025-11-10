@@ -134,7 +134,7 @@ export default function Users() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <div>
         <h1 className="page-title">{adminStrings.users.title}</h1>
         <p className="text-caption mt-2">

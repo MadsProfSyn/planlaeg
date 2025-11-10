@@ -80,7 +80,7 @@ export default function Overview() {
   });
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* User Status Card */}
       <Card className="rounded-2xl shadow-sm border-2">
         <CardHeader className="border-b bg-muted/20">

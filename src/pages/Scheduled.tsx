@@ -192,8 +192,8 @@ export default function ScheduledPage() {
             </div>
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-6">
-          {view === "table" ? (
+        {view === "table" ? (
+          <CardContent className="p-6">
             <ScheduledTable
               assignments={sortedAssignments}
               isLoading={isLoading}
@@ -201,10 +201,10 @@ export default function ScheduledPage() {
               sortDirection={sortDirection}
               onSort={handleSort}
             />
-          ) : (
-            <InspectorRoutesView assignments={sortedAssignments} />
-          )}
-        </CardContent>
+          </CardContent>
+        ) : (
+          <InspectorRoutesView assignments={sortedAssignments} />
+        )}
       </Card>
     </div>
   );

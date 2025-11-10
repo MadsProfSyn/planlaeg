@@ -508,7 +508,7 @@ export function PlanlaegSynModal({
           <DialogHeader>
             <div className="flex items-center justify-between">
               <DialogTitle className="text-2xl">
-                Planlæg syn ({selectedInspectionIds.length} valgt)
+                Planlæg syn ({selectedInspectionIds.length} valgt{groupedRoutes ? `, ${groupedRoutes.inspector_routes.reduce((sum, r) => sum + r.assignments.length, 0)} planlagt` : ''})
               </DialogTitle>
               
               {groupedRoutes && !isLoadingRoutes && (
@@ -736,6 +736,11 @@ export function PlanlaegSynModal({
                       <MapPin className="h-4 w-4" />
                       <span className="font-medium">Distance:</span>
                       <span>{Number(groupedRoutes.overall_total_distance ?? 0).toFixed(1)} km</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <Package className="h-4 w-4" />
+                      <span className="font-medium">Planlagte:</span>
+                      <span>{groupedRoutes.inspector_routes.reduce((sum, r) => sum + r.assignments.length, 0)} af {selectedInspectionIds.length}</span>
                     </div>
                   </div>
 
@@ -968,17 +973,23 @@ function MapModal({
       {/* Header Overlay */}
       <div className="absolute top-0 left-0 right-0 z-20 bg-background/95 backdrop-blur-sm border-b">
         <div className="flex items-center justify-between p-4">
-          <Button
-            variant="outline"
-            onClick={(e) => {
-              e.stopPropagation();
-              onClose();
-            }}
-            className="flex items-center gap-2"
-          >
-            <X className="h-4 w-4" />
-            Tilbage til ruteoversigt
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              id="btn-luk-kort"
+              variant="outline"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
+              className="flex items-center gap-2"
+            >
+              <X className="h-4 w-4" />
+              Luk kort
+            </Button>
+            <span className="text-sm text-muted-foreground hidden sm:inline">
+              Tilbage til ruteoversigt
+            </span>
+          </div>
           
           <div className="flex items-center gap-3">
             <label className="text-sm flex items-center gap-2 cursor-pointer">

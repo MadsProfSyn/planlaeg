@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { InspectorRouteSummary } from "@/types/vrp";
+import { MapControls } from "./MapControls";
 import "mapbox-gl/dist/mapbox-gl.css";
 
 interface RouteMapViewProps {
@@ -220,6 +221,9 @@ export function RouteMapView({
         setInitError(e.error?.message || "Map initialization failed");
       });
 
+      // Enable scroll zoom with smooth behavior
+      map.current.scrollZoom.enable();
+      
       // Add navigation controls
       map.current.addControl(
         new mapboxgl.NavigationControl({
@@ -601,9 +605,65 @@ export function RouteMapView({
     }
   }, [selectedInspectorId, inspectorRoutes, inspectionsMap, mapLoaded, inspectorBases]);
 
+  // Map control handlers
+  const handleZoomIn = () => {
+    if (map.current) {
+      map.current.zoomIn({ duration: 300 });
+    }
+  };
+
+  const handleZoomOut = () => {
+    if (map.current) {
+      map.current.zoomOut({ duration: 300 });
+    }
+  };
+
+  const handleResetView = () => {
+    if (!map.current || inspectorRoutes.length === 0) return;
+
+    const allCoords: [number, number][] = [];
+    
+    inspectorRoutes.forEach((route) => {
+      const base = inspectorBases.get(route.inspector_id);
+      if (base?.lat && base?.lng) {
+        allCoords.push([base.lng, base.lat]);
+      }
+      
+      route.assignments.forEach((assignment) => {
+        const inspection = inspectionsMap.get(assignment.inspection_id);
+        if (inspection?.lat && inspection?.lng) {
+          allCoords.push([inspection.lng, inspection.lat]);
+        }
+      });
+    });
+
+    if (allCoords.length > 0) {
+      const lngs = allCoords.map((c) => c[0]);
+      const lats = allCoords.map((c) => c[1]);
+
+      map.current.fitBounds(
+        [
+          [Math.min(...lngs), Math.min(...lats)],
+          [Math.max(...lngs), Math.max(...lats)],
+        ],
+        { padding: 60, duration: 1000 }
+      );
+    }
+  };
+
   return (
     <div className="relative w-full h-full rounded-lg overflow-hidden border">
       <div ref={mapContainer} className="absolute inset-0 w-full h-full" />
+
+      {/* Map Controls */}
+      {mapLoaded && !initError && (
+        <MapControls
+          onZoomIn={handleZoomIn}
+          onZoomOut={handleZoomOut}
+          onResetView={handleResetView}
+          className="absolute bottom-4 right-4 z-10"
+        />
+      )}
 
       {/* Loading Overlay */}
       {!mapLoaded && !initError && (
