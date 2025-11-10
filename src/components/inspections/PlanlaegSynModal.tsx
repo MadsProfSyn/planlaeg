@@ -32,6 +32,7 @@ import { useVrpOptimization, type VrpProgress } from "@/hooks/useVrpOptimization
 import { Progress } from "@/components/ui/progress";
 import { approveVrpAssignments, getInspectionsByIds, groupAssignmentsByInspector } from "@/lib/vrp";
 import { useToast } from "@/hooks/use-toast";
+import { sendBatchToZapier, type ZapierSynPayload } from "@/lib/zapier";
 import { InspectorRouteGroup } from "./InspectorRouteGroup";
 import { RouteMapView } from "./RouteMapView";
 import { SimpleFallbackMap } from "./SimpleFallbackMap";
@@ -310,6 +311,84 @@ export function PlanlaegSynModal({
           title: "Delvis synkronisering",
           description: `✅ ${successCount} synkroniseret • ⚠️ ${failedCount} fejlede`,
           variant: "default",
+        });
+      }
+
+      // 4. Send to Zapier webhook
+      console.log("[Godkend] Sending data to Zapier webhook...");
+      
+      try {
+        // Build payloads for each assignment
+        const zapierPayloads: ZapierSynPayload[] = assignments.map((assignment) => {
+          const inspection = inspections.find(i => i.id === assignment.inspection_id);
+          
+          // Combine scheduled_date and start_time into ISO8601 timestamps
+          const startDateTime = new Date(`${assignment.scheduled_date}T${assignment.start_time}`);
+          const endDateTime = new Date(`${assignment.scheduled_date}T${assignment.end_time}`);
+          
+          return {
+            // Identification
+            inspection_id: assignment.inspection_id,
+            monday_item_id: inspection?.monday_item_id || null,
+            
+            // Inspector
+            inspector_id: assignment.inspector_id,
+            inspector_name: assignment.inspector_name,
+            
+            // Scheduling (ISO8601 format)
+            scheduled_date: assignment.scheduled_date,
+            start_time: startDateTime.toISOString(),
+            end_time: endDateTime.toISOString(),
+            
+            // Inspection details
+            inspection_type: assignment.inspection_type || inspection?.inspection_type || "",
+            address: assignment.inspection_address || inspection?.address || "",
+            customer_name: inspection?.customer_name || null,
+            department: inspection?.department || "",
+            rooms: inspection?.rooms || 0,
+            lease_number: inspection?.lease_number || null,
+            
+            // Metadata
+            approved_at: new Date().toISOString(),
+            vrp_run_id: vrpRunId,
+          };
+        });
+        
+        // Send batch to Zapier (runs with retries)
+        const zapierResult = await sendBatchToZapier(zapierPayloads);
+        
+        if (zapierResult.success === zapierPayloads.length) {
+          // All webhooks successful
+          toast({
+            title: "Syn godkendt og opdateret",
+            description: `✅ ${zapierResult.success} syn synkroniseret til Monday.com`,
+            duration: 4000,
+          });
+        } else if (zapierResult.success > 0) {
+          // Partial success
+          toast({
+            title: "Syn godkendt",
+            description: `✅ ${zapierResult.success} opdateret • ⚠️ ${zapierResult.failed} afventer`,
+            variant: "default",
+            duration: 4000,
+          });
+        } else {
+          // All failed (but don't block user)
+          toast({
+            title: "Syn godkendt lokalt – afventer integration",
+            description: "Monday.com opdatering vil blive forsøgt igen.",
+            variant: "default",
+            duration: 4000,
+          });
+        }
+      } catch (zapierError) {
+        console.error("[Godkend] Zapier webhook error:", zapierError);
+        // Non-blocking warning
+        toast({
+          title: "Syn godkendt lokalt – afventer integration",
+          description: "Synene er godkendt, men Monday.com kunne ikke opdateres.",
+          variant: "default",
+          duration: 4000,
         });
       }
 
