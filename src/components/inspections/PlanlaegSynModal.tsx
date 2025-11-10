@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Calendar, Clock, MapPin, User, AlertCircle, CheckCircle2, Loader2, Package, ChevronDown } from "lucide-react";
+import { Calendar, Clock, MapPin, User, AlertCircle, CheckCircle2, Loader2, Package, ChevronDown, X } from "lucide-react";
 import { useVrpOptimization, type VrpProgress } from "@/hooks/useVrpOptimization";
 import { Progress } from "@/components/ui/progress";
 import { approveVrpAssignments, getInspectionsByIds, groupAssignmentsByInspector } from "@/lib/vrp";
@@ -62,11 +62,11 @@ export function PlanlaegSynModal({
   const [loadingInspections, setLoadingInspections] = useState(false);
   const [selectedInspectorId, setSelectedInspectorId] = useState<string | null>(null);
   const [groupingError, setGroupingError] = useState<string | null>(null);
-  const [isMapExpanded, setIsMapExpanded] = useState(false);
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
   const [inspectorBases, setInspectorBases] = useState<Map<string, InspectorBase>>(new Map());
   const [isFetchingBases, setIsFetchingBases] = useState(false);
   const [roundtripEnabled, setRoundtripEnabled] = useState(true);
-  const mapSectionRef = useRef<HTMLDivElement | null>(null);
+  const mapButtonRef = useRef<HTMLButtonElement>(null);
   
   // WorkFeed sync state
   const [isSyncing, setIsSyncing] = useState(false);
@@ -462,21 +462,30 @@ export function PlanlaegSynModal({
     };
   }, [routePlan]);
 
-  // Auto-open map on large screens when routes are ready
-  useEffect(() => {
-    if (groupedRoutes && !isMapExpanded && typeof window !== "undefined" && window.innerWidth >= 1280) {
-      setIsMapExpanded(true);
-    }
-  }, [groupedRoutes, isMapExpanded]);
 
   return (
     <ErrorBoundary name="PlanlaegSynModal">
       <Dialog open={open} onOpenChange={(open) => !open && onClose()}>
         <DialogContent className="max-w-[95vw] max-h-[90vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle className="text-2xl">
-              Planlæg syn ({selectedInspectionIds.length} valgt)
-            </DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-2xl">
+                Planlæg syn ({selectedInspectionIds.length} valgt)
+              </DialogTitle>
+              
+              {groupedRoutes && !isLoadingRoutes && (
+                <Button
+                  ref={mapButtonRef}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsMapModalOpen(true)}
+                  className="flex items-center gap-2"
+                >
+                  <MapPin className="h-4 w-4" />
+                  Kortvisning
+                </Button>
+              )}
+            </div>
           </DialogHeader>
 
           {/* TEST MODE WARNING */}
@@ -491,7 +500,7 @@ export function PlanlaegSynModal({
           )}
 
         <div className="flex-1 overflow-hidden">
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 h-full">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
             {/* Left Panel: Inspection Details */}
             <div className="space-y-4">
               <h3 className="font-semibold text-lg flex items-center gap-2">
@@ -741,117 +750,10 @@ export function PlanlaegSynModal({
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    Venter på ruteberegning...
+                    Ingen ruter endnu – kør 'Til VRP' for at generere ruter.
                   </AlertDescription>
                 </Alert>
               )}
-            </div>
-
-            {/* Third Panel: Map View */}
-            <div className="space-y-4 hidden xl:block">
-              <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-lg flex items-center gap-2">
-                  <MapPin className="h-5 w-5" />
-                  Kortvisning
-                </h3>
-                {groupedRoutes && (
-                  <Button
-                    size="sm"
-                    variant={isMapExpanded ? "secondary" : "default"}
-                    onClick={() => {
-                      setIsMapExpanded((v) => !v);
-                      setTimeout(() => mapSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
-                    }}
-                  >
-                    {isMapExpanded ? "Skjul interaktivt kort" : "Vis interaktivt kort"}
-                  </Button>
-                )}
-              </div>
-
-              <ScrollArea className="h-[calc(100vh-280px)] max-h-[800px] pr-4">
-                <div className="space-y-2">
-                {/* Debug Info */}
-                <details className="text-xs text-muted-foreground p-2 bg-muted/50 rounded">
-                  <summary className="cursor-pointer font-medium">
-                    Debug info (klik for detaljer)
-                  </summary>
-                  <div className="mt-2 space-y-1">
-                    <div>Loading: {isLoadingRoutes ? 'Ja' : 'Nej'}</div>
-                    <div>Error: {vrpError ? 'Ja' : 'Nej'}</div>
-                    <div>GroupedRoutes: {groupedRoutes ? 'Ja' : 'Nej'}</div>
-                    <div>Routes: {groupedRoutes?.inspector_routes?.length || 0}</div>
-                    <div>Inspections: {inspections.length}</div>
-                  </div>
-                </details>
-
-                {isLoadingRoutes && (
-                  <Skeleton className="h-[600px] w-full rounded-lg" />
-                )}
-
-                {!isLoadingRoutes && vrpError && (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      Kort kan ikke vises: {vrpError}
-                    </AlertDescription>
-                  </Alert>
-                )}
-
-                {!isLoadingRoutes && !vrpError && !groupedRoutes && (
-                  <div className="h-[600px] border rounded-lg bg-muted/20 flex items-center justify-center">
-                    <div className="text-center">
-                      <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-muted-foreground" />
-                      <p className="text-muted-foreground">Venter på ruteoversigt...</p>
-                    </div>
-                  </div>
-                )}
-
-                {!isLoadingRoutes && !vrpError && groupedRoutes && (
-                  <div className="space-y-4">
-                    {/* Anchor for smooth scroll */}
-                    <div ref={mapSectionRef} />
-                    
-                    {/* Optional: Interactive map view */}
-                    {isMapExpanded && (
-                      <div className="mb-4">
-                        <RouteMapView
-                          key="interactive-map"
-                          inspectorRoutes={groupedRoutes.inspector_routes}
-                          selectedInspectorId={selectedInspectorId}
-                          inspectionsMap={inspectionsMap}
-                          onInspectorSelect={setSelectedInspectorId}
-                          inspectorBases={inspectorBases}
-                          roundtrip={roundtripEnabled}
-                        />
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-3 pt-2">
-                      <label className="text-sm flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={roundtripEnabled}
-                          onChange={(e) => setRoundtripEnabled(e.target.checked)}
-                          className="rounded border-gray-300"
-                        />
-                        Inkludér retur til base
-                      </label>
-                      {isFetchingBases && (
-                        <span className="text-xs text-muted-foreground">Henter base-adresser…</span>
-                      )}
-                    </div>
-                    
-                    {/* Primary: Always visible list view */}
-                    <SimpleFallbackMap
-                      inspectorRoutes={groupedRoutes.inspector_routes}
-                      selectedInspectorId={selectedInspectorId}
-                      inspectionsMap={inspectionsMap}
-                      onInspectorSelect={setSelectedInspectorId}
-                    />
-                  </div>
-                )}
-                </div>
-              </ScrollArea>
             </div>
           </div>
         </div>
@@ -928,6 +830,135 @@ export function PlanlaegSynModal({
           currentSelection={manualAssignments[selectedInspectionForAssignment.id] || undefined}
         />
       )}
+
+      {/* Map Modal Overlay */}
+      {groupedRoutes && (
+        <MapModal
+          open={isMapModalOpen}
+          onClose={() => {
+            setIsMapModalOpen(false);
+            setTimeout(() => mapButtonRef.current?.focus(), 100);
+          }}
+          groupedRoutes={groupedRoutes}
+          selectedInspectorId={selectedInspectorId}
+          inspectionsMap={inspectionsMap}
+          onInspectorSelect={setSelectedInspectorId}
+          inspectorBases={inspectorBases}
+          roundtripEnabled={roundtripEnabled}
+          setRoundtripEnabled={setRoundtripEnabled}
+          isFetchingBases={isFetchingBases}
+        />
+      )}
     </ErrorBoundary>
+  );
+}
+
+// Map Modal Component
+interface MapModalProps {
+  open: boolean;
+  onClose: () => void;
+  groupedRoutes: any;
+  selectedInspectorId: string | null;
+  inspectionsMap: Map<string, any>;
+  onInspectorSelect: (id: string | null) => void;
+  inspectorBases: Map<string, InspectorBase>;
+  roundtripEnabled: boolean;
+  setRoundtripEnabled: (enabled: boolean) => void;
+  isFetchingBases: boolean;
+}
+
+function MapModal({
+  open,
+  onClose,
+  groupedRoutes,
+  selectedInspectorId,
+  inspectionsMap,
+  onInspectorSelect,
+  inspectorBases,
+  roundtripEnabled,
+  setRoundtripEnabled,
+  isFetchingBases,
+}: MapModalProps) {
+  // Handle Esc key and body scroll
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && open) {
+        onClose();
+      }
+    };
+    
+    if (open) {
+      document.addEventListener('keydown', handleEsc);
+      document.body.style.overflow = 'hidden';
+    }
+    
+    return () => {
+      document.removeEventListener('keydown', handleEsc);
+      document.body.style.overflow = '';
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] bg-background/95 backdrop-blur-sm"
+      onClick={onClose}
+      aria-modal="true"
+      role="dialog"
+      aria-label="Kortvisning"
+    >
+      <div className="relative h-screen w-screen p-6">
+        {/* Close button */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute top-4 right-4 z-10 bg-background shadow-lg hover:bg-muted"
+          onClick={onClose}
+          aria-label="Luk kortvisning"
+        >
+          <X className="h-5 w-5" />
+        </Button>
+
+        {/* Header */}
+        <div className="mb-4 flex items-center justify-between bg-background/80 backdrop-blur p-4 rounded-lg shadow-sm">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <MapPin className="h-5 w-5" />
+            Kortvisning
+          </h2>
+          
+          <div className="flex items-center gap-3">
+            <label className="text-sm flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={roundtripEnabled}
+                onChange={(e) => setRoundtripEnabled(e.target.checked)}
+                className="rounded border-input"
+              />
+              Inkludér retur til base
+            </label>
+            {isFetchingBases && (
+              <span className="text-xs text-muted-foreground">Henter base-adresser…</span>
+            )}
+          </div>
+        </div>
+
+        {/* Map content */}
+        <div 
+          className="h-[calc(100vh-120px)] bg-background rounded-lg shadow-xl overflow-hidden border"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <RouteMapView
+            key="modal-map"
+            inspectorRoutes={groupedRoutes.inspector_routes}
+            selectedInspectorId={selectedInspectorId}
+            inspectionsMap={inspectionsMap}
+            onInspectorSelect={onInspectorSelect}
+            inspectorBases={inspectorBases}
+            roundtrip={roundtripEnabled}
+          />
+        </div>
+      </div>
+    </div>
   );
 }
