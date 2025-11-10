@@ -61,9 +61,8 @@ export function InspectorSelector({
 
   const filteredInspectors = React.useMemo(() => {
     return inspectors.filter((inspector: any) => {
-      const matchesSearch = inspector.full_name
-        ?.toLowerCase()
-        .includes(search.toLowerCase());
+      const name = inspector?.navn || inspector?.full_name || '';
+      const matchesSearch = name.toLowerCase().includes(search.toLowerCase());
       return matchesSearch;
     });
   }, [inspectors, search]);
@@ -78,31 +77,17 @@ export function InspectorSelector({
   };
 
   const hasRequiredSkill = (inspector: any) => {
-    return inspector.inspector_skills?.some(
-      (skill: any) => skill.inspection_type === inspectionType
-    );
+    const types: string[] = inspector?.synstyper || [];
+    return types.some((t) => (t || '').toLowerCase() === (inspectionType || '').toLowerCase());
   };
-
   const getTimeRanges = (inspector: any) => {
-    const availability = inspector.supabase_availability?.[0];
-    if (!availability) return [];
-    
-    const timeRanges = availability.availability_time_ranges || [];
-    if (timeRanges.length > 0) {
-      return timeRanges;
+    const start = inspector?.start_tid || inspector?.start_time_local;
+    const end = inspector?.slut_tid || inspector?.end_time_local;
+    if (start && end) {
+      return [{ start_time: start, end_time: end }];
     }
-    
-    // Fallback to start/end time
-    if (availability.start_time_local && availability.end_time_local) {
-      return [{
-        start_time: availability.start_time_local,
-        end_time: availability.end_time_local,
-      }];
-    }
-    
     return [];
   };
-
   const getAvailabilitySource = (inspector: any) => {
     return inspector.supabase_availability?.[0]?.source || "workfeed";
   };
@@ -142,13 +127,12 @@ export function InspectorSelector({
                 {filteredInspectors.map((inspector: any) => {
                   const hasSkill = hasRequiredSkill(inspector);
                   const timeRanges = getTimeRanges(inspector);
-                  const source = getAvailabilitySource(inspector);
 
                   return (
                     <button
-                      key={inspector.id}
+                      key={inspector.inspector_uuid || inspector.id}
                       onClick={() => {
-                        onSelect(inspector.id, inspector.full_name);
+                        onSelect(inspector.inspector_uuid || inspector.id, inspector.navn || inspector.full_name);
                         onOpenChange(false);
                       }}
                       className="w-full p-4 rounded-lg border bg-card hover:bg-accent transition-colors text-left"
@@ -156,13 +140,13 @@ export function InspectorSelector({
                       <div className="flex items-start gap-3">
                         <Avatar className="h-10 w-10">
                           <AvatarFallback className="bg-primary/10 text-primary">
-                            {getInitials(inspector.full_name)}
+                            {getInitials((inspector.navn || inspector.full_name || ''))}
                           </AvatarFallback>
                         </Avatar>
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <h4 className="font-medium">{inspector.full_name}</h4>
+                            <h4 className="font-medium">{inspector.navn || inspector.full_name}</h4>
                             {hasSkill ? (
                               <CheckCircle2 className="h-4 w-4 text-success" />
                             ) : (
@@ -171,17 +155,11 @@ export function InspectorSelector({
                           </div>
 
                           <div className="flex flex-wrap gap-1 mb-2">
-                            {source === "workfeed" ? (
+                            {hasSkill ? (
                               <Badge variant="outline" className="text-xs bg-success/10 text-success border-success/20">
-                                Tilgængelig fra WorkFeed
+                                Kvalificeret
                               </Badge>
                             ) : (
-                              <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/20">
-                                Manuelt tilgængelig
-                              </Badge>
-                            )}
-                            
-                            {!hasSkill && (
                               <Badge variant="outline" className="text-xs bg-warning/10 text-warning border-warning/20">
                                 Mangler kompetence
                               </Badge>
