@@ -91,6 +91,7 @@ export interface VrpApprovalResponse {
   success: boolean;
   vrp_run_id: string;
   approved_count: number;
+  shift_ids?: string[];
   error?: string;
 }
 

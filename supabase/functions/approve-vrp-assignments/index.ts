@@ -88,9 +88,10 @@ Deno.serve(async (req) => {
       assignment_source: "vrp",
     }));
 
-    const { error: assignmentError } = await supabase
+    const { data: createdAssignments, error: assignmentError } = await supabase
       .from("proposed_assignments")
-      .insert(proposedAssignments);
+      .insert(proposedAssignments)
+      .select("id");
 
     if (assignmentError) {
       throw new Error(
@@ -98,7 +99,54 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 4. Update inspection_queue status
+    // 4. Create shifts in supabase_shifts for WorkFeed sync
+    console.log(`Creating shifts for ${assignments.length} assignments`);
+    
+    // Fetch inspection and inspector details for each assignment
+    const assignmentIds = createdAssignments.map(a => a.id);
+    const { data: fullAssignments, error: fetchError } = await supabase
+      .from("proposed_assignments")
+      .select(`
+        *,
+        inspection:inspection_queue(address, inspection_type, department),
+        inspector:inspectors(wf_employee_id, full_name)
+      `)
+      .in("id", assignmentIds);
+
+    if (fetchError || !fullAssignments) {
+      console.error("Failed to fetch full assignment details:", fetchError);
+      throw new Error(`Failed to fetch assignment details: ${fetchError?.message}`);
+    }
+
+    // Create shifts
+    const shiftsToInsert = fullAssignments.map((assignment: any) => ({
+      inspection_queue_id: assignment.inspection_id,
+      inspector_id: assignment.inspector_id,
+      inspector_name: assignment.inspector?.full_name || "Unknown",
+      wf_employee_id: assignment.inspector?.wf_employee_id || "",
+      date_local: assignment.scheduled_date,
+      start_time_local: assignment.start_time,
+      end_time_local: assignment.end_time,
+      type: assignment.inspection?.inspection_type || "Unknown",
+      department: assignment.inspection?.department || "Unknown",
+      address: assignment.inspection?.address || "",
+      status: "ASSIGNED",
+      sync_status: "pending",
+    }));
+
+    const { data: createdShifts, error: shiftsError } = await supabase
+      .from("supabase_shifts")
+      .insert(shiftsToInsert)
+      .select("id");
+
+    if (shiftsError) {
+      console.error("Failed to create shifts:", shiftsError);
+      throw new Error(`Failed to create shifts: ${shiftsError.message}`);
+    }
+
+    console.log(`Created ${createdShifts?.length || 0} shifts for WorkFeed sync`);
+
+    // 5. Update inspection_queue status
     const { error: updateError } = await supabase
       .from("inspection_queue")
       .update({ status: "IN_VRP" })
@@ -120,6 +168,7 @@ Deno.serve(async (req) => {
         success: true,
         vrp_run_id,
         approved_count: assignments.length,
+        shift_ids: createdShifts?.map(s => s.id) || [],
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

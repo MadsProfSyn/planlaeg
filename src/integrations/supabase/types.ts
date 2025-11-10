@@ -875,9 +875,13 @@ export type Database = {
           inspection_queue_id: string | null
           inspector_id: string
           inspector_name: string
+          last_sync_attempt: string | null
           start_time_local: string | null
           start_utc: string | null
           status: string
+          sync_attempts: number | null
+          sync_error: string | null
+          sync_status: string | null
           type: string
           wf_employee_id: string
           wf_role_id: string | null
@@ -896,9 +900,13 @@ export type Database = {
           inspection_queue_id?: string | null
           inspector_id: string
           inspector_name: string
+          last_sync_attempt?: string | null
           start_time_local?: string | null
           start_utc?: string | null
           status?: string
+          sync_attempts?: number | null
+          sync_error?: string | null
+          sync_status?: string | null
           type: string
           wf_employee_id: string
           wf_role_id?: string | null
@@ -917,9 +925,13 @@ export type Database = {
           inspection_queue_id?: string | null
           inspector_id?: string
           inspector_name?: string
+          last_sync_attempt?: string | null
           start_time_local?: string | null
           start_utc?: string | null
           status?: string
+          sync_attempts?: number | null
+          sync_error?: string | null
+          sync_status?: string | null
           type?: string
           wf_employee_id?: string
           wf_role_id?: string | null
@@ -1113,6 +1125,10 @@ export type Database = {
       get_vrp_input: {
         Args: { p_inspection_ids: string[]; p_target_dates: string[] }
         Returns: Json
+      }
+      get_wf_role_id_for_inspection: {
+        Args: { p_inspection_type: string }
+        Returns: string
       }
       has_role: {
         Args: {

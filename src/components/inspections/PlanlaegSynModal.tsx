@@ -31,6 +31,8 @@ import { ErrorBoundary } from "@/components/utility/ErrorBoundary";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { TEST_MODE } from "@/lib/testMode";
+import { AlertTriangle } from "lucide-react";
 
 type InspectorBase = {
   id: string;
@@ -65,6 +67,15 @@ export function PlanlaegSynModal({
   const [isFetchingBases, setIsFetchingBases] = useState(false);
   const [roundtripEnabled, setRoundtripEnabled] = useState(true);
   const mapSectionRef = useRef<HTMLDivElement | null>(null);
+  
+  // WorkFeed sync state
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState({
+    total: 0,
+    completed: 0,
+    failed: 0,
+  });
+  const [currentSync, setCurrentSync] = useState<string | null>(null);
   
   // Manual inspector assignments (before VRP approval)
   const [manualAssignments, setManualAssignments] = useState<Record<string, {
@@ -214,10 +225,76 @@ export function PlanlaegSynModal({
         inspection_ids: selectedInspectionIds,
       });
 
-      toast({
-        title: "Syn planlagt",
-        description: `${response.approved_count} syn blev planlagt`,
+      // Check if we got shift IDs back
+      if (!response.shift_ids || response.shift_ids.length === 0) {
+        toast({
+          title: "Syn planlagt",
+          description: `${response.approved_count} syn blev planlagt (ingen vagter at synkronisere)`,
+        });
+        onApproved();
+        onClose();
+        return;
+      }
+
+      // 2. Sync shifts to WorkFeed
+      setIsSyncing(true);
+      setSyncProgress({
+        total: response.shift_ids.length,
+        completed: 0,
+        failed: 0,
       });
+
+      const syncResults = [];
+      
+      for (let i = 0; i < response.shift_ids.length; i++) {
+        const shiftId = response.shift_ids[i];
+        
+        setCurrentSync(`Synkroniserer vagt ${i + 1} af ${response.shift_ids.length}...`);
+        
+        try {
+          const syncResponse = await supabase.functions.invoke("post-to-workfeed", {
+            body: { shiftId },
+          });
+
+          if (syncResponse.data?.success) {
+            syncResults.push({ shiftId, status: "success" });
+            setSyncProgress((prev) => ({
+              ...prev,
+              completed: prev.completed + 1,
+            }));
+          } else {
+            throw new Error(syncResponse.data?.error || syncResponse.error?.message || "Sync failed");
+          }
+        } catch (error) {
+          console.error(`Failed to sync shift ${shiftId}:`, error);
+          syncResults.push({
+            shiftId,
+            status: "failed",
+            error: error instanceof Error ? error.message : String(error),
+          });
+          setSyncProgress((prev) => ({
+            ...prev,
+            failed: prev.failed + 1,
+          }));
+        }
+      }
+
+      // 3. Show results
+      const successCount = syncResults.filter((r) => r.status === "success").length;
+      const failedCount = syncResults.filter((r) => r.status === "failed").length;
+
+      if (failedCount === 0) {
+        toast({
+          title: "Syn planlagt og synkroniseret",
+          description: `✅ ${successCount} vagter er oprettet i WorkFeed`,
+        });
+      } else {
+        toast({
+          title: "Delvis synkronisering",
+          description: `✅ ${successCount} synkroniseret • ⚠️ ${failedCount} fejlede`,
+          variant: "default",
+        });
+      }
 
       onApproved();
       onClose();
@@ -229,6 +306,8 @@ export function PlanlaegSynModal({
       });
     } finally {
       setIsSubmitting(false);
+      setIsSyncing(false);
+      setCurrentSync(null);
     }
   };
 
@@ -399,6 +478,17 @@ export function PlanlaegSynModal({
               Planlæg syn ({selectedInspectionIds.length} valgt)
             </DialogTitle>
           </DialogHeader>
+
+          {/* TEST MODE WARNING */}
+          {TEST_MODE && (
+            <Alert className="border-orange-500 bg-orange-50 dark:bg-orange-950 dark:border-orange-700">
+              <AlertTriangle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+              <AlertDescription className="text-orange-900 dark:text-orange-100">
+                <strong>TEST MODE AKTIV</strong> - Kun test-inspektører (Albert, Mads, Jobson) kan bruges.
+                Sæt <code className="bg-orange-100 dark:bg-orange-900 px-1 rounded text-xs">TEST_MODE = false</code> i <code className="text-xs">src/lib/testMode.ts</code> for at bruge alle inspektører.
+              </AlertDescription>
+            </Alert>
+          )}
 
         <div className="flex-1 overflow-hidden">
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 h-full">
@@ -766,29 +856,64 @@ export function PlanlaegSynModal({
           </div>
         </div>
 
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="outline" disabled={isSubmitting}>
-              Annullér
+        <DialogFooter className="flex-col gap-2">
+          {/* Progress indicator */}
+          {isSyncing && syncProgress.total > 0 && (
+            <div className="space-y-2 w-full">
+              <Progress 
+                value={(syncProgress.completed + syncProgress.failed) / syncProgress.total * 100} 
+                className="h-2"
+              />
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>
+                  ✅ {syncProgress.completed} synkroniseret
+                  {syncProgress.failed > 0 && (
+                    <span className="text-orange-600 dark:text-orange-400 ml-2">
+                      ⚠️ {syncProgress.failed} fejlede
+                    </span>
+                  )}
+                </span>
+                <span>
+                  {Math.round((syncProgress.completed + syncProgress.failed) / syncProgress.total * 100)}%
+                </span>
+              </div>
+            </div>
+          )}
+          
+          <div className="flex w-full justify-end gap-2">
+            <DialogClose asChild>
+              <Button variant="outline" disabled={isSubmitting || isSyncing}>
+                Annullér
+              </Button>
+            </DialogClose>
+            <Button
+              onClick={handleApprove}
+              disabled={hasMissingData || isSubmitting || isSyncing || !routePlan}
+            >
+              {isSubmitting || isSyncing ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>
+                    {isSyncing 
+                      ? currentSync || "Synkroniserer..." 
+                      : "Planlægger..."
+                    }
+                  </span>
+                  {syncProgress.total > 0 && (
+                    <span className="text-xs ml-1">
+                      ({syncProgress.completed + syncProgress.failed}/{syncProgress.total})
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  Godkend syn
+                </>
+              )}
             </Button>
-          </DialogClose>
-          <Button
-            onClick={handleApprove}
-            disabled={hasMissingData || isSubmitting || !routePlan}
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Planlægger...
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="mr-2 h-4 w-4" />
-                Godkend syn
-              </>
-            )}
-          </Button>
-          </DialogFooter>
+          </div>
+        </DialogFooter>
         </DialogContent>
       </Dialog>
 
