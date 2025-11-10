@@ -221,7 +221,7 @@ export function InspectorSelectorWithFilters({
 
             <div>
               <label className="text-sm font-medium mb-2 block">
-                Dato interval
+                Dato
               </label>
               <DateRangePicker
                 dateFrom={filters.from}

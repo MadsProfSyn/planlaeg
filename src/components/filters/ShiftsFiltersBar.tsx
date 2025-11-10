@@ -76,7 +76,7 @@ export function ShiftsFiltersBar({
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Dato interval</label>
+            <label className="text-sm font-medium">Dato</label>
             <DateRangePicker
               dateFrom={filters.dateFrom}
               dateTo={filters.dateTo}

@@ -602,8 +602,8 @@ export function RouteMapView({
   }, [selectedInspectorId, inspectorRoutes, inspectionsMap, mapLoaded, inspectorBases]);
 
   return (
-    <div className="relative h-[500px] w-full rounded-lg overflow-hidden border">
-      <div ref={mapContainer} className="absolute inset-0" />
+    <div className="relative w-full h-full rounded-lg overflow-hidden border">
+      <div ref={mapContainer} className="absolute inset-0 w-full h-full" />
 
       {/* Loading Overlay */}
       {!mapLoaded && !initError && (

@@ -83,7 +83,7 @@ export function AvailabilityFiltersBar({
 
         <div>
           <label className="text-sm font-medium text-foreground mb-2 block">
-            Dato interval
+            Dato
           </label>
           <DateRangePicker
             dateFrom={filters.from}
