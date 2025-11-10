@@ -72,11 +72,13 @@ function getTimeDifference(startTime: string, endTime: string): number {
 }
 
 export function RouteOverviewCard({ assignment, sequence, address }: RouteOverviewCardProps) {
-  // Calculate actual inspection times
-  const arrivalTime = addMinutes(assignment.start_time, assignment.travel_from_previous_mins);
-  const inspectionStartTime = roundUpToNearest5(arrivalTime);
-  const inspectionDuration = getTimeDifference(assignment.start_time, assignment.end_time);
-  const inspectionEndTime = addMinutes(inspectionStartTime, inspectionDuration);
+  // VRP returns inspection start/end times directly
+  const inspectionStartTime = assignment.start_time;
+  const inspectionEndTime = assignment.end_time;
+  // Calculate arrival by subtracting travel time from inspection start
+  const arrivalTime = assignment.travel_from_previous_mins > 0
+    ? addMinutes(assignment.start_time, -assignment.travel_from_previous_mins)
+    : assignment.start_time;
 
   return (
     <Card className="p-4 hover:shadow-md transition-shadow">
