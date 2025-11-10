@@ -75,8 +75,8 @@ export function InspectorSelectorWithFilters({
     afdeling: [] as string[],
     from: preferredDate,
     to: preferredDate,
-    synstyper: [] as string[],
-    synstyper_all: true,
+    synstyper: [inspectionType],
+    synstyper_all: false,
     q: '',
   });
 

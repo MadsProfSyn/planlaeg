@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { getAvailableInspectors } from "@/lib/scheduled";
+import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 
 interface InspectorSelectorProps {
@@ -33,9 +33,30 @@ export function InspectorSelector({
   const [search, setSearch] = React.useState("");
 
   const { data: inspectors = [], isLoading } = useQuery({
-    queryKey: ["available-inspectors", date],
-    queryFn: () => getAvailableInspectors(date),
-    enabled: open && !!date,
+    queryKey: ["available-inspectors", date, inspectionType],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke(
+        "fetch-available-inspectors",
+        {
+          body: {
+            from: date,
+            to: date,
+            synstyper: [inspectionType],
+            synstyper_all: false,
+            afdeling: null,
+            q: '',
+            page: 1,
+            pageSize: 9999,
+            no_pagination: true,
+            sortBy: 'navn',
+            sortOrder: 'asc'
+          },
+        }
+      );
+      if (error) throw error;
+      return data?.data || [];
+    },
+    enabled: open && !!date && !!inspectionType,
   });
 
   const filteredInspectors = React.useMemo(() => {
