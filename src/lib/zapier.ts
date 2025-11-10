@@ -42,7 +42,9 @@ export async function sendToZapierWebhook(
   retryCount = 0
 ): Promise<ZapierWebhookResponse> {
   try {
-    console.log(`[Zapier] Sending payload (attempt ${retryCount + 1}/${MAX_RETRIES + 1}):`, payload);
+    console.log(`[Zapier] Attempt ${retryCount + 1}/${MAX_RETRIES + 1}`);
+    console.log(`[Zapier] Sending payload:`, JSON.stringify(payload, null, 2));
+    console.log(`[Zapier] Webhook URL:`, ZAPIER_WEBHOOK_URL);
     
     const response = await fetch(ZAPIER_WEBHOOK_URL, {
       method: "POST",
@@ -53,11 +55,16 @@ export async function sendToZapierWebhook(
       body: JSON.stringify(payload),
     });
 
+    console.log(`[Zapier] Response status:`, response.status);
+    console.log(`[Zapier] Response ok:`, response.ok);
+    
     if (!response.ok) {
+      const responseText = await response.text();
+      console.error(`[Zapier] Error response:`, responseText);
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
-    console.log("[Zapier] Webhook sent successfully");
+    console.log("[Zapier] ✅ Webhook sent successfully");
     return { success: true };
     
   } catch (error) {

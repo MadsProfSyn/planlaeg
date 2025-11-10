@@ -245,17 +245,25 @@ export function PlanlaegSynModal({
 
       // 2. Send to Zapier webhook (ALWAYS happens, regardless of WorkFeed)
       console.log("[Godkend] Sending data to Zapier webhook...");
+      console.log("[Godkend] Available inspections data:", inspections);
+      console.log("[Godkend] Assignments to send:", assignments);
       
       try {
         // Build payloads for each assignment
         const zapierPayloads: ZapierSynPayload[] = assignments.map((assignment) => {
           const inspection = inspections.find(i => i.id === assignment.inspection_id);
           
+          console.log(`[Zapier] Building payload for inspection ${assignment.inspection_id}:`, {
+            found: !!inspection,
+            inspection_data: inspection,
+            assignment_data: assignment
+          });
+          
           // Combine scheduled_date and start_time into ISO8601 timestamps
           const startDateTime = new Date(`${assignment.scheduled_date}T${assignment.start_time}`);
           const endDateTime = new Date(`${assignment.scheduled_date}T${assignment.end_time}`);
           
-          return {
+          const payload = {
             // Identification
             inspection_id: assignment.inspection_id,
             monday_item_id: inspection?.monday_item_id || null,
@@ -281,7 +289,13 @@ export function PlanlaegSynModal({
             approved_at: new Date().toISOString(),
             vrp_run_id: vrpRunId,
           };
+          
+          console.log(`[Zapier] Payload for ${assignment.inspection_id}:`, JSON.stringify(payload, null, 2));
+          return payload;
         });
+        
+        console.log("[Zapier] Total payloads to send:", zapierPayloads.length);
+        console.log("[Zapier] Complete batch:", JSON.stringify(zapierPayloads, null, 2));
         
         // Send batch to Zapier (runs with retries)
         const zapierResult = await sendBatchToZapier(zapierPayloads);
