@@ -9,8 +9,143 @@ const WORKFEED_API_URL = "https://europe-west1-production-eu-327a3.cloudfunction
 const WORKFEED_API_KEY = Deno.env.get("WORKFEED_API_KEY") ?? "";
 const WORKFEED_COMPANY_ID = Deno.env.get("WORKFEED_COMPANY_ID") ?? "";
 
+// Role name mapping (inspection type to WorkFeed role code)
+const ROLE_MAPPING: Record<string, string> = {
+  "Fraflytningssyn": "FF",
+  "Indflytningssyn": "IF",
+  "Projektsyn": "PS",
+  "Proforma": "PA",
+  "TMS": "TMS"
+};
+
+// Cache for departments and roles (5 minute TTL)
+const cache = {
+  departments: null as any[] | null,
+  roles: null as any[] | null,
+  departmentsExpiry: 0,
+  rolesExpiry: 0,
+};
+
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 interface PostWorkfeedRequest {
   shiftId: string;
+}
+
+/**
+ * Get cached departments from WorkFeed API
+ */
+async function getCachedDepartments(): Promise<any[]> {
+  const now = Date.now();
+  
+  if (cache.departments && cache.departmentsExpiry > now) {
+    console.log('[post-to-workfeed] Using cached departments');
+    return cache.departments;
+  }
+
+  console.log('[post-to-workfeed] Fetching departments from WorkFeed API');
+  const response = await fetch(
+    `${WORKFEED_API_URL}/companies/${WORKFEED_COMPANY_ID}/departments`,
+    { headers: { Authorization: WORKFEED_API_KEY } }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch departments: ${response.status}`);
+  }
+
+  cache.departments = await response.json();
+  cache.departmentsExpiry = now + CACHE_TTL_MS;
+  
+  console.log(`[post-to-workfeed] Cached ${cache.departments.length} departments`);
+  return cache.departments;
+}
+
+/**
+ * Get cached roles from WorkFeed API
+ */
+async function getCachedRoles(): Promise<any[]> {
+  const now = Date.now();
+  
+  if (cache.roles && cache.rolesExpiry > now) {
+    console.log('[post-to-workfeed] Using cached roles');
+    return cache.roles;
+  }
+
+  console.log('[post-to-workfeed] Fetching roles from WorkFeed API');
+  const response = await fetch(
+    `${WORKFEED_API_URL}/companies/${WORKFEED_COMPANY_ID}/roles`,
+    { headers: { Authorization: WORKFEED_API_KEY } }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch roles: ${response.status}`);
+  }
+
+  cache.roles = await response.json();
+  cache.rolesExpiry = now + CACHE_TTL_MS;
+  
+  console.log(`[post-to-workfeed] Cached ${cache.roles.length} roles`);
+  return cache.roles;
+}
+
+/**
+ * Get WorkFeed department ID by name
+ */
+async function getWorkfeedDepartmentId(departmentName: string): Promise<string> {
+  console.log(`[post-to-workfeed] Looking up department: ${departmentName}`);
+  
+  const departments = await getCachedDepartments();
+  
+  for (const dept of departments) {
+    if (dept.name === departmentName) {
+      console.log(`[post-to-workfeed] ✅ Matched department: ${dept.name} → ${dept.id}`);
+      return dept.id;
+    }
+  }
+
+  throw new Error(`Department '${departmentName}' not found in WorkFeed. Available: ${departments.map(d => d.name).join(', ')}`);
+}
+
+/**
+ * Get WorkFeed role ID for department and inspection type
+ * Dynamically fetches from WorkFeed API (source of truth)
+ */
+async function getWorkfeedRoleId(
+  departmentName: string,
+  inspectionType: string
+): Promise<string> {
+  console.log(`[post-to-workfeed] Looking up role for: ${departmentName} / ${inspectionType}`);
+  
+  // 1. Get department ID
+  const departmentId = await getWorkfeedDepartmentId(departmentName);
+
+  // 2. Map inspection type to role short code
+  const roleShortCode = ROLE_MAPPING[inspectionType];
+  if (!roleShortCode) {
+    throw new Error(`Unknown inspection type: ${inspectionType}. Valid types: ${Object.keys(ROLE_MAPPING).join(', ')}`);
+  }
+  
+  console.log(`[post-to-workfeed] Mapped ${inspectionType} → ${roleShortCode}`);
+
+  // 3. Fetch all roles from WorkFeed
+  const roles = await getCachedRoles();
+  console.log(`[post-to-workfeed] Searching ${roles.length} roles for match`);
+
+  // 4. Find the role that matches department AND name
+  for (const role of roles) {
+    if (
+      role.departmentID === departmentId &&
+      !role.isDeleted &&
+      role.name === roleShortCode
+    ) {
+      console.log(`[post-to-workfeed] ✅ Found matching role: ${role.name} (${role.id}) for ${departmentName}`);
+      return role.id;
+    }
+  }
+
+  throw new Error(
+    `No matching role found for department '${departmentName}' and type '${roleShortCode}'. Check WorkFeed configuration.`
+  );
 }
 
 Deno.serve(async (req) => {
@@ -43,21 +178,13 @@ Deno.serve(async (req) => {
       inspector: shift.inspector_name,
       date: shift.date_local,
       type: shift.type,
+      department: shift.department,
     });
 
-    // 2. Get WorkFeed role ID from inspection type
-    const { data: roleID, error: roleError } = await supabase.rpc(
-      "get_wf_role_id_for_inspection",
-      {
-        p_inspection_type: shift.type,
-      }
-    );
-
-    if (roleError || !roleID) {
-      throw new Error(`Role ID not found for type: ${shift.type} - ${roleError?.message}`);
-    }
-
-    console.log(`[post-to-workfeed] Role ID: ${roleID}`);
+    // 2. Get WorkFeed role ID dynamically from WorkFeed API
+    const roleID = await getWorkfeedRoleId(shift.department, shift.type);
+    
+    console.log(`[post-to-workfeed] ✅ Found role ID: ${roleID} for ${shift.department} / ${shift.type}`);
 
     // 3. Convert local time to UTC (Copenhagen = UTC+1 in winter, UTC+2 in summer)
     // We assume the times in DB are already in local Copenhagen time
@@ -140,13 +267,23 @@ Deno.serve(async (req) => {
 
     // Log error to shift (best effort)
     try {
-      const { shiftId } = await req.json();
+      const requestClone = req.clone();
+      const body = await requestClone.json();
+      const { shiftId } = body;
+      
+      // Get current sync_attempts
+      const { data: currentShift } = await supabase
+        .from("supabase_shifts")
+        .select("sync_attempts")
+        .eq("id", shiftId)
+        .single();
+
       await supabase
         .from("supabase_shifts")
         .update({
           sync_status: "sync_failed",
           sync_error: error.message,
-          sync_attempts: supabase.from("supabase_shifts").select("sync_attempts").eq("id", shiftId).single().then(r => (r.data?.sync_attempts ?? 0) + 1),
+          sync_attempts: (currentShift?.sync_attempts || 0) + 1,
           last_sync_attempt: new Date().toISOString(),
         })
         .eq("id", shiftId);
