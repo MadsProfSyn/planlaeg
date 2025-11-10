@@ -1,6 +1,6 @@
 import * as React from "react";
 import { GlobalSearchInput } from "@/components/filters/GlobalSearchInput";
-import { DateRangePicker } from "@/components/filters/DateRangePicker";
+import { SingleDatePicker } from "@/components/filters/SingleDatePicker";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
 import {
@@ -19,9 +19,8 @@ interface InspectionsFiltersBarProps {
   regions: string[];
   selectedRegion: string;
   onRegionChange: (region: string) => void;
-  dateFrom?: string;
-  dateTo?: string;
-  onDateChange: (dateFrom?: string, dateTo?: string) => void;
+  date?: string;
+  onDateChange: (date?: string) => void;
   onClearAll: () => void;
   resultCount: number;
   isLoading?: boolean;
@@ -34,15 +33,14 @@ export function InspectionsFiltersBar({
   regions,
   selectedRegion,
   onRegionChange,
-  dateFrom,
-  dateTo,
+  date,
   onDateChange,
   onClearAll,
   resultCount,
   isLoading = false,
 }: InspectionsFiltersBarProps) {
   const hasActiveFilters =
-    searchQuery.length >= 2 || selectedRegion !== "all" || dateFrom || dateTo;
+    searchQuery.length >= 2 || selectedRegion !== "all" || date;
 
   return (
     <div className="space-y-4">
@@ -54,11 +52,13 @@ export function InspectionsFiltersBar({
           className="w-full sm:w-80"
         />
 
-        <DateRangePicker
-          dateFrom={dateFrom}
-          dateTo={dateTo}
-          onDateChange={onDateChange}
-        />
+        <div className="w-[200px]">
+          <SingleDatePicker
+            date={date}
+            onDateChange={onDateChange}
+            placeholder="Vælg dato"
+          />
+        </div>
 
         <Select value={selectedRegion} onValueChange={onRegionChange}>
           <SelectTrigger className="w-[200px]">
@@ -98,16 +98,12 @@ export function InspectionsFiltersBar({
               />
             </Badge>
           )}
-          {(dateFrom || dateTo) && (
+          {date && (
             <Badge variant="secondary" className="gap-1">
-              {dateFrom && dateTo
-                ? `${dateFrom} - ${dateTo}`
-                : dateFrom
-                ? `Fra ${dateFrom}`
-                : `Til ${dateTo}`}
+              {date}
               <X
                 className="h-3 w-3 cursor-pointer"
-                onClick={() => onDateChange(undefined, undefined)}
+                onClick={() => onDateChange(undefined)}
               />
             </Badge>
           )}

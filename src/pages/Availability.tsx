@@ -8,8 +8,7 @@ import { Users } from "lucide-react";
 
 interface AvailabilityFilters {
   afdeling: string[];
-  from: string;
-  to: string;
+  date: string;
   synstyper: string[];
   synstyper_all: boolean;
   q: string;
@@ -25,8 +24,7 @@ interface AvailabilityData {
 
 const DEFAULT_FILTERS: AvailabilityFilters = {
   afdeling: [],
-  from: new Date().toISOString().split('T')[0],
-  to: new Date(Date.now() + 6 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // today + 6 days
+  date: new Date().toISOString().split('T')[0],
   synstyper: ["Proforma", "Projektsyn", "Indflytningssyn", "Fraflytningssyn"],
   synstyper_all: true,
   q: "",
@@ -54,8 +52,7 @@ export default function AvailabilityPage() {
     const urlFilters = { ...DEFAULT_FILTERS };
     
     const afdeling = searchParams.get("afdeling");
-    const from = searchParams.get("from");
-    const to = searchParams.get("to");
+    const date = searchParams.get("date");
     const synstyper = searchParams.get("synstyper");
     const synstyper_all = searchParams.get("synstyper_all");
     const q = searchParams.get("q");
@@ -71,8 +68,7 @@ export default function AvailabilityPage() {
         urlFilters.afdeling = [afdeling];
       }
     }
-    if (from) urlFilters.from = from;
-    if (to) urlFilters.to = to;
+    if (date) urlFilters.date = date;
     if (q) urlFilters.q = q;
     if (synstyper) {
       try {
@@ -97,8 +93,7 @@ export default function AvailabilityPage() {
     const params = new URLSearchParams();
     
     if (filters.afdeling.length > 0) params.set("afdeling", encodeURIComponent(JSON.stringify(filters.afdeling)));
-    if (filters.from !== DEFAULT_FILTERS.from) params.set("from", filters.from);
-    if (filters.to !== DEFAULT_FILTERS.to) params.set("to", filters.to);
+    if (filters.date !== DEFAULT_FILTERS.date) params.set("date", filters.date);
     if (filters.q) params.set("q", filters.q);
     if (!filters.synstyper_all || JSON.stringify(filters.synstyper) !== JSON.stringify(DEFAULT_FILTERS.synstyper)) {
       params.set("synstyper", encodeURIComponent(JSON.stringify(filters.synstyper)));
@@ -133,8 +128,8 @@ export default function AvailabilityPage() {
     setIsLoading(true);
     try {
       const params = {
-        from: filters.from,
-        to: filters.to,
+        from: filters.date,
+        to: filters.date,
         afdeling: filters.afdeling,
         synstyper: filters.synstyper,
         synstyper_all: filters.synstyper_all,
@@ -205,8 +200,8 @@ export default function AvailabilityPage() {
     setIsLoading(true);
     try {
       // Convert date strings to ISO format for the edge function
-      const fromISO = new Date(filters.from).toISOString();
-      const toISO = new Date(filters.to + 'T23:59:59').toISOString();
+      const fromISO = new Date(filters.date).toISOString();
+      const toISO = new Date(filters.date + 'T23:59:59').toISOString();
 
       toast({
         title: "Synkroniserer tilgængelighed",

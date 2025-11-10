@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { DepartmentMultiSelect } from "@/components/filters/DepartmentMultiSelect";
-import { DateRangePicker } from "@/components/filters/DateRangePicker";
+import { SingleDatePicker } from "@/components/filters/SingleDatePicker";
 import { SynsTypeMultiSelect } from "@/components/filters/SynsTypeMultiSelect";
 import { GlobalSearchInput } from "@/components/filters/GlobalSearchInput";
 import { Card } from "@/components/ui/card";
@@ -9,8 +9,7 @@ import { Search, RotateCcw, RefreshCw } from "lucide-react";
 
 interface AvailabilityFilters {
   afdeling: string[];
-  from: string;
-  to: string;
+  date: string;
   synstyper: string[];
   synstyper_all: boolean;
   q: string;
@@ -56,13 +55,10 @@ export function AvailabilityFiltersBar({
     onFiltersChange(newFilters);
   };
 
-  const handleDateRangeChange = (dateFrom?: string, dateTo?: string) => {
+  const handleDateChange = (date?: string) => {
     const newFilters = { ...filters };
-    if (dateFrom) {
-      newFilters.from = dateFrom;
-    }
-    if (dateTo) {
-      newFilters.to = dateTo;
+    if (date) {
+      newFilters.date = date;
     }
     onFiltersChange(newFilters);
   };
@@ -85,10 +81,10 @@ export function AvailabilityFiltersBar({
           <label className="text-sm font-medium text-foreground mb-2 block">
             Dato
           </label>
-          <DateRangePicker
-            dateFrom={filters.from}
-            dateTo={filters.to}
-            onDateChange={handleDateRangeChange}
+          <SingleDatePicker
+            date={filters.date}
+            onDateChange={handleDateChange}
+            placeholder="Vælg dato"
           />
         </div>
 

@@ -31,8 +31,7 @@ export default function InspectionsPage() {
   const [currentPage, setCurrentPage] = React.useState(1);
   const [selectedIds, setSelectedIds] = React.useState<number[]>([]);
   const [selectedRegion, setSelectedRegion] = React.useState("all");
-  const [dateFrom, setDateFrom] = React.useState<string | undefined>();
-  const [dateTo, setDateTo] = React.useState<string | undefined>();
+  const [date, setDate] = React.useState<string | undefined>();
   const [filters, setFilters] = React.useState<MondayItemFilters>({});
   const [isPlanningModalOpen, setIsPlanningModalOpen] = React.useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = React.useState(false);
@@ -60,14 +59,14 @@ export default function InspectionsPage() {
   React.useEffect(() => {
     const newFilters: MondayItemFilters = {
       searchQuery: searchQuery || undefined,
-      dateFrom: dateFrom,
-      dateTo: dateTo,
+      dateFrom: date,
+      dateTo: date,
       regions: selectedRegion !== "all" ? [selectedRegion] : undefined,
     };
     setFilters(newFilters);
     // Reset to first page when filters change
     setCurrentPage(1);
-  }, [searchQuery, dateFrom, dateTo, selectedRegion]);
+  }, [searchQuery, date, selectedRegion]);
 
   // Update URL when search query changes
   React.useEffect(() => {
@@ -259,16 +258,10 @@ export default function InspectionsPage() {
     setSearchQuery("");
   };
 
-  const handleDateChange = (from?: string, to?: string) => {
-    setDateFrom(from);
-    setDateTo(to);
-  };
-
   const handleClearAllFilters = () => {
     setSearchQuery("");
     setSelectedRegion("all");
-    setDateFrom(undefined);
-    setDateTo(undefined);
+    setDate(undefined);
   };
 
   const handleDeleteAll = async () => {
@@ -354,9 +347,8 @@ export default function InspectionsPage() {
             regions={regions}
             selectedRegion={selectedRegion}
             onRegionChange={setSelectedRegion}
-            dateFrom={dateFrom}
-            dateTo={dateTo}
-            onDateChange={handleDateChange}
+            date={date}
+            onDateChange={setDate}
             onClearAll={handleClearAllFilters}
             resultCount={totalCount}
             isLoading={isLoading}

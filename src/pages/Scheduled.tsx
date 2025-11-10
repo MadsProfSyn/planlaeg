@@ -17,8 +17,7 @@ export default function ScheduledPage() {
   const [selectedDepartments, setSelectedDepartments] = React.useState<string[]>([]);
   const [status, setStatus] = React.useState("all");
   const [selectedTypes, setSelectedTypes] = React.useState<string[]>([]);
-  const [dateFrom, setDateFrom] = React.useState<string | undefined>();
-  const [dateTo, setDateTo] = React.useState<string | undefined>();
+  const [date, setDate] = React.useState<string | undefined>();
 
   // Sort states
   const [sortColumn, setSortColumn] = React.useState<SortColumn | null>(null);
@@ -37,11 +36,13 @@ export default function ScheduledPage() {
   const backendFilters: ScheduledFilters = React.useMemo(() => {
     const filters: ScheduledFilters = {};
     if (selectedDepartments.length > 0) filters.departments = selectedDepartments;
-    if (dateFrom) filters.dateFrom = dateFrom;
-    if (dateTo) filters.dateTo = dateTo;
+    if (date) {
+      filters.dateFrom = date;
+      filters.dateTo = date;
+    }
     if (status !== "all") filters.status = status;
     return filters;
-  }, [selectedDepartments, dateFrom, dateTo, status]);
+  }, [selectedDepartments, date, status]);
 
   // Fetch proposed assignments
   const {
@@ -110,9 +111,8 @@ export default function ScheduledPage() {
     }
   };
 
-  const handleDateChange = (from?: string, to?: string) => {
-    setDateFrom(from);
-    setDateTo(to);
+  const handleDateChange = (newDate?: string) => {
+    setDate(newDate);
   };
 
   const handleClearAll = () => {
@@ -120,8 +120,7 @@ export default function ScheduledPage() {
     setSelectedDepartments([]);
     setStatus("all");
     setSelectedTypes([]);
-    setDateFrom(undefined);
-    setDateTo(undefined);
+    setDate(undefined);
     setSortColumn(null);
     setSortDirection("asc");
   };
@@ -162,8 +161,7 @@ export default function ScheduledPage() {
             types={["Proforma", "Projektsyn", "Indflytningssyn", "Fraflytningssyn"]}
             selectedTypes={selectedTypes}
             onTypesChange={setSelectedTypes}
-            dateFrom={dateFrom}
-            dateTo={dateTo}
+            date={date}
             onDateChange={handleDateChange}
             onClearAll={handleClearAll}
             resultCount={sortedAssignments.length}
