@@ -243,7 +243,78 @@ export function PlanlaegSynModal({
         inspection_ids: selectedInspectionIds,
       });
 
-      // Check if we got shift IDs back
+      // 2. Send to Zapier webhook (ALWAYS happens, regardless of WorkFeed)
+      console.log("[Godkend] Sending data to Zapier webhook...");
+      
+      try {
+        // Build payloads for each assignment
+        const zapierPayloads: ZapierSynPayload[] = assignments.map((assignment) => {
+          const inspection = inspections.find(i => i.id === assignment.inspection_id);
+          
+          // Combine scheduled_date and start_time into ISO8601 timestamps
+          const startDateTime = new Date(`${assignment.scheduled_date}T${assignment.start_time}`);
+          const endDateTime = new Date(`${assignment.scheduled_date}T${assignment.end_time}`);
+          
+          return {
+            // Identification
+            inspection_id: assignment.inspection_id,
+            monday_item_id: inspection?.monday_item_id || null,
+            
+            // Inspector
+            inspector_id: assignment.inspector_id,
+            inspector_name: assignment.inspector_name,
+            
+            // Scheduling (ISO8601 format)
+            scheduled_date: assignment.scheduled_date,
+            start_time: startDateTime.toISOString(),
+            end_time: endDateTime.toISOString(),
+            
+            // Inspection details
+            inspection_type: assignment.inspection_type || inspection?.inspection_type || "",
+            address: assignment.inspection_address || inspection?.address || "",
+            customer_name: inspection?.customer_name || null,
+            department: inspection?.department || "",
+            rooms: inspection?.rooms || 0,
+            lease_number: inspection?.lease_number || null,
+            
+            // Metadata
+            approved_at: new Date().toISOString(),
+            vrp_run_id: vrpRunId,
+          };
+        });
+        
+        // Send batch to Zapier (runs with retries)
+        const zapierResult = await sendBatchToZapier(zapierPayloads);
+        
+        if (zapierResult.success === zapierPayloads.length) {
+          toast({
+            title: "Monday.com opdateret",
+            description: `✅ ${zapierResult.success} syn synkroniseret`,
+            duration: 3000,
+          });
+        } else if (zapierResult.success > 0) {
+          toast({
+            title: "Delvis Monday.com opdatering",
+            description: `✅ ${zapierResult.success} opdateret • ⚠️ ${zapierResult.failed} afventer`,
+            duration: 3000,
+          });
+        } else {
+          toast({
+            title: "Monday.com afventer",
+            description: "Synene er godkendt, men Monday.com kunne ikke opdateres endnu.",
+            duration: 3000,
+          });
+        }
+      } catch (zapierError) {
+        console.error("[Godkend] Zapier webhook error:", zapierError);
+        toast({
+          title: "Monday.com afventer",
+          description: "Synene er godkendt, men Monday.com kunne ikke opdateres endnu.",
+          duration: 3000,
+        });
+      }
+
+      // 3. Check if we got shift IDs back
       if (!response.shift_ids || response.shift_ids.length === 0) {
         toast({
           title: "Syn planlagt",
