@@ -89,62 +89,95 @@ async function getCachedRoles(): Promise<any[]> {
 }
 
 /**
- * Get WorkFeed department ID by name
+ * Build WorkFeed comment in the required format:
+ * 
+ * <address>
+ * 
+ * <notes with DYMO replacement>
+ * 
+ * OBS: <obs text> (only if not blank)
  */
-async function getWorkfeedDepartmentId(departmentName: string): Promise<string> {
-  console.log(`[post-to-workfeed] Looking up department: ${departmentName}`);
-  
-  const departments = await getCachedDepartments();
-  
-  for (const dept of departments) {
-    if (dept.name === departmentName) {
-      console.log(`[post-to-workfeed] ✅ Matched department: ${dept.name} → ${dept.id}`);
-      return dept.id;
-    }
+function buildWorkfeedComment(inspection: any): string {
+  if (!inspection) {
+    console.warn('[post-to-workfeed] No inspection data available for comment');
+    return "";
   }
 
-  throw new Error(`Department '${departmentName}' not found in WorkFeed. Available: ${departments.map(d => d.name).join(', ')}`);
+  const parts: string[] = [];
+  
+  // 1. Address
+  if (inspection.address) {
+    parts.push(inspection.address);
+    parts.push(""); // blank line
+  }
+  
+  // 2. Notes with DYMO replacement (matches Python logic)
+  if (inspection.notes) {
+    let processedNotes = inspection.notes;
+    
+    // Replace '" "' placeholder with tenant name if DYMO is mentioned
+    if (processedNotes.toUpperCase().includes('DYMO') && inspection.tenant_name) {
+      processedNotes = processedNotes.replace('" "', `"${inspection.tenant_name}"`);
+    }
+    
+    parts.push(processedNotes);
+    parts.push(""); // blank line
+  }
+  
+  // 3. OBS (only if not blank)
+  if (inspection.obs && inspection.obs.trim() !== "") {
+    parts.push(`OBS: ${inspection.obs.trim()}`);
+  }
+  
+  // Remove trailing empty lines
+  while (parts.length > 0 && parts[parts.length - 1] === "") {
+    parts.pop();
+  }
+  
+  return parts.join("\n");
 }
 
 /**
- * Get WorkFeed role ID for department and inspection type
- * Dynamically fetches from WorkFeed API (source of truth)
+ * Get WorkFeed role ID for department ID and inspection type
+ * @param wfDepartmentId - WorkFeed department ID (from inspector.department.wf_department_id)
+ * @param inspectionType - Inspection type to map to role code
  */
 async function getWorkfeedRoleId(
-  departmentName: string,
+  wfDepartmentId: string,
   inspectionType: string
 ): Promise<string> {
-  console.log(`[post-to-workfeed] Looking up role for: ${departmentName} / ${inspectionType}`);
+  console.log(`[post-to-workfeed] Looking up role for: ${wfDepartmentId} / ${inspectionType}`);
   
-  // 1. Get department ID
-  const departmentId = await getWorkfeedDepartmentId(departmentName);
-
-  // 2. Map inspection type to role short code
+  // Map inspection type to role short code
   const roleShortCode = ROLE_MAPPING[inspectionType];
   if (!roleShortCode) {
-    throw new Error(`Unknown inspection type: ${inspectionType}. Valid types: ${Object.keys(ROLE_MAPPING).join(', ')}`);
+    throw new Error(
+      `Unknown inspection type: ${inspectionType}. Valid types: ${Object.keys(ROLE_MAPPING).join(', ')}`
+    );
   }
   
   console.log(`[post-to-workfeed] Mapped ${inspectionType} → ${roleShortCode}`);
 
-  // 3. Fetch all roles from WorkFeed
+  // Fetch all roles from WorkFeed
   const roles = await getCachedRoles();
   console.log(`[post-to-workfeed] Searching ${roles.length} roles for match`);
 
-  // 4. Find the role that matches department AND name
+  // Find the role that matches department ID AND name
   for (const role of roles) {
     if (
-      role.departmentID === departmentId &&
+      role.departmentID === wfDepartmentId &&
       !role.isDeleted &&
       role.name === roleShortCode
     ) {
-      console.log(`[post-to-workfeed] ✅ Found matching role: ${role.name} (${role.id}) for ${departmentName}`);
+      console.log(
+        `[post-to-workfeed] ✅ Found matching role: ${role.name} (${role.id}) for department ${wfDepartmentId}`
+      );
       return role.id;
     }
   }
 
   throw new Error(
-    `No matching role found for department '${departmentName}' and type '${roleShortCode}'. Check WorkFeed configuration.`
+    `No matching role found for department ID '${wfDepartmentId}' and type '${roleShortCode}'. Check WorkFeed configuration.`
   );
 }
 
@@ -163,10 +196,25 @@ Deno.serve(async (req) => {
 
     console.log(`[post-to-workfeed] Processing shift: ${shiftId}`);
 
-    // 1. Get shift data
+    // 1. Get shift data with inspection details
     const { data: shift, error: shiftError } = await supabase
       .from("supabase_shifts")
-      .select("*")
+      .select(`
+        *,
+        inspection:inspection_queue(
+          address,
+          notes,
+          obs,
+          tenant_name
+        ),
+        inspector:inspectors(
+          wf_employee_id,
+          full_name,
+          department:departments(
+            wf_department_id
+          )
+        )
+      `)
       .eq("id", shiftId)
       .single();
 
@@ -181,12 +229,22 @@ Deno.serve(async (req) => {
       department: shift.department,
     });
 
-    // 2. Get WorkFeed role ID dynamically from WorkFeed API
-    const roleID = await getWorkfeedRoleId(shift.department, shift.type);
-    
-    console.log(`[post-to-workfeed] ✅ Found role ID: ${roleID} for ${shift.department} / ${shift.type}`);
+    // 2. Get wf_department_id from inspector's department
+    const wfDepartmentId = shift.inspector?.department?.wf_department_id;
+    if (!wfDepartmentId) {
+      throw new Error(
+        `Inspector ${shift.inspector_name} department not found or missing wf_department_id`
+      );
+    }
 
-    // 3. Convert local time to UTC (Copenhagen = UTC+1 in winter, UTC+2 in summer)
+    console.log(`[post-to-workfeed] Using wf_department_id: ${wfDepartmentId} for ${shift.inspector_name}`);
+
+    // 3. Get WorkFeed role ID using wf_department_id
+    const roleID = await getWorkfeedRoleId(wfDepartmentId, shift.type);
+    
+    console.log(`[post-to-workfeed] ✅ Found role ID: ${roleID} for ${shift.type}`);
+
+    // 4. Convert local time to UTC (Copenhagen = UTC+1 in winter, UTC+2 in summer)
     // We assume the times in DB are already in local Copenhagen time
     const startUTC = new Date(`${shift.date_local}T${shift.start_time_local}+01:00`).toISOString();
     const endUTC = new Date(`${shift.date_local}T${shift.end_time_local}+01:00`).toISOString();
@@ -198,14 +256,14 @@ Deno.serve(async (req) => {
       utc_end: endUTC,
     });
 
-    // 4. POST to WorkFeed
+    // 5. POST to WorkFeed
     const workfeedPayload = {
       roleID: roleID,
       start: startUTC,
       end: endUTC,
       employeeID: shift.wf_employee_id,
       released: true,
-      comment: shift.address || "",
+      comment: buildWorkfeedComment(shift.inspection),
     };
 
     console.log(`[post-to-workfeed] POSTing to WorkFeed:`, workfeedPayload);
@@ -230,7 +288,7 @@ Deno.serve(async (req) => {
     const result = await workfeedResponse.json();
     console.log(`[post-to-workfeed] WorkFeed response:`, result);
 
-    // 5. Update shift with WorkFeed ID and mark as synced
+    // 6. Update shift with WorkFeed ID and mark as synced
     const { error: updateError } = await supabase
       .from("supabase_shifts")
       .update({

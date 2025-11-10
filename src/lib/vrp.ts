@@ -121,20 +121,30 @@ export async function transformMondayItemsToInspections(
   }
 
   // Transform and insert into inspection_queue
-  const inspectionRecords = mondayItems.map((item) => ({
-    monday_item_id: item.id,
-    address: item.adresse || "",
-    inspection_type: item.synstype || "Ukendt",
-    rooms: item.antal_vaerelser || 0,
-    preferred_date: item.dato_tid
-      ? new Date(item.dato_tid).toISOString().split("T")[0]
-      : new Date().toISOString().split("T")[0],
-    customer_name: item.Kunde || "",
-    lease_number: item.lejemalsnr || "",
-    department: item.landsdel || "Ukendt",
-    status: "PENDING",
-    geocode_status: "pending",
-  }));
+  const inspectionRecords = mondayItems.map((item) => {
+    const rawData = (item.raw as Record<string, any>) || {};
+    
+    return {
+      monday_item_id: item.id,
+      address: item.adresse || "",
+      inspection_type: item.synstype || "Ukendt",
+      rooms: item.antal_vaerelser || 0,
+      preferred_date: item.dato_tid
+        ? new Date(item.dato_tid).toISOString().split("T")[0]
+        : new Date().toISOString().split("T")[0],
+      customer_name: item.Kunde || "",
+      lease_number: item.lejemalsnr || "",
+      department: item.landsdel || "Ukendt",
+      
+      // Extract from raw JSONB for WorkFeed comment
+      notes: rawData.Note || "",
+      obs: rawData.OBS || "",
+      tenant_name: rawData.Lejersnavn || "",
+      
+      status: "PENDING",
+      geocode_status: "pending",
+    };
+  });
 
   const { data: created, error: insertError } = await supabase
     .from("inspection_queue")
