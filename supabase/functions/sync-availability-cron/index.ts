@@ -7,28 +7,36 @@ serve(async (req) => {
     const oneMonthAhead = new Date(today);
     oneMonthAhead.setDate(today.getDate() + 30);
 
-    const from = today.toISOString();
-    const to = oneMonthAhead.toISOString();
+    // ADD 1 DAY PADDING on each side for WorkFeed API quirks
+    // This ensures we catch all-day entries that span midnight in UTC
+    const paddedStart = new Date(today);
+    paddedStart.setDate(today.getDate() - 1);
 
-    console.log(`[sync-availability-cron] Running scheduled sync from ${from} to ${to}`);
+    const paddedEnd = new Date(oneMonthAhead);
+    paddedEnd.setDate(oneMonthAhead.getDate() + 1);
+
+    const from = paddedStart.toISOString();
+    const to = paddedEnd.toISOString();
+
+    console.log(`[sync-availability-cron] Running scheduled sync from ${from} to ${to} (with 1-day padding)`);
 
     // Call the main ingest function
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
-    
+
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
       throw new Error("Missing SUPABASE_URL or SUPABASE_ANON_KEY");
     }
-    
+
     const ingestUrl = `${SUPABASE_URL}/functions/v1/workfeed-ingest-availability?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`;
-    
+
     console.log(`[sync-availability-cron] Calling: ${ingestUrl}`);
-    
+
     const response = await fetch(ingestUrl, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json',
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        "Content-Type": "application/json",
       },
     });
 
@@ -41,22 +49,27 @@ serve(async (req) => {
 
     console.log(`[sync-availability-cron] Sync completed successfully:`, result);
 
-    return new Response(JSON.stringify({
-      success: true,
-      message: `Synced availability for ${from} to ${to}`,
-      result
-    }), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: `Synced availability for ${from} to ${to} (padded)`,
+        result,
+      }),
+      {
+        headers: { "Content-Type": "application/json" },
+      },
+    );
   } catch (error) {
-    console.error('[sync-availability-cron] Error:', error);
-    return new Response(JSON.stringify({
-      success: false,
-      error: error.message
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    console.error("[sync-availability-cron] Error:", error);
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error.message,
+      }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
   }
 });
