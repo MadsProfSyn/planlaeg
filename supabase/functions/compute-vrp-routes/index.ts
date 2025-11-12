@@ -68,18 +68,29 @@ Deno.serve(async (req) => {
     const inspectors = vrpInput?.inspectors || [];
     const inspectorCapacity = vrpInput?.inspector_capacity || [];
 
+    // Extract allowed inspector IDs from filtered input
+    const allowedInspectorIds = inspectors.map((i: any) => i.inspector_id);
+
     // Call the external Railway VRP API for optimized route planning
     const railwayApiUrl = "https://web-production-1b301.up.railway.app/api/schedule";
     
-    const requestPayload = {
+    const requestPayload: any = {
       inspection_ids,
       target_dates,
     };
 
+    // Pass test_mode constraints to Railway API
+    if (test_mode) {
+      requestPayload.test_mode = true;
+      requestPayload.allowed_inspector_ids = allowedInspectorIds;
+    }
+
     console.log("Step 2: Calling external VRP API:", {
       url: railwayApiUrl,
       method: "POST",
-      payload: requestPayload,
+      payload_keys: Object.keys(requestPayload),
+      test_mode,
+      allowed_inspector_count: test_mode ? allowedInspectorIds.length : "N/A",
     });
 
     let railwayData: any;
