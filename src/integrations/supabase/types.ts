@@ -1141,19 +1141,10 @@ export type Database = {
         Args: { emp_name: string; wf_emp_id: string }
         Returns: string
       }
-      get_vrp_input:
-        | {
-            Args: { p_inspection_ids: string[]; p_target_dates: string[] }
-            Returns: Json
-          }
-        | {
-            Args: {
-              p_inspection_ids: string[]
-              p_target_dates: string[]
-              p_test_mode?: boolean
-            }
-            Returns: Json
-          }
+      get_vrp_input: {
+        Args: { p_inspection_ids: string[]; p_target_dates: string[] }
+        Returns: Json
+      }
       get_wf_role_id_for_inspection: {
         Args: { p_inspection_type: string }
         Returns: string
