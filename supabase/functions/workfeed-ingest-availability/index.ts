@@ -196,7 +196,18 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[workfeed-ingest-availability] Fetching from ${from} to ${to}`);
+    console.log(`[workfeed-ingest-availability] Target date range: ${from} to ${to}`);
+
+    // ADD 1 DAY PADDING for WorkFeed API query (to catch midnight-boundary entries)
+    const paddedFrom = new Date(from);
+    paddedFrom.setDate(paddedFrom.getDate() - 1);
+    const paddedTo = new Date(to);
+    paddedTo.setDate(paddedTo.getDate() + 1);
+    
+    const paddedFromISO = paddedFrom.toISOString();
+    const paddedToISO = paddedTo.toISOString();
+    
+    console.log(`[workfeed-ingest-availability] Padded fetch range: ${paddedFromISO} to ${paddedToISO}`);
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -225,10 +236,10 @@ serve(async (req) => {
     const BASE = Deno.env.get("WORKFEED_BASE_URL") ?? "https://europe-west1-production-eu-327a3.cloudfunctions.net/api";
     const COMPANY_ID = Deno.env.get("WORKFEED_COMPANY_ID") ?? "KASqUqisoJTrzapASxwG";
 
-    // Build WorkFeed request - ONLY FETCH WORK TYPE
+    // Build WorkFeed request with PADDED dates - ONLY FETCH WORK TYPE
     const wfUrl = new URL(`${BASE}/companies/${COMPANY_ID}/availability`);
-    wfUrl.searchParams.set("from", from);
-    wfUrl.searchParams.set("to", to);
+    wfUrl.searchParams.set("from", paddedFromISO);
+    wfUrl.searchParams.set("to", paddedToISO);
     wfUrl.searchParams.set("type", "WORK");
 
     const headers = {
@@ -241,7 +252,7 @@ serve(async (req) => {
       console.warn("[workfeed-ingest-availability] WORKFEED_API_KEY not set");
     }
 
-    // Fetch WorkFeed
+    // Fetch WorkFeed with padded range
     console.log(`[workfeed-ingest-availability] Calling WorkFeed API: ${wfUrl.toString()}`);
     const resp = await fetch(wfUrl.toString(), {
       headers,
@@ -267,22 +278,22 @@ serve(async (req) => {
     }
 
     const items = await resp.json();
-    console.log(`[workfeed-ingest-availability] Received ${items.length} WORK availability items from WorkFeed`);
+    console.log(`[workfeed-ingest-availability] Received ${items.length} WORK availability items from WorkFeed (padded range)`);
 
-    // CLEAN-SLATE: Delete existing records for this date range and source
+    // CLEAN-SLATE: Delete existing records ONLY for the TARGET date range (not padded)
     const fromDate = new Date(from).toISOString().split("T")[0];
     const toDate = new Date(to).toISOString().split("T")[0];
 
     console.log(
-      `[workfeed-ingest-availability] Cleaning existing records from ${fromDate} to ${toDate} for source ${SOURCE}`,
+      `[workfeed-ingest-availability] Cleaning existing records from ${fromDate} to ${toDate} (target range only)`,
     );
 
     const { error: deleteError } = await supabase
       .from(TABLE)
       .delete()
       .eq("source", SOURCE)
-      .gte("date_local", fromDate)
-      .lte("date_local", toDate);
+      .gte("date_local", fromDate)  // Use original dates
+      .lte("date_local", toDate);    // Use original dates
 
     if (deleteError) {
       console.error("[workfeed-ingest-availability] Failed to delete existing records:", deleteError);
@@ -301,7 +312,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[workfeed-ingest-availability] Successfully cleaned existing records for date range`);
+    console.log(`[workfeed-ingest-availability] Successfully cleaned existing records for target date range`);
 
     if (items.length === 0) {
       return new Response(
@@ -378,11 +389,14 @@ serve(async (req) => {
     for (const [, list] of grouped) {
       const row = collapseSlicesForDate(list, inspectorMap);
       if (row) {
-        rows.push(row);
+        // FILTER: Only include rows within the TARGET date range (not padded days)
+        if (row.date_local >= fromDate && row.date_local <= toDate) {
+          rows.push(row);
+        }
       }
     }
 
-    console.log(`[workfeed-ingest-availability] Prepared ${rows.length} rows for upsert (WORK only)`);
+    console.log(`[workfeed-ingest-availability] Prepared ${rows.length} rows for upsert (WORK only, filtered to target range)`);
 
     if (rows.length === 0) {
       return new Response(

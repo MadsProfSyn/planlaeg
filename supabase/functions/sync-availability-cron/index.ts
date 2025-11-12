@@ -7,18 +7,10 @@ serve(async (req) => {
     const oneMonthAhead = new Date(today);
     oneMonthAhead.setDate(today.getDate() + 30);
 
-    // ADD 1 DAY PADDING on each side for WorkFeed API quirks
-    // This ensures we catch all-day entries that span midnight in UTC
-    const paddedStart = new Date(today);
-    paddedStart.setDate(today.getDate() - 1);
+    const from = today.toISOString();
+    const to = oneMonthAhead.toISOString();
 
-    const paddedEnd = new Date(oneMonthAhead);
-    paddedEnd.setDate(oneMonthAhead.getDate() + 1);
-
-    const from = paddedStart.toISOString();
-    const to = paddedEnd.toISOString();
-
-    console.log(`[sync-availability-cron] Running scheduled sync from ${from} to ${to} (with 1-day padding)`);
+    console.log(`[sync-availability-cron] Running scheduled sync from ${from} to ${to}`);
 
     // Call the main ingest function
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
@@ -52,7 +44,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Synced availability for ${from} to ${to} (padded)`,
+        message: `Synced availability for ${from} to ${to}`,
         result,
       }),
       {
