@@ -221,8 +221,12 @@ export function RouteMapView({
         setInitError(e.error?.message || "Map initialization failed");
       });
 
-      // Enable scroll zoom with smooth behavior
+      // Enable all map interactions explicitly
       map.current.scrollZoom.enable();
+      map.current.dragPan.enable();
+      map.current.dragRotate.enable();
+      map.current.doubleClickZoom.enable();
+      map.current.touchZoomRotate.enable();
       
       // Add navigation controls
       map.current.addControl(
@@ -244,6 +248,18 @@ export function RouteMapView({
       map.current?.remove();
     };
   }, []);
+
+  // Ensure map resizes properly when loaded (important for modal context)
+  useEffect(() => {
+    if (map.current && mapLoaded) {
+      const resizeTimer = setTimeout(() => {
+        map.current?.resize();
+        console.log("✅ Map resized for container context");
+      }, 100);
+      
+      return () => clearTimeout(resizeTimer);
+    }
+  }, [mapLoaded]);
 
   // Update markers and routes when data changes
   useEffect(() => {
@@ -652,8 +668,12 @@ export function RouteMapView({
   };
 
   return (
-    <div className="relative w-full h-full rounded-lg overflow-hidden border">
-      <div ref={mapContainer} className="absolute inset-0 w-full h-full" />
+    <div className="relative w-full h-full rounded-lg overflow-hidden border bg-muted/30">
+      <div 
+        ref={mapContainer} 
+        className="absolute inset-0 w-full h-full z-0"
+        style={{ pointerEvents: 'auto' }}
+      />
 
       {/* Map Controls */}
       {mapLoaded && !initError && (
@@ -661,13 +681,13 @@ export function RouteMapView({
           onZoomIn={handleZoomIn}
           onZoomOut={handleZoomOut}
           onResetView={handleResetView}
-          className="absolute bottom-4 right-4 z-10"
+          className="absolute bottom-4 right-4 z-20"
         />
       )}
 
       {/* Loading Overlay */}
       {!mapLoaded && !initError && (
-        <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-10">
+        <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-40 pointer-events-auto">
           <div className="text-center">
             <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-primary" />
             <p className="text-sm text-muted-foreground">Indlæser kort...</p>
@@ -677,7 +697,7 @@ export function RouteMapView({
 
       {/* Error Overlay */}
       {initError && (
-        <div className="absolute inset-0 bg-background/90 flex items-center justify-center z-10">
+        <div className="absolute inset-0 bg-background/90 flex items-center justify-center z-40 pointer-events-auto">
           <div className="max-w-md p-6 text-center">
             <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
             <p className="font-semibold mb-2">Kort kan ikke indlæses</p>
@@ -695,21 +715,25 @@ export function RouteMapView({
 
       {/* Tile Load Error Warning */}
       {tileLoadError && !initError && (
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-destructive/90 text-destructive-foreground p-4 rounded-lg max-w-md text-center z-20">
-          <p className="font-semibold mb-2">Kort-fliser kan ikke indlæses</p>
-          <p className="text-sm">
-            OpenStreetMap er muligvis utilgængelig. Tjek din internetforbindelse.
-          </p>
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-30 pointer-events-none">
+          <div className="bg-destructive/90 text-destructive-foreground p-4 rounded-lg max-w-md text-center pointer-events-auto">
+            <p className="font-semibold mb-2">Kort-fliser kan ikke indlæses</p>
+            <p className="text-sm">
+              OpenStreetMap er muligvis utilgængelig. Tjek din internetforbindelse.
+            </p>
+          </div>
         </div>
       )}
 
       {/* Directions Auth Error Warning */}
       {directionsAuthError && mapLoaded && !initError && (
-        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-amber-500/90 text-white p-3 rounded-lg max-w-md text-center z-20 shadow-lg">
-          <p className="font-semibold mb-1">Mapbox Directions afvist (401/403)</p>
-          <p className="text-sm">
-            Tjek at din token er gyldig og at domænet er på allowlist.
-          </p>
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-30 pointer-events-none">
+          <div className="bg-amber-500/90 text-white p-3 rounded-lg max-w-md text-center shadow-lg pointer-events-auto">
+            <p className="font-semibold mb-1">Mapbox Directions afvist (401/403)</p>
+            <p className="text-sm">
+              Tjek at din token er gyldig og at domænet er på allowlist.
+            </p>
+          </div>
         </div>
       )}
 
@@ -750,7 +774,7 @@ export function RouteMapView({
       })()}
 
       {/* Inspector Legend */}
-      <div className="absolute top-4 right-4 bg-background rounded-lg shadow-lg p-3 space-y-2 max-w-[250px] border">
+      <div className="absolute top-4 right-4 bg-background rounded-lg shadow-lg p-3 space-y-2 max-w-[250px] border z-30">
         <div className="font-semibold text-sm mb-2">Synskonsulenter</div>
         <div className="space-y-1 max-h-[400px] overflow-y-auto">
           {inspectorRoutes.map((route, index) => (

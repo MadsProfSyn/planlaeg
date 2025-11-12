@@ -1099,23 +1099,26 @@ function MapModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100] bg-background"
+      className="fixed inset-0 z-[100] bg-background flex flex-col"
       aria-modal="true"
       role="dialog"
       aria-label="Kortvisning"
+      style={{ pointerEvents: 'auto' }}
     >
-      {/* Header Overlay */}
-      <div className="absolute top-0 left-0 right-0 z-20 bg-background/95 backdrop-blur-sm border-b">
+      {/* Header - use flexbox layout for better control */}
+      <div className="relative z-50 bg-background border-b flex-shrink-0">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-2">
             <Button
               id="btn-luk-kort"
               variant="outline"
               onClick={(e) => {
+                e.preventDefault();
                 e.stopPropagation();
                 onClose();
               }}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 z-50"
+              style={{ pointerEvents: 'auto' }}
             >
               <X className="h-4 w-4" />
               Luk kort
@@ -1142,8 +1145,8 @@ function MapModal({
         </div>
       </div>
 
-      {/* Map content - Full viewport */}
-      <div className="absolute inset-0 pt-[73px]">
+      {/* Map content - flex-1 to fill remaining space */}
+      <div className="relative flex-1 overflow-hidden">
         <RouteMapView
           key="modal-map"
           inspectorRoutes={groupedRoutes.inspector_routes}
