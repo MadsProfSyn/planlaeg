@@ -690,17 +690,6 @@ export function PlanlaegSynModal({
             </div>
           </DialogHeader>
 
-          {/* TEST MODE WARNING */}
-          {TEST_MODE && (
-            <Alert className="border-orange-500 bg-orange-50 dark:bg-orange-950 dark:border-orange-700">
-              <AlertTriangle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-              <AlertDescription className="text-orange-900 dark:text-orange-100">
-                <strong>TEST MODE AKTIV</strong> - Kun test-inspektører (Albert, Mads, Jobson) kan bruges.
-                Sæt <code className="bg-orange-100 dark:bg-orange-900 px-1 rounded text-xs">TEST_MODE = false</code> i <code className="text-xs">src/lib/testMode.ts</code> for at bruge alle inspektører.
-              </AlertDescription>
-            </Alert>
-          )}
-
         <div className="flex-1 overflow-hidden">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full">
             {/* Left Panel: Inspection Details */}
@@ -889,25 +878,6 @@ export function PlanlaegSynModal({
                 </Alert>
               ) : groupedRoutes ? (
                 <>
-                  {/* Overall Stats */}
-                  <div className="bg-primary/10 rounded-lg p-4 space-y-2">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Clock className="h-4 w-4" />
-                      <span className="font-medium">Estimeret tid:</span>
-                      <span>{groupedRoutes.overall_total_time} min</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <MapPin className="h-4 w-4" />
-                      <span className="font-medium">Distance:</span>
-                      <span>{Number(groupedRoutes.overall_total_distance ?? 0).toFixed(1)} km</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <Package className="h-4 w-4" />
-                      <span className="font-medium">Planlagte:</span>
-                      <span>{groupedRoutes.inspector_routes.reduce((sum, r) => sum + r.assignments.length, 0)} af {selectedInspectionIds.length}</span>
-                    </div>
-                  </div>
-
                   <ScrollArea className="h-[calc(100vh-280px)] max-h-[800px] pr-4">
                     <div className="space-y-4">
                       <h4 className="font-medium text-sm text-muted-foreground">
