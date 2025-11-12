@@ -4,11 +4,10 @@ serve(async (req) => {
   try {
     // Calculate date range: today + 30 days ahead
     const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
-    
+    const todayStr = today.toISOString().split("T")[0];
     const oneMonthAhead = new Date(today);
     oneMonthAhead.setDate(today.getDate() + 30);
-    const endDateStr = oneMonthAhead.toISOString().split('T')[0];
+    const endDateStr = oneMonthAhead.toISOString().split("T")[0];
 
     console.log(`[sync-shifts-cron] Running scheduled sync from ${todayStr} to ${endDateStr}`);
 
@@ -21,19 +20,20 @@ serve(async (req) => {
     }
 
     const syncUrl = `${SUPABASE_URL}/functions/v1/sync-workfeed-shifts`;
+
     console.log(`[sync-shifts-cron] Calling: ${syncUrl}`);
 
     const response = await fetch(syncUrl, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        'Content-Type': 'application/json'
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
         startDate: todayStr,
         endDate: endDateStr,
-        forceSync: false
-      })
+        // Removed forceSync - not needed with clean-slate approach
+      }),
     });
 
     const result = await response.json();
@@ -45,25 +45,27 @@ serve(async (req) => {
 
     console.log(`[sync-shifts-cron] Sync completed successfully:`, result);
 
-    return new Response(JSON.stringify({
-      success: true,
-      message: `Synced shifts for ${todayStr} to ${endDateStr}`,
-      result
-    }), {
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: `Synced shifts for ${todayStr} to ${endDateStr}`,
+        result,
+      }),
+      {
+        headers: { "Content-Type": "application/json" },
+      },
+    );
   } catch (error) {
-    console.error('[sync-shifts-cron] Error:', error);
-    return new Response(JSON.stringify({
-      success: false,
-      error: error.message
-    }), {
-      status: 500,
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
+    console.error("[sync-shifts-cron] Error:", error);
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error.message,
+      }),
+      {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
   }
 });
