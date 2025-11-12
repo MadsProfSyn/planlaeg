@@ -9,6 +9,7 @@ const corsHeaders = {
 interface VrpRequest {
   inspection_ids: string[];
   target_dates: string[];
+  test_mode?: boolean;
 }
 
 Deno.serve(async (req) => {
@@ -22,17 +23,19 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    const { inspection_ids, target_dates }: VrpRequest = await req.json();
+    const { inspection_ids, target_dates, test_mode = false }: VrpRequest = await req.json();
 
     console.log("Computing VRP routes for:", {
       inspection_ids,
       target_dates,
+      test_mode,
     });
 
     // Call the database function to get VRP input data
     console.log("Step 1: Calling get_vrp_input RPC with:", {
       p_inspection_ids: inspection_ids,
       p_target_dates: target_dates,
+      p_test_mode: test_mode,
     });
 
     const { data: vrpInput, error: inputError } = await supabase.rpc(
@@ -40,6 +43,7 @@ Deno.serve(async (req) => {
       {
         p_inspection_ids: inspection_ids,
         p_target_dates: target_dates,
+        p_test_mode: test_mode,
       }
     );
 

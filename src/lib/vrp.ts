@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { TEST_MODE } from "./testMode";
 import type {
   VrpComputeRequest,
   VrpComputeResponse,
@@ -22,6 +23,7 @@ export async function computeVrpRoutes(
       body: {
         inspection_ids: inspectionIds,
         target_dates: targetDates,
+        test_mode: TEST_MODE,
       } as VrpComputeRequest,
     }
   );

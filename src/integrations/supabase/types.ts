@@ -146,11 +146,14 @@ export type Database = {
           lease_number: string | null
           lng: number | null
           monday_item_id: number | null
+          notes: string | null
+          obs: string | null
           planned_at: string | null
           planned_by: string | null
           preferred_date: string
           rooms: number
           status: string | null
+          tenant_name: string | null
           updated_at: string | null
         }
         Insert: {
@@ -166,11 +169,14 @@ export type Database = {
           lease_number?: string | null
           lng?: number | null
           monday_item_id?: number | null
+          notes?: string | null
+          obs?: string | null
           planned_at?: string | null
           planned_by?: string | null
           preferred_date: string
           rooms: number
           status?: string | null
+          tenant_name?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -186,11 +192,14 @@ export type Database = {
           lease_number?: string | null
           lng?: number | null
           monday_item_id?: number | null
+          notes?: string | null
+          obs?: string | null
           planned_at?: string | null
           planned_by?: string | null
           preferred_date?: string
           rooms?: number
           status?: string | null
+          tenant_name?: string | null
           updated_at?: string | null
         }
         Relationships: []
@@ -549,6 +558,7 @@ export type Database = {
           landsdel: string | null
           lejemalsnr: string | null
           name: string | null
+          note: string | null
           raw: Json | null
           region: string | null
           synstype: string | null
@@ -565,6 +575,7 @@ export type Database = {
           landsdel?: string | null
           lejemalsnr?: string | null
           name?: string | null
+          note?: string | null
           raw?: Json | null
           region?: string | null
           synstype?: string | null
@@ -581,6 +592,7 @@ export type Database = {
           landsdel?: string | null
           lejemalsnr?: string | null
           name?: string | null
+          note?: string | null
           raw?: Json | null
           region?: string | null
           synstype?: string | null
@@ -939,6 +951,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "fk_supabase_shifts_inspector"
+            columns: ["inspector_id"]
+            isOneToOne: false
+            referencedRelation: "inspectors"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "supabase_shifts_inspection_id_fkey"
             columns: ["inspection_id"]
             isOneToOne: false
@@ -1122,10 +1141,19 @@ export type Database = {
         Args: { emp_name: string; wf_emp_id: string }
         Returns: string
       }
-      get_vrp_input: {
-        Args: { p_inspection_ids: string[]; p_target_dates: string[] }
-        Returns: Json
-      }
+      get_vrp_input:
+        | {
+            Args: { p_inspection_ids: string[]; p_target_dates: string[] }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_inspection_ids: string[]
+              p_target_dates: string[]
+              p_test_mode?: boolean
+            }
+            Returns: Json
+          }
       get_wf_role_id_for_inspection: {
         Args: { p_inspection_type: string }
         Returns: string
