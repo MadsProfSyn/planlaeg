@@ -3,7 +3,6 @@
  * Supabase Edge Function: Fetch WorkFeed availability and populate supabase_availability table.
  * ONLY stores WORK type availability (not NO_WORK).
  */
-
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { Temporal } from "npm:@js-temporal/polyfill";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
@@ -13,107 +12,66 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const TZ = "Europe/Copenhagen" as const;
+const TZ = "Europe/Copenhagen";
 const TABLE = "supabase_availability";
-const SOURCE = "workfeed" as const;
-const DEFAULT_START = "08:30:00"; // Always start at 08:30 for WORK
-const DEFAULT_END = "16:00:00"; // Default end if all-day
-
-// ---------- Types ----------
-
-type WorkfeedAvailability = {
-  id: string;
-  start: string; // ISO UTC
-  end: string; // ISO UTC
-  employeeID: string;
-  type: "WORK" | "NO_WORK";
-  createTime: string;
-  updateTime: string;
-};
-
-type Inspector = {
-  id: string;
-  wf_employee_id: string;
-  full_name: string;
-  department_name: string;
-};
-
-type Slice = {
-  date: string;
-  employeeID: string;
-  isAvailable: boolean;
-  isAllDay: boolean;
-  startLocal: string;
-  endLocal: string;
-  raw: WorkfeedAvailability;
-};
-
-type RowForUpsert = {
-  inspector_id: string;
-  inspector_name: string;
-  date_local: string;
-  is_available: boolean;
-  start_time_local: string;
-  end_time_local: string;
-  department: string;
-  source: string;
-  fetched_at: string;
-  raw_payload: any;
-};
+const SOURCE = "workfeed";
+const DEFAULT_START = "08:30:00"; // Business hours start for all-day availability
+const DEFAULT_END = "16:00:00"; // Business hours end for all-day availability
 
 // ---------- Time helpers ----------
-
-function isoToZoned(iso: string, timeZone: string) {
+function isoToZoned(iso, timeZone) {
   return Temporal.Instant.from(iso).toZonedDateTimeISO(timeZone);
 }
 
-function plainTimeToHHMMSS(t: Temporal.PlainTime): string {
+function plainTimeToHHMMSS(t) {
   const hh = String(t.hour).padStart(2, "0");
   const mm = String(t.minute).padStart(2, "0");
   const ss = String(t.second).padStart(2, "0");
   return `${hh}:${mm}:${ss}`;
 }
 
-function isAllDay(start: Temporal.PlainTime, end: Temporal.PlainTime): boolean {
+function isAllDay(start, end) {
   const sMidnight = start.hour === 0 && start.minute === 0 && start.second === 0;
   const eMidnight = end.hour === 0 && end.minute === 0 && end.second === 0;
   return sMidnight && eMidnight;
 }
 
-function splitByLocalDate(
-  startISO: string,
-  endISO: string,
-  timeZone: string,
-): Array<{ date: Temporal.PlainDate; start: Temporal.PlainTime; end: Temporal.PlainTime }> {
+function splitByLocalDate(startISO, endISO, timeZone) {
   const startZ = isoToZoned(startISO, timeZone);
   const endZ = isoToZoned(endISO, timeZone);
-
   const startMs = Temporal.Instant.from(startISO).epochMilliseconds;
   const endMs = Temporal.Instant.from(endISO).epochMilliseconds;
   if (!(endMs > startMs)) return [];
 
-  const slices: Array<{ date: Temporal.PlainDate; start: Temporal.PlainTime; end: Temporal.PlainTime }> = [];
-
+  const slices = [];
   let cursor = startZ;
+
   while (true) {
     const date = cursor.toPlainDate();
     const startOfNextDay = date
-      .add({ days: 1 })
-      .toZonedDateTime({ timeZone, plainTime: Temporal.PlainTime.from("00:00:00") });
+      .add({
+        days: 1,
+      })
+      .toZonedDateTime({
+        timeZone,
+        plainTime: Temporal.PlainTime.from("00:00:00"),
+      });
     const sliceEndZ = endZ.epochMilliseconds < startOfNextDay.epochMilliseconds ? endZ : startOfNextDay;
 
-    slices.push({ date, start: cursor.toPlainTime(), end: sliceEndZ.toPlainTime() });
+    slices.push({
+      date,
+      start: cursor.toPlainTime(),
+      end: sliceEndZ.toPlainTime(),
+    });
 
     if (sliceEndZ.equals(endZ)) break;
     cursor = sliceEndZ;
   }
-
   return slices;
 }
 
 // ---------- Normalize WorkFeed → per-date slices ----------
-
-function toSlices(item: WorkfeedAvailability): Slice[] {
+function toSlices(item) {
   const isAvailable = item.type === "WORK";
   const zonedSlices = splitByLocalDate(item.start, item.end, TZ);
 
@@ -131,7 +89,7 @@ function toSlices(item: WorkfeedAvailability): Slice[] {
   });
 }
 
-function collapseSlicesForDate(slices: Slice[], inspectorMap: Map<string, Inspector>): RowForUpsert | null {
+function collapseSlicesForDate(slices, inspectorMap) {
   const key = slices[0];
 
   // Get inspector details
@@ -151,15 +109,19 @@ function collapseSlicesForDate(slices: Slice[], inspectorMap: Map<string, Inspec
 
   const nowIso = new Date().toISOString();
 
-  // SIMPLIFIED TIME LOGIC:
-  // START: Always 08:30
-  // END: Use their latest end time, or 16:00 if all-day (midnight to midnight)
-
-  const hasAllDayWork = workSlices.some((s) => s.isAllDay);
+  // Extract actual start and end times from the work slices
+  const startTimes = workSlices.map((s) => s.startLocal).sort();
   const endTimes = workSlices.map((s) => s.endLocal).sort();
-  const latestEnd = endTimes[endTimes.length - 1];
 
-  // If all-day (00:00:00), use default 16:00, otherwise use their actual end time
+  const earliestStart = startTimes[0]; // Earliest start time
+  const latestEnd = endTimes[endTimes.length - 1]; // Latest end time
+
+  // Check if any work slices are all-day (midnight to midnight)
+  const hasAllDayWork = workSlices.some((s) => s.isAllDay);
+
+  // For all-day entries: use business hours (08:30-16:00)
+  // For specific times: use their actual availability times
+  const finalStartTime = hasAllDayWork ? DEFAULT_START : earliestStart;
   const finalEndTime = hasAllDayWork ? DEFAULT_END : latestEnd;
 
   return {
@@ -167,21 +129,21 @@ function collapseSlicesForDate(slices: Slice[], inspectorMap: Map<string, Inspec
     inspector_name: inspector.full_name,
     date_local: key.date,
     is_available: true,
-    start_time_local: DEFAULT_START, // Always 08:30
-    end_time_local: finalEndTime, // Their end time or 16:00
+    start_time_local: finalStartTime,
+    end_time_local: finalEndTime,
     department: inspector.department_name,
     source: SOURCE,
     fetched_at: nowIso,
     raw_payload: {
       contributing_ids: Array.from(new Set(workSlices.map((s) => s.raw.id))),
       items: workSlices.map((s) => s.raw),
-      rationale: `Always start at ${DEFAULT_START}; end at ${finalEndTime} (all-day: ${hasAllDayWork})`,
+      rationale: `Start: ${finalStartTime}, End: ${finalEndTime} (all-day: ${hasAllDayWork})`,
     },
   };
 }
 
-function groupSlices(slices: Slice[]): Map<string, Slice[]> {
-  const map = new Map<string, Slice[]>();
+function groupSlices(slices) {
+  const map = new Map();
   for (const s of slices) {
     const k = `${s.employeeID}|${s.date}`;
     const arr = map.get(k);
@@ -192,18 +154,27 @@ function groupSlices(slices: Slice[]): Map<string, Slice[]> {
 }
 
 // ---------- Main handler ----------
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, {
+      headers: corsHeaders,
+    });
   }
 
   try {
     if (req.method !== "POST") {
-      return new Response(JSON.stringify({ error: "Use POST with query params ?from&to" }), {
-        status: 405,
-        headers: { ...corsHeaders, "content-type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          error: "Use POST with query params ?from&to",
+        }),
+        {
+          status: 405,
+          headers: {
+            ...corsHeaders,
+            "content-type": "application/json",
+          },
+        },
+      );
     }
 
     const url = new URL(req.url);
@@ -211,24 +182,44 @@ serve(async (req) => {
     const to = url.searchParams.get("to");
 
     if (!from || !to) {
-      return new Response(JSON.stringify({ error: "Missing required query params: from, to (ISO 8601 UTC)" }), {
-        status: 400,
-        headers: { ...corsHeaders, "content-type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          error: "Missing required query params: from, to (ISO 8601 UTC)",
+        }),
+        {
+          status: 400,
+          headers: {
+            ...corsHeaders,
+            "content-type": "application/json",
+          },
+        },
+      );
     }
 
     console.log(`[workfeed-ingest-availability] Fetching from ${from} to ${to}`);
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      return new Response(JSON.stringify({ error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env" }), {
-        status: 500,
-        headers: { ...corsHeaders, "content-type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY env",
+        }),
+        {
+          status: 500,
+          headers: {
+            ...corsHeaders,
+            "content-type": "application/json",
+          },
+        },
+      );
     }
+
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      auth: { persistSession: false },
+      auth: {
+        persistSession: false,
+      },
     });
 
     const BASE = Deno.env.get("WORKFEED_BASE_URL") ?? "https://europe-west1-production-eu-327a3.cloudfunctions.net/api";
@@ -240,7 +231,9 @@ serve(async (req) => {
     wfUrl.searchParams.set("to", to);
     wfUrl.searchParams.set("type", "WORK");
 
-    const headers: Record<string, string> = { "content-type": "application/json" };
+    const headers = {
+      "content-type": "application/json",
+    };
     const apiKey = Deno.env.get("WORKFEED_API_KEY");
     if (apiKey) {
       headers["Authorization"] = apiKey;
@@ -250,39 +243,62 @@ serve(async (req) => {
 
     // Fetch WorkFeed
     console.log(`[workfeed-ingest-availability] Calling WorkFeed API: ${wfUrl.toString()}`);
-    const resp = await fetch(wfUrl.toString(), { headers });
+    const resp = await fetch(wfUrl.toString(), {
+      headers,
+    });
+
     if (!resp.ok) {
       const body = await resp.text();
       console.error(`[workfeed-ingest-availability] WorkFeed request failed: ${resp.status} - ${body}`);
-      return new Response(JSON.stringify({ error: "WorkFeed request failed", status: resp.status, body }), {
-        status: 502,
-        headers: { ...corsHeaders, "content-type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          error: "WorkFeed request failed",
+          status: resp.status,
+          body,
+        }),
+        {
+          status: 502,
+          headers: {
+            ...corsHeaders,
+            "content-type": "application/json",
+          },
+        },
+      );
     }
-    const items = (await resp.json()) as WorkfeedAvailability[];
+
+    const items = await resp.json();
     console.log(`[workfeed-ingest-availability] Received ${items.length} WORK availability items from WorkFeed`);
 
     // CLEAN-SLATE: Delete existing records for this date range and source
-    // This ensures that if someone removes their WORK availability in WorkFeed,
-    // it will also be removed from our database
-    const fromDate = new Date(from).toISOString().split('T')[0];
-    const toDate = new Date(to).toISOString().split('T')[0];
+    const fromDate = new Date(from).toISOString().split("T")[0];
+    const toDate = new Date(to).toISOString().split("T")[0];
 
-    console.log(`[workfeed-ingest-availability] Cleaning existing records from ${fromDate} to ${toDate} for source ${SOURCE}`);
+    console.log(
+      `[workfeed-ingest-availability] Cleaning existing records from ${fromDate} to ${toDate} for source ${SOURCE}`,
+    );
 
     const { error: deleteError } = await supabase
       .from(TABLE)
       .delete()
-      .eq('source', SOURCE)
-      .gte('date_local', fromDate)
-      .lte('date_local', toDate);
+      .eq("source", SOURCE)
+      .gte("date_local", fromDate)
+      .lte("date_local", toDate);
 
     if (deleteError) {
-      console.error('[workfeed-ingest-availability] Failed to delete existing records:', deleteError);
-      return new Response(JSON.stringify({ error: "Failed to delete existing records", details: deleteError }), {
-        status: 500,
-        headers: { ...corsHeaders, "content-type": "application/json" },
-      });
+      console.error("[workfeed-ingest-availability] Failed to delete existing records:", deleteError);
+      return new Response(
+        JSON.stringify({
+          error: "Failed to delete existing records",
+          details: deleteError,
+        }),
+        {
+          status: 500,
+          headers: {
+            ...corsHeaders,
+            "content-type": "application/json",
+          },
+        },
+      );
     }
 
     console.log(`[workfeed-ingest-availability] Successfully cleaned existing records for date range`);
@@ -295,7 +311,10 @@ serve(async (req) => {
         }),
         {
           status: 200,
-          headers: { ...corsHeaders, "content-type": "application/json" },
+          headers: {
+            ...corsHeaders,
+            "content-type": "application/json",
+          },
         },
       );
     }
@@ -313,10 +332,19 @@ serve(async (req) => {
 
     if (allInspectorError) {
       console.error("[workfeed-ingest-availability] Failed to fetch inspectors:", allInspectorError);
-      return new Response(JSON.stringify({ error: "Failed to fetch inspectors", details: allInspectorError }), {
-        status: 500,
-        headers: { ...corsHeaders, "content-type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          error: "Failed to fetch inspectors",
+          details: allInspectorError,
+        }),
+        {
+          status: 500,
+          headers: {
+            ...corsHeaders,
+            "content-type": "application/json",
+          },
+        },
+      );
     }
 
     console.log(`[workfeed-ingest-availability] Found ${allInspectors?.length || 0} active inspectors`);
@@ -328,7 +356,7 @@ serve(async (req) => {
     const departmentMap = new Map(departments?.map((d) => [d.id, d.name]) || []);
 
     // Create lookup map with department names
-    const inspectorMap = new Map<string, Inspector>(
+    const inspectorMap = new Map(
       allInspectors?.map((i) => [
         i.wf_employee_id,
         {
@@ -339,13 +367,14 @@ serve(async (req) => {
         },
       ]) ?? [],
     );
+
     console.log(`[workfeed-ingest-availability] Mapped ${inspectorMap.size} inspectors with departments`);
 
     // Normalize → slices → group → collapse → rows
-    const slices: Slice[] = items.flatMap(toSlices);
+    const slices = items.flatMap(toSlices);
     const grouped = groupSlices(slices);
+    const rows = [];
 
-    const rows: RowForUpsert[] = [];
     for (const [, list] of grouped) {
       const row = collapseSlicesForDate(list, inspectorMap);
       if (row) {
@@ -363,7 +392,10 @@ serve(async (req) => {
         }),
         {
           status: 200,
-          headers: { ...corsHeaders, "content-type": "application/json" },
+          headers: {
+            ...corsHeaders,
+            "content-type": "application/json",
+          },
         },
       );
     }
@@ -371,15 +403,26 @@ serve(async (req) => {
     // Upsert into table
     const { data, error } = await supabase
       .from(TABLE)
-      .upsert(rows, { onConflict: "inspector_id,date_local,source" })
+      .upsert(rows, {
+        onConflict: "inspector_id,date_local,source",
+      })
       .select();
 
     if (error) {
       console.error("[workfeed-ingest-availability] Supabase upsert failed:", error);
-      return new Response(JSON.stringify({ error: "Supabase upsert failed", details: error }), {
-        status: 500,
-        headers: { ...corsHeaders, "content-type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          error: "Supabase upsert failed",
+          details: error,
+        }),
+        {
+          status: 500,
+          headers: {
+            ...corsHeaders,
+            "content-type": "application/json",
+          },
+        },
+      );
     }
 
     console.log(`[workfeed-ingest-availability] Successfully upserted ${data?.length ?? 0} rows`);
@@ -392,13 +435,28 @@ serve(async (req) => {
         mapped_inspectors: inspectorMap.size,
         rows: data,
       }),
-      { status: 200, headers: { ...corsHeaders, "content-type": "application/json" } },
+      {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          "content-type": "application/json",
+        },
+      },
     );
   } catch (err) {
     console.error("[workfeed-ingest-availability] Unhandled error:", err);
-    return new Response(JSON.stringify({ error: "Unhandled error", details: String(err) }), {
-      status: 500,
-      headers: { ...corsHeaders, "content-type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        error: "Unhandled error",
+        details: String(err),
+      }),
+      {
+        status: 500,
+        headers: {
+          ...corsHeaders,
+          "content-type": "application/json",
+        },
+      },
+    );
   }
 });
