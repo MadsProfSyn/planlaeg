@@ -64,16 +64,66 @@ Deno.serve(async (req) => {
     const inspectors = vrpInput?.inspectors || [];
     const inspectorCapacity = vrpInput?.inspector_capacity || [];
 
+    // Phase 5: Add comprehensive diagnostic logging
+    console.log("Step 1.5: Data validation summary:", {
+      target_dates,
+      target_inspection_ids: inspection_ids,
+      inspections: {
+        count: inspections.length,
+        sample_ids: inspections.slice(0, 2).map((i: any) => i.id),
+        sample_data: inspections.slice(0, 2).map((i: any) => ({
+          id: i.id,
+          address: i.address,
+          type: i.inspection_type,
+          preferred_date: i.preferred_date,
+          has_coords: !!(i.lat && i.lng),
+        })),
+      },
+      inspectors: {
+        count: inspectors.length,
+        sample: inspectors.slice(0, 2).map((i: any) => ({
+          id: i.inspector_id,
+          name: i.full_name,
+          date: i.date_local,
+          start: i.start_time_local,
+          end: i.end_time_local,
+          has_coords: !!(i.home_lat && i.home_lng),
+        })),
+      },
+      inspector_capacity: {
+        count: inspectorCapacity.length,
+        sample: inspectorCapacity.slice(0, 3).map((ic: any) => ({
+          name: ic.inspector_name,
+          date: ic.date_local,
+          start: ic.start_time_local,
+          end: ic.end_time_local,
+          total_mins: ic.total_minutes,
+          booked_mins: ic.booked_minutes,
+          remaining_mins: ic.remaining_minutes,
+          capacity_status: ic.capacity_status,
+        })),
+        null_times_count: inspectorCapacity.filter((ic: any) => !ic.start_time_local || !ic.end_time_local).length,
+      },
+    });
+
     // Validate that no inspectors have NULL time ranges
     const invalidInspectors = inspectorCapacity.filter(
       (ic: any) => !ic.start_time_local || !ic.end_time_local
     );
 
     if (invalidInspectors.length > 0) {
-      console.error("❌ Inspectors with NULL time ranges detected:", invalidInspectors);
+      console.error("❌ Phase 4: Inspectors with NULL time ranges detected:", {
+        count: invalidInspectors.length,
+        details: invalidInspectors.map((ic: any) => ({
+          inspector_name: ic.inspector_name,
+          date: ic.date_local,
+          start_time: ic.start_time_local,
+          end_time: ic.end_time_local,
+        })),
+      });
       throw new Error(
-        `Nogle synskonsulenter mangler arbejdstider. ` +
-        `Kontakt administrator. Påvirkede: ${invalidInspectors.map((i: any) => i.inspector_name).join(', ')}`
+        `Nogle synskonsulenter mangler arbejdstider (${invalidInspectors.length} registreringer). ` +
+        `Kontakt administrator. Påvirkede: ${invalidInspectors.map((i: any) => `${i.inspector_name} (${i.date_local})`).join(', ')}`
       );
     }
 
@@ -92,13 +142,7 @@ Deno.serve(async (req) => {
       inspection_count: inspections.length,
       inspector_count: inspectors.length,
       inspector_capacity_count: inspectorCapacity.length,
-      inspector_capacity_sample: inspectorCapacity.slice(0, 2).map((ic: any) => ({
-        inspector_name: ic.inspector_name,
-        date: ic.date_local,
-        start_time: ic.start_time_local,
-        end_time: ic.end_time_local,
-        remaining_minutes: ic.remaining_minutes,
-      })),
+      all_times_valid: invalidInspectors.length === 0,
     });
 
     let railwayData: any;
