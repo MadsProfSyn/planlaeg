@@ -42,7 +42,7 @@ const navigationItems = [
     icon: Users,
   },
   {
-    title: "Tilføj synskonsulenter (Tilgængelighed)",
+    title: "Tilføj tilgængelige SK",
     url: "/unavailable-consultants",
     icon: UserX,
     adminOnly: true,
