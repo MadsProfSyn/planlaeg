@@ -64,6 +64,19 @@ Deno.serve(async (req) => {
     const inspectors = vrpInput?.inspectors || [];
     const inspectorCapacity = vrpInput?.inspector_capacity || [];
 
+    // Validate that no inspectors have NULL time ranges
+    const invalidInspectors = inspectorCapacity.filter(
+      (ic: any) => !ic.start_time_local || !ic.end_time_local
+    );
+
+    if (invalidInspectors.length > 0) {
+      console.error("❌ Inspectors with NULL time ranges detected:", invalidInspectors);
+      throw new Error(
+        `Nogle synskonsulenter mangler arbejdstider. ` +
+        `Kontakt administrator. Påvirkede: ${invalidInspectors.map((i: any) => i.inspector_name).join(', ')}`
+      );
+    }
+
     // Call the external Railway VRP API for optimized route planning
     const railwayApiUrl = "https://web-production-1b301.up.railway.app/api/schedule";
     
@@ -72,10 +85,20 @@ Deno.serve(async (req) => {
       target_dates,
     };
 
-    console.log("Step 2: Calling external VRP API:", {
+    console.log("Step 2: Calling external VRP API with validated data:", {
       url: railwayApiUrl,
       method: "POST",
       payload: requestPayload,
+      inspection_count: inspections.length,
+      inspector_count: inspectors.length,
+      inspector_capacity_count: inspectorCapacity.length,
+      inspector_capacity_sample: inspectorCapacity.slice(0, 2).map((ic: any) => ({
+        inspector_name: ic.inspector_name,
+        date: ic.date_local,
+        start_time: ic.start_time_local,
+        end_time: ic.end_time_local,
+        remaining_minutes: ic.remaining_minutes,
+      })),
     });
 
     let railwayData: any;
