@@ -9,7 +9,6 @@ const corsHeaders = {
 interface VrpRequest {
   inspection_ids: string[];
   target_dates: string[];
-  test_mode?: boolean;
 }
 
 Deno.serve(async (req) => {
@@ -23,19 +22,17 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    const { inspection_ids, target_dates, test_mode = false }: VrpRequest = await req.json();
+    const { inspection_ids, target_dates }: VrpRequest = await req.json();
 
     console.log("Computing VRP routes for:", {
       inspection_ids,
       target_dates,
-      test_mode,
     });
 
     // Call the database function to get VRP input data
     console.log("Step 1: Calling get_vrp_input RPC with:", {
       p_inspection_ids: inspection_ids,
       p_target_dates: target_dates,
-      p_test_mode: test_mode,
     });
 
     const { data: vrpInput, error: inputError } = await supabase.rpc(
@@ -43,7 +40,6 @@ Deno.serve(async (req) => {
       {
         p_inspection_ids: inspection_ids,
         p_target_dates: target_dates,
-        p_test_mode: test_mode,
       }
     );
 
@@ -68,29 +64,18 @@ Deno.serve(async (req) => {
     const inspectors = vrpInput?.inspectors || [];
     const inspectorCapacity = vrpInput?.inspector_capacity || [];
 
-    // Extract allowed inspector IDs from filtered input
-    const allowedInspectorIds = inspectors.map((i: any) => i.inspector_id);
-
     // Call the external Railway VRP API for optimized route planning
     const railwayApiUrl = "https://web-production-1b301.up.railway.app/api/schedule";
     
-    const requestPayload: any = {
+    const requestPayload = {
       inspection_ids,
       target_dates,
     };
 
-    // Pass test_mode constraints to Railway API
-    if (test_mode) {
-      requestPayload.test_mode = true;
-      requestPayload.allowed_inspector_ids = allowedInspectorIds;
-    }
-
     console.log("Step 2: Calling external VRP API:", {
       url: railwayApiUrl,
       method: "POST",
-      payload_keys: Object.keys(requestPayload),
-      test_mode,
-      allowed_inspector_count: test_mode ? allowedInspectorIds.length : "N/A",
+      payload: requestPayload,
     });
 
     let railwayData: any;

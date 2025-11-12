@@ -19,7 +19,6 @@ interface ApprovalRequest {
     travel_from_previous_mins: number;
   }>;
   inspection_ids: string[];
-  test_mode?: boolean;
 }
 
 Deno.serve(async (req) => {
@@ -33,48 +32,14 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    const { vrp_run_id, assignments, inspection_ids, test_mode = false }: ApprovalRequest =
+    const { vrp_run_id, assignments, inspection_ids }: ApprovalRequest =
       await req.json();
 
     console.log("Approving VRP assignments:", {
       vrp_run_id,
       assignments_count: assignments.length,
       inspection_ids_count: inspection_ids.length,
-      test_mode,
     });
-
-    // TEST MODE APPROVAL GUARD: Verify all inspectors are test users
-    if (test_mode) {
-      const uniqueInspectorIds = Array.from(
-        new Set(assignments.map((a) => a.inspector_id))
-      );
-
-      console.log(`🔒 TEST_MODE guard: verifying ${uniqueInspectorIds.length} inspectors...`);
-
-      const { data: inspectors, error: inspectorError } = await supabase
-        .from("inspectors")
-        .select("id, full_name, notes")
-        .in("id", uniqueInspectorIds);
-
-      if (inspectorError) {
-        throw new Error(`Failed to verify inspectors: ${inspectorError.message}`);
-      }
-
-      const nonTestInspectors = inspectors?.filter(
-        (inspector) => !inspector.notes?.toUpperCase().includes("TEST USER")
-      );
-
-      if (nonTestInspectors && nonTestInspectors.length > 0) {
-        const names = nonTestInspectors.map((i) => i.full_name).join(", ");
-        console.error(`❌ TEST MODE VIOLATION: Non-test inspectors found: ${names}`);
-        throw new Error(
-          `TEST MODE VIOLATION: Cannot approve assignments with non-test inspectors: ${names}. ` +
-          `Only Albert Bisgaard, Mads Boye Nielsen, and Jobson De Souza are allowed in test mode.`
-        );
-      }
-
-      console.log("✅ All inspectors verified as test users");
-    }
 
     // 1. Create VRP run record
     const { error: runError } = await supabase.from("vrp_runs").insert({

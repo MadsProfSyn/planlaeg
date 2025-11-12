@@ -1,5 +1,4 @@
 import { supabase } from "@/integrations/supabase/client";
-import { TEST_MODE } from "./testMode";
 import type {
   VrpComputeRequest,
   VrpComputeResponse,
@@ -23,7 +22,6 @@ export async function computeVrpRoutes(
       body: {
         inspection_ids: inspectionIds,
         target_dates: targetDates,
-        test_mode: TEST_MODE,
       } as VrpComputeRequest,
     }
   );
@@ -87,10 +85,7 @@ export async function approveVrpAssignments(
   const { data, error } = await supabase.functions.invoke<VrpApprovalResponse>(
     "approve-vrp-assignments",
     {
-      body: {
-        ...request,
-        test_mode: TEST_MODE,
-      },
+      body: request,
     }
   );
 
@@ -221,42 +216,20 @@ export async function fetchAssignmentsByVrpRunId(vrpRunId: string): Promise<VrpR
   // Get unique inspector IDs
   const inspectorIds = [...new Set(assignments.map(a => a.inspector_id))];
   
-  // Fetch inspector details (include notes for TEST_MODE filtering)
+  // Fetch inspector details
   const { data: inspectors, error: inspectorError } = await supabase
     .from('inspectors')
-    .select('id, full_name, notes')
+    .select('id, full_name')
     .in('id', inspectorIds);
   
   if (inspectorError) {
     console.warn('Failed to fetch inspector names:', inspectorError);
   }
   
-  // TEST MODE SAFETY NET: Filter assignments to test inspectors only
-  let filteredAssignments = assignments;
-  if (TEST_MODE && inspectors) {
-    console.log('🔒 TEST_MODE active: filtering assignments to test inspectors only');
-    const testInspectorIds = new Set(
-      inspectors
-        .filter(i => i.notes?.toUpperCase().includes('TEST USER'))
-        .map(i => i.id)
-    );
-    
-    filteredAssignments = assignments.filter((a: any) => {
-      const isTestUser = testInspectorIds.has(a.inspector_id);
-      if (!isTestUser) {
-        const inspector = inspectors.find(i => i.id === a.inspector_id);
-        console.warn(`⚠️ Filtered out non-test inspector: ${inspector?.full_name} (${a.inspector_id})`);
-      }
-      return isTestUser;
-    });
-    
-    console.log(`✅ Filtered ${assignments.length} -> ${filteredAssignments.length} assignments`);
-  }
-  
   const inspectorMap = new Map(inspectors?.map(i => [i.id, i.full_name]) || []);
   
-  // Fetch inspection details for addresses (use filtered assignments)
-  const inspectionIds = [...new Set(filteredAssignments.map(a => a.inspection_id))];
+  // Fetch inspection details for addresses
+  const inspectionIds = [...new Set(assignments.map(a => a.inspection_id))];
   const { data: inspections, error: inspectionError } = await supabase
     .from('inspection_queue')
     .select('id, address, inspection_type')
@@ -268,8 +241,8 @@ export async function fetchAssignmentsByVrpRunId(vrpRunId: string): Promise<VrpR
   
   const inspectionMap = new Map(inspections?.map(i => [i.id, i]) || []);
   
-  // Transform database rows to VrpAssignment format (use filtered assignments)
-  const vrpAssignments: VrpAssignment[] = filteredAssignments.map(a => {
+  // Transform database rows to VrpAssignment format
+  const vrpAssignments: VrpAssignment[] = assignments.map(a => {
     const inspection = inspectionMap.get(a.inspection_id);
     return {
       inspection_id: a.inspection_id,
