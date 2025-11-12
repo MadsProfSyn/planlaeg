@@ -1,4 +1,14 @@
-import { CalendarCheck, ClipboardList, Users, UserX, Shield, LayoutDashboard, User, FileText, Brain } from "lucide-react";
+import {
+  CalendarCheck,
+  ClipboardList,
+  Users,
+  UserX,
+  Shield,
+  LayoutDashboard,
+  User,
+  FileText,
+  Brain,
+} from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -22,7 +32,7 @@ const navigationItems = [
   },
   {
     title: "Planlagte syn",
-    url: "/scheduled", 
+    url: "/scheduled",
     icon: CalendarCheck,
     adminOnly: true,
   },
@@ -32,7 +42,7 @@ const navigationItems = [
     icon: Users,
   },
   {
-    title: "Tilføj synskonsulenter",
+    title: "Tilføj synskonsulenter (Tilgængelighed)",
     url: "/unavailable-consultants",
     icon: UserX,
     adminOnly: true,
@@ -71,8 +81,8 @@ const adminNavigationItems = [
 export function AppSidebar() {
   const { hasRole } = useAuth();
   const location = useLocation();
-  const isOnAdminRoute = location.pathname.startsWith('/admin');
-  
+  const isOnAdminRoute = location.pathname.startsWith("/admin");
+
   return (
     <Sidebar>
       <SidebarHeader className="border-b border-sidebar-border">
@@ -83,15 +93,15 @@ export function AppSidebar() {
           <span className="font-semibold text-sidebar-foreground">ProfSyn</span>
         </div>
       </SidebarHeader>
-      
+
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {navigationItems.map((item) => {
-                if (item.adminOnly && !hasRole('admin')) return null;
-                
+                if (item.adminOnly && !hasRole("admin")) return null;
+
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild>
@@ -113,16 +123,16 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        
+
         {/* Admin Section */}
-        {hasRole('admin') && (
+        {hasRole("admin") && (
           <SidebarGroup>
             <SidebarGroupLabel>Admin</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
                 {adminNavigationItems.map((item) => {
-                  if (item.adminOnly && !hasRole('admin')) return null;
-                  
+                  if (item.adminOnly && !hasRole("admin")) return null;
+
                   return (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton asChild>
