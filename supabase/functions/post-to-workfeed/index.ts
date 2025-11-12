@@ -4,18 +4,18 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
-
-const WORKFEED_API_URL = "https://europe-west1-production-eu-327a3.cloudfunctions.net/api";
+// To turn on again: https://europe-west1-production-eu-327a3.cloudfunctions.net/api"
+const WORKFEED_API_URL = "https://europe-west1-INDSÆT KORREKTHER-eu-327a3.cloudfunctions.net/api";
 const WORKFEED_API_KEY = Deno.env.get("WORKFEED_API_KEY") ?? "";
 const WORKFEED_COMPANY_ID = Deno.env.get("WORKFEED_COMPANY_ID") ?? "";
 
 // Role name mapping (inspection type to WorkFeed role code)
 const ROLE_MAPPING: Record<string, string> = {
-  "Fraflytningssyn": "FF",
-  "Indflytningssyn": "IF",
-  "Projektsyn": "PS",
-  "Proforma": "PA",
-  "TMS": "TMS"
+  Fraflytningssyn: "FF",
+  Indflytningssyn: "IF",
+  Projektsyn: "PS",
+  Proforma: "PA",
+  TMS: "TMS",
 };
 
 // Cache for departments and roles (5 minute TTL)
@@ -37,17 +37,16 @@ interface PostWorkfeedRequest {
  */
 async function getCachedDepartments(): Promise<any[]> {
   const now = Date.now();
-  
+
   if (cache.departments && cache.departmentsExpiry > now) {
-    console.log('[post-to-workfeed] Using cached departments');
+    console.log("[post-to-workfeed] Using cached departments");
     return cache.departments;
   }
 
-  console.log('[post-to-workfeed] Fetching departments from WorkFeed API');
-  const response = await fetch(
-    `${WORKFEED_API_URL}/companies/${WORKFEED_COMPANY_ID}/departments`,
-    { headers: { Authorization: WORKFEED_API_KEY } }
-  );
+  console.log("[post-to-workfeed] Fetching departments from WorkFeed API");
+  const response = await fetch(`${WORKFEED_API_URL}/companies/${WORKFEED_COMPANY_ID}/departments`, {
+    headers: { Authorization: WORKFEED_API_KEY },
+  });
 
   if (!response.ok) {
     throw new Error(`Failed to fetch departments: ${response.status}`);
@@ -55,7 +54,7 @@ async function getCachedDepartments(): Promise<any[]> {
 
   cache.departments = await response.json();
   cache.departmentsExpiry = now + CACHE_TTL_MS;
-  
+
   console.log(`[post-to-workfeed] Cached ${cache.departments.length} departments`);
   return cache.departments;
 }
@@ -65,17 +64,16 @@ async function getCachedDepartments(): Promise<any[]> {
  */
 async function getCachedRoles(): Promise<any[]> {
   const now = Date.now();
-  
+
   if (cache.roles && cache.rolesExpiry > now) {
-    console.log('[post-to-workfeed] Using cached roles');
+    console.log("[post-to-workfeed] Using cached roles");
     return cache.roles;
   }
 
-  console.log('[post-to-workfeed] Fetching roles from WorkFeed API');
-  const response = await fetch(
-    `${WORKFEED_API_URL}/companies/${WORKFEED_COMPANY_ID}/roles`,
-    { headers: { Authorization: WORKFEED_API_KEY } }
-  );
+  console.log("[post-to-workfeed] Fetching roles from WorkFeed API");
+  const response = await fetch(`${WORKFEED_API_URL}/companies/${WORKFEED_COMPANY_ID}/roles`, {
+    headers: { Authorization: WORKFEED_API_KEY },
+  });
 
   if (!response.ok) {
     throw new Error(`Failed to fetch roles: ${response.status}`);
@@ -83,57 +81,57 @@ async function getCachedRoles(): Promise<any[]> {
 
   cache.roles = await response.json();
   cache.rolesExpiry = now + CACHE_TTL_MS;
-  
+
   console.log(`[post-to-workfeed] Cached ${cache.roles.length} roles`);
   return cache.roles;
 }
 
 /**
  * Build WorkFeed comment in the required format:
- * 
+ *
  * <address>
- * 
+ *
  * <notes with DYMO replacement>
- * 
+ *
  * OBS: <obs text> (only if not blank)
  */
 function buildWorkfeedComment(inspection: any): string {
   if (!inspection) {
-    console.warn('[post-to-workfeed] No inspection data available for comment');
+    console.warn("[post-to-workfeed] No inspection data available for comment");
     return "";
   }
 
   const parts: string[] = [];
-  
+
   // 1. Address
   if (inspection.address) {
     parts.push(inspection.address);
     parts.push(""); // blank line
   }
-  
+
   // 2. Notes with DYMO replacement (matches Python logic)
   if (inspection.notes) {
     let processedNotes = inspection.notes;
-    
+
     // Replace '" "' placeholder with tenant name if DYMO is mentioned
-    if (processedNotes.toUpperCase().includes('DYMO') && inspection.tenant_name) {
+    if (processedNotes.toUpperCase().includes("DYMO") && inspection.tenant_name) {
       processedNotes = processedNotes.replace('" "', `"${inspection.tenant_name}"`);
     }
-    
+
     parts.push(processedNotes);
     parts.push(""); // blank line
   }
-  
+
   // 3. OBS (only if not blank)
   if (inspection.obs && inspection.obs.trim() !== "") {
     parts.push(`OBS: ${inspection.obs.trim()}`);
   }
-  
+
   // Remove trailing empty lines
   while (parts.length > 0 && parts[parts.length - 1] === "") {
     parts.pop();
   }
-  
+
   return parts.join("\n");
 }
 
@@ -142,20 +140,15 @@ function buildWorkfeedComment(inspection: any): string {
  * @param wfDepartmentId - WorkFeed department ID (from inspector.department.wf_department_id)
  * @param inspectionType - Inspection type to map to role code
  */
-async function getWorkfeedRoleId(
-  wfDepartmentId: string,
-  inspectionType: string
-): Promise<string> {
+async function getWorkfeedRoleId(wfDepartmentId: string, inspectionType: string): Promise<string> {
   console.log(`[post-to-workfeed] Looking up role for: ${wfDepartmentId} / ${inspectionType}`);
-  
+
   // Map inspection type to role short code
   const roleShortCode = ROLE_MAPPING[inspectionType];
   if (!roleShortCode) {
-    throw new Error(
-      `Unknown inspection type: ${inspectionType}. Valid types: ${Object.keys(ROLE_MAPPING).join(', ')}`
-    );
+    throw new Error(`Unknown inspection type: ${inspectionType}. Valid types: ${Object.keys(ROLE_MAPPING).join(", ")}`);
   }
-  
+
   console.log(`[post-to-workfeed] Mapped ${inspectionType} → ${roleShortCode}`);
 
   // Fetch all roles from WorkFeed
@@ -164,20 +157,16 @@ async function getWorkfeedRoleId(
 
   // Find the role that matches department ID AND name
   for (const role of roles) {
-    if (
-      role.departmentID === wfDepartmentId &&
-      !role.isDeleted &&
-      role.name === roleShortCode
-    ) {
+    if (role.departmentID === wfDepartmentId && !role.isDeleted && role.name === roleShortCode) {
       console.log(
-        `[post-to-workfeed] ✅ Found matching role: ${role.name} (${role.id}) for department ${wfDepartmentId}`
+        `[post-to-workfeed] ✅ Found matching role: ${role.name} (${role.id}) for department ${wfDepartmentId}`,
       );
       return role.id;
     }
   }
 
   throw new Error(
-    `No matching role found for department ID '${wfDepartmentId}' and type '${roleShortCode}'. Check WorkFeed configuration.`
+    `No matching role found for department ID '${wfDepartmentId}' and type '${roleShortCode}'. Check WorkFeed configuration.`,
   );
 }
 
@@ -186,10 +175,7 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-  );
+  const supabase = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "");
 
   try {
     const { shiftId }: PostWorkfeedRequest = await req.json();
@@ -215,7 +201,7 @@ Deno.serve(async (req) => {
       .single();
 
     if (inspectionError) {
-      console.warn('[post-to-workfeed] Could not fetch inspection:', inspectionError);
+      console.warn("[post-to-workfeed] Could not fetch inspection:", inspectionError);
     }
 
     // 3. Fetch inspector data
@@ -246,8 +232,8 @@ Deno.serve(async (req) => {
       inspection: inspection || {},
       inspector: {
         ...inspector,
-        department: department
-      }
+        department: department,
+      },
     };
 
     console.log(`[post-to-workfeed] Shift data:`, {
@@ -262,16 +248,14 @@ Deno.serve(async (req) => {
     // 2. Get wf_department_id from inspector's department
     const wfDepartmentId = enrichedShift.inspector?.department?.wf_department_id;
     if (!wfDepartmentId) {
-      throw new Error(
-        `Inspector ${enrichedShift.inspector_name} department not found or missing wf_department_id`
-      );
+      throw new Error(`Inspector ${enrichedShift.inspector_name} department not found or missing wf_department_id`);
     }
 
     console.log(`[post-to-workfeed] Using wf_department_id: ${wfDepartmentId} for ${enrichedShift.inspector_name}`);
 
     // 3. Get WorkFeed role ID using wf_department_id
     const roleID = await getWorkfeedRoleId(wfDepartmentId, enrichedShift.type);
-    
+
     console.log(`[post-to-workfeed] ✅ Found role ID: ${roleID} for ${enrichedShift.type}`);
 
     // 4. Convert local time to UTC (Copenhagen = UTC+1 in winter, UTC+2 in summer)
@@ -298,17 +282,14 @@ Deno.serve(async (req) => {
 
     console.log(`[post-to-workfeed] POSTing to WorkFeed:`, workfeedPayload);
 
-    const workfeedResponse = await fetch(
-      `${WORKFEED_API_URL}/companies/${WORKFEED_COMPANY_ID}/shifts`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: WORKFEED_API_KEY,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(workfeedPayload),
-      }
-    );
+    const workfeedResponse = await fetch(`${WORKFEED_API_URL}/companies/${WORKFEED_COMPANY_ID}/shifts`, {
+      method: "POST",
+      headers: {
+        Authorization: WORKFEED_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(workfeedPayload),
+    });
 
     if (!workfeedResponse.ok) {
       const errorText = await workfeedResponse.text();
@@ -348,7 +329,7 @@ Deno.serve(async (req) => {
       {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   } catch (error: any) {
     console.error(`[post-to-workfeed] ❌ Error:`, error);
@@ -358,7 +339,7 @@ Deno.serve(async (req) => {
       const requestClone = req.clone();
       const body = await requestClone.json();
       const { shiftId } = body;
-      
+
       // Get current sync_attempts
       const { data: currentShift } = await supabase
         .from("supabase_shifts")
@@ -387,7 +368,7 @@ Deno.serve(async (req) => {
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   }
 });
