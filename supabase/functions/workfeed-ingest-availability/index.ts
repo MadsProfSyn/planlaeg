@@ -1,7 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 /**
  * Supabase Edge Function: Fetch WorkFeed availability and populate supabase_availability table.
- * Stores both WORK (available) and NO_WORK (unavailable) types from WorkFeed.
+ * ONLY stores WORK type availability (not NO_WORK).
  */
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { Temporal } from "npm:@js-temporal/polyfill";
@@ -101,45 +101,43 @@ function collapseSlicesForDate(slices, inspectorMap) {
     return null;
   }
 
-  // Determine final availability status:
-  // If ANY WORK slice exists → Available (true)
-  // If ONLY NO_WORK slices exist → Unavailable (false)
-  const hasWorkSlice = slices.some((s) => s.isAvailable);
-  const finalIsAvailable = hasWorkSlice;
-  
-  // For time ranges, use WORK slices if available, otherwise use NO_WORK slices
-  const relevantSlices = hasWorkSlice ? slices.filter((s) => s.isAvailable) : slices;
+  // ONLY PROCESS WORK SLICES
+  const workSlices = slices.filter((s) => s.isAvailable);
+  if (workSlices.length === 0) {
+    return null;
+  }
 
   const nowIso = new Date().toISOString();
 
-  // Extract actual start and end times from the relevant slices
-  const startTimes = relevantSlices.map((s) => s.startLocal).sort();
-  const endTimes = relevantSlices.map((s) => s.endLocal).sort();
+  // Extract actual start and end times from the work slices
+  const startTimes = workSlices.map((s) => s.startLocal).sort();
+  const endTimes = workSlices.map((s) => s.endLocal).sort();
 
   const earliestStart = startTimes[0]; // Earliest start time
   const latestEnd = endTimes[endTimes.length - 1]; // Latest end time
 
-  // Check if any relevant slices are all-day (midnight to midnight)
-  const hasAllDay = relevantSlices.some((s) => s.isAllDay);
+  // Check if any work slices are all-day (midnight to midnight)
+  const hasAllDayWork = workSlices.some((s) => s.isAllDay);
 
-  // If all-day, use business hours; otherwise use actual times
-  const finalStartLocal = hasAllDay ? DEFAULT_START : earliestStart;
-  const finalEndLocal = hasAllDay ? DEFAULT_END : latestEnd;
+  // For all-day entries: use business hours (08:30-16:00)
+  // For specific times: use their actual availability times
+  const finalStartTime = hasAllDayWork ? DEFAULT_START : earliestStart;
+  const finalEndTime = hasAllDayWork ? DEFAULT_END : latestEnd;
 
   return {
     inspector_id: inspector.id,
     inspector_name: inspector.full_name,
     date_local: key.date,
-    is_available: finalIsAvailable, // true for WORK, false for NO_WORK
-    start_time_local: finalStartLocal,
-    end_time_local: finalEndLocal,
+    is_available: true,
+    start_time_local: finalStartTime,
+    end_time_local: finalEndTime,
     department: inspector.department_name,
     source: SOURCE,
     fetched_at: nowIso,
     raw_payload: {
-      contributing_ids: Array.from(new Set(relevantSlices.map((s) => s.raw.id))),
-      items: relevantSlices.map((s) => s.raw),
-      rationale: `Start: ${finalStartLocal}, End: ${finalEndLocal} (all-day: ${hasAllDay}). Status: ${finalIsAvailable ? 'AVAILABLE' : 'UNAVAILABLE'}`,
+      contributing_ids: Array.from(new Set(workSlices.map((s) => s.raw.id))),
+      items: workSlices.map((s) => s.raw),
+      rationale: `Start: ${finalStartTime}, End: ${finalEndTime} (all-day: ${hasAllDayWork})`,
     },
   };
 }
@@ -238,11 +236,11 @@ serve(async (req) => {
     const BASE = Deno.env.get("WORKFEED_BASE_URL") ?? "https://europe-west1-production-eu-327a3.cloudfunctions.net/api";
     const COMPANY_ID = Deno.env.get("WORKFEED_COMPANY_ID") ?? "KASqUqisoJTrzapASxwG";
 
-    // Build WorkFeed request with PADDED dates - FETCH ALL TYPES (WORK and NO_WORK)
+    // Build WorkFeed request with PADDED dates - ONLY FETCH WORK TYPE
     const wfUrl = new URL(`${BASE}/companies/${COMPANY_ID}/availability`);
     wfUrl.searchParams.set("from", paddedFromISO);
     wfUrl.searchParams.set("to", paddedToISO);
-    // Removed type filter to capture both WORK and NO_WORK
+    wfUrl.searchParams.set("type", "WORK");
 
     const headers = {
       "content-type": "application/json",
