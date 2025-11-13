@@ -178,9 +178,11 @@ export function ManageAvailabilityDrawer({ open, onOpenChange, onSuccess }: Mana
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
       case "available":
-        return "default";
+        return "default"; // Green - confirmed available in WorkFeed
       case "unavailable":
-        return "destructive";
+        return "destructive"; // Red - actively set unavailable in WorkFeed
+      case "no_record":
+        return "warning"; // Yellow - no response from WorkFeed
       default:
         return "secondary";
     }
