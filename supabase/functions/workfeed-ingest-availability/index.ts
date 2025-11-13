@@ -137,9 +137,9 @@ function collapseSlicesForDate(slices, inspectorMap) {
     source: SOURCE,
     fetched_at: nowIso,
     raw_payload: {
-      contributing_ids: Array.from(new Set(workSlices.map((s) => s.raw.id))),
-      items: workSlices.map((s) => s.raw),
-      rationale: `Start: ${finalStartTime}, End: ${finalEndTime} (all-day: ${hasAllDayWork})`,
+      contributing_ids: Array.from(new Set(relevantSlices.map((s) => s.raw.id))),
+      items: relevantSlices.map((s) => s.raw),
+      rationale: `Start: ${finalStartLocal}, End: ${finalEndLocal} (all-day: ${hasAllDay}). Status: ${finalIsAvailable ? 'AVAILABLE' : 'UNAVAILABLE'}`,
     },
   };
 }
