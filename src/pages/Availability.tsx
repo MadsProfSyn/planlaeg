@@ -193,11 +193,30 @@ export default function AvailabilityPage() {
     }
   }, [filters, availabilityData.page, availabilityData.pageSize, sortBy, sortOrder, toast]);
 
-  // Auto-fetch on filter changes (debounced)
+  // Auto-fetch on filter changes (debounced) - ONLY for Tab 1
   React.useEffect(() => {
-    const timer = setTimeout(fetchAvailability, 300);
-    return () => clearTimeout(timer);
-  }, [fetchAvailability]);
+    if (activeTab !== 'available') {
+      console.log('⏭️ [Availability] Skipping Tab 1 auto-fetch (not on available tab)');
+      return;
+    }
+    
+    console.log('🔄 [Availability] Scheduling Tab 1 auto-fetch with filters:', {
+      date: filters.date,
+      afdeling: filters.afdeling,
+      q: filters.q,
+      page: availabilityData.page
+    });
+    
+    const timer = setTimeout(() => {
+      console.log('🚀 [Availability] Executing Tab 1 auto-fetch...');
+      fetchAvailability();
+    }, 300);
+    
+    return () => {
+      console.log('🧹 [Availability] Cleaning up Tab 1 fetch timer');
+      clearTimeout(timer);
+    };
+  }, [activeTab, fetchAvailability]);
 
   const handleFiltersChange = (newFilters: AvailabilityFilters) => {
     setFilters(newFilters);
