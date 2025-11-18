@@ -66,7 +66,8 @@ export default function AvailabilityPage() {
     responseRate: 0
   });
   const [noResponseFilters, setNoResponseFilters] = React.useState({
-    date: new Date().toISOString().split('T')[0]
+    date: new Date().toISOString().split('T')[0],
+    departments: [] as string[]
   });
   const [selectedInspectors, setSelectedInspectors] = React.useState<Set<string>>(new Set());
 
@@ -269,7 +270,7 @@ export default function AvailabilityPage() {
     }
   };
 
-  const fetchNoResponseInspectors = React.useCallback(async (targetDate: string) => {
+  const fetchNoResponseInspectors = React.useCallback(async (targetDate: string, selectedDepartments: string[]) => {
     setIsLoading(true);
     try {
       const { data, error } = await supabase.rpc('get_availability_overview', {
@@ -278,7 +279,16 @@ export default function AvailabilityPage() {
 
       if (error) throw error;
 
-      const noResponseInspectors = (data || [])
+      let filteredData = data || [];
+      
+      // Filter by departments if any selected
+      if (selectedDepartments.length > 0) {
+        filteredData = filteredData.filter((inspector: any) => 
+          selectedDepartments.includes(inspector.department)
+        );
+      }
+
+      const noResponseInspectors = filteredData
         .filter((inspector: any) => inspector.availability_status === 'NO_RESPONSE')
         .map((inspector: any) => ({
           inspector_id: inspector.inspector_id,
@@ -290,7 +300,7 @@ export default function AvailabilityPage() {
           availability_status: 'NO_RESPONSE' as const
         }));
 
-      const totalInspectors = data?.length || 0;
+      const totalInspectors = filteredData.length;
       const noResponseCount = noResponseInspectors.length;
       const responseRate = totalInspectors > 0 
         ? ((totalInspectors - noResponseCount) / totalInspectors) * 100 
@@ -315,9 +325,9 @@ export default function AvailabilityPage() {
 
   React.useEffect(() => {
     if (activeTab === 'no-response') {
-      fetchNoResponseInspectors(noResponseFilters.date);
+      fetchNoResponseInspectors(noResponseFilters.date, noResponseFilters.departments);
     }
-  }, [activeTab, noResponseFilters.date, fetchNoResponseInspectors]);
+  }, [activeTab, noResponseFilters.date, noResponseFilters.departments, fetchNoResponseInspectors]);
 
   return (
     <div className="container mx-auto py-8">
@@ -376,12 +386,15 @@ export default function AvailabilityPage() {
         <TabsContent value="no-response">
           <NoResponseFiltersBar
             selectedDate={noResponseFilters.date}
-            onDateChange={(date) => setNoResponseFilters({ date })}
-            onSearch={() => fetchNoResponseInspectors(noResponseFilters.date)}
+            onDateChange={(date) => setNoResponseFilters(prev => ({ ...prev, date }))}
+            selectedDepartments={noResponseFilters.departments}
+            onDepartmentsChange={(departments) => setNoResponseFilters(prev => ({ ...prev, departments }))}
+            departments={departments}
+            onSearch={() => fetchNoResponseInspectors(noResponseFilters.date, noResponseFilters.departments)}
             onReset={() => {
               const today = new Date().toISOString().split('T')[0];
-              setNoResponseFilters({ date: today });
-              fetchNoResponseInspectors(today);
+              setNoResponseFilters({ date: today, departments: [] });
+              fetchNoResponseInspectors(today, []);
             }}
             isLoading={isLoading}
           />
