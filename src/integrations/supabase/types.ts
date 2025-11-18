@@ -386,6 +386,7 @@ export type Database = {
           lat: number | null
           lng: number | null
           notes: string | null
+          phone: string | null
           updated_at: string | null
           wf_employee_id: string | null
         }
@@ -402,6 +403,7 @@ export type Database = {
           lat?: number | null
           lng?: number | null
           notes?: string | null
+          phone?: string | null
           updated_at?: string | null
           wf_employee_id?: string | null
         }
@@ -418,12 +420,84 @@ export type Database = {
           lat?: number | null
           lng?: number | null
           notes?: string | null
+          phone?: string | null
           updated_at?: string | null
           wf_employee_id?: string | null
         }
         Relationships: [
           {
             foreignKeyName: "inspectors_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inspectors_dublicate: {
+        Row: {
+          address: string | null
+          created_at: string | null
+          department_id: string | null
+          email: string
+          full_name: string
+          geocode_error: string | null
+          geocode_status: string | null
+          id: string
+          is_active: boolean | null
+          lat: number | null
+          lng: number | null
+          notes: string | null
+          phone: string | null
+          role_ids: string | null
+          role_ids_array: string[] | null
+          updated_at: string | null
+          wf_department_id: string | null
+          wf_employee_id: string | null
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string | null
+          department_id?: string | null
+          email: string
+          full_name: string
+          geocode_error?: string | null
+          geocode_status?: string | null
+          id?: string
+          is_active?: boolean | null
+          lat?: number | null
+          lng?: number | null
+          notes?: string | null
+          phone?: string | null
+          role_ids?: string | null
+          role_ids_array?: string[] | null
+          updated_at?: string | null
+          wf_department_id?: string | null
+          wf_employee_id?: string | null
+        }
+        Update: {
+          address?: string | null
+          created_at?: string | null
+          department_id?: string | null
+          email?: string
+          full_name?: string
+          geocode_error?: string | null
+          geocode_status?: string | null
+          id?: string
+          is_active?: boolean | null
+          lat?: number | null
+          lng?: number | null
+          notes?: string | null
+          phone?: string | null
+          role_ids?: string | null
+          role_ids_array?: string[] | null
+          updated_at?: string | null
+          wf_department_id?: string | null
+          wf_employee_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inspectors_dublicate_department_id_fkey"
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"
@@ -800,6 +874,8 @@ export type Database = {
       }
       supabase_availability: {
         Row: {
+          availability_status: string | null
+          created_at_source: string | null
           date_local: string
           department: string | null
           end_time_local: string | null
@@ -811,8 +887,13 @@ export type Database = {
           raw_payload: Json | null
           source: string | null
           start_time_local: string | null
+          updated_at_source: string | null
+          wf_availability_id: string | null
+          wf_type: string | null
         }
         Insert: {
+          availability_status?: string | null
+          created_at_source?: string | null
           date_local: string
           department?: string | null
           end_time_local?: string | null
@@ -824,8 +905,13 @@ export type Database = {
           raw_payload?: Json | null
           source?: string | null
           start_time_local?: string | null
+          updated_at_source?: string | null
+          wf_availability_id?: string | null
+          wf_type?: string | null
         }
         Update: {
+          availability_status?: string | null
+          created_at_source?: string | null
           date_local?: string
           department?: string | null
           end_time_local?: string | null
@@ -837,6 +923,9 @@ export type Database = {
           raw_payload?: Json | null
           source?: string | null
           start_time_local?: string | null
+          updated_at_source?: string | null
+          wf_availability_id?: string | null
+          wf_type?: string | null
         }
         Relationships: []
       }
@@ -1137,6 +1226,33 @@ export type Database = {
     Functions: {
       cleanup_old_jobs: { Args: { hours_old?: number }; Returns: number }
       demote_admin: { Args: { target_email: string }; Returns: undefined }
+      get_availability_overview: {
+        Args: { p_target_dates: string[] }
+        Returns: {
+          availability_status: string
+          date_local: string
+          department: string
+          email: string
+          end_time_local: string
+          inspector_id: string
+          inspector_name: string
+          last_updated: string
+          phone: string
+          start_time_local: string
+          wf_employee_id: string
+        }[]
+      }
+      get_availability_summary: {
+        Args: { p_target_dates: string[] }
+        Returns: {
+          available_count: number
+          date_local: string
+          no_response_count: number
+          not_available_count: number
+          response_rate: number
+          total_inspectors: number
+        }[]
+      }
       get_or_create_inspector_uuid: {
         Args: { emp_name: string; wf_emp_id: string }
         Returns: string
