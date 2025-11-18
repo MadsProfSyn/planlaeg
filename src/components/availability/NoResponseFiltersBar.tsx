@@ -1,10 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { SingleDatePicker } from "@/components/filters/SingleDatePicker";
+import { DepartmentMultiSelect } from "@/components/filters/DepartmentMultiSelect";
 import { Search, RotateCcw } from "lucide-react";
 
 interface NoResponseFiltersBarProps {
   selectedDate: string;
   onDateChange: (date: string) => void;
+  selectedDepartments: string[];
+  onDepartmentsChange: (departments: string[]) => void;
+  departments: { value: string; label: string }[];
   onSearch: () => void;
   onReset: () => void;
   isLoading?: boolean;
@@ -13,6 +17,9 @@ interface NoResponseFiltersBarProps {
 export function NoResponseFiltersBar({
   selectedDate,
   onDateChange,
+  selectedDepartments,
+  onDepartmentsChange,
+  departments,
   onSearch,
   onReset,
   isLoading = false,
@@ -27,6 +34,18 @@ export function NoResponseFiltersBar({
           <SingleDatePicker
             date={selectedDate}
             onDateChange={onDateChange}
+            disabled={isLoading}
+          />
+        </div>
+
+        <div className="flex-1 min-w-[200px]">
+          <label className="text-sm font-medium text-foreground mb-2 block">
+            Afdeling
+          </label>
+          <DepartmentMultiSelect
+            departments={departments.map(d => d.value)}
+            selectedDepartments={selectedDepartments}
+            onSelectionChange={onDepartmentsChange}
             disabled={isLoading}
           />
         </div>
