@@ -138,8 +138,6 @@ export function NoResponseTable({
                   <TableHead className="w-12">Vælg</TableHead>
                   <TableHead>Navn</TableHead>
                   <TableHead>Afdeling</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Telefon</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -157,8 +155,6 @@ export function NoResponseTable({
                     </TableCell>
                     <TableCell className="font-medium">{inspector.inspector_name}</TableCell>
                     <TableCell>{inspector.department}</TableCell>
-                    <TableCell className="text-muted-foreground">{inspector.email}</TableCell>
-                    <TableCell className="text-muted-foreground">{inspector.phone}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
