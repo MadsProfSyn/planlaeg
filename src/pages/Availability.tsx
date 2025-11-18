@@ -92,7 +92,11 @@ export default function AvailabilityPage() {
         urlFilters.afdeling = [afdeling];
       }
     }
-    if (date) urlFilters.date = date;
+    if (date) {
+      urlFilters.date = date;
+      // Sync Tab 2's date filter with URL parameter
+      setNoResponseFilters(prev => ({ ...prev, date }));
+    }
     if (q) urlFilters.q = q;
     if (synstyper) {
       try {
