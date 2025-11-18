@@ -2,9 +2,15 @@ import * as React from "react";
 import { useSearchParams } from "react-router-dom";
 import { AvailabilityFiltersBar } from "@/components/availability/AvailabilityFiltersBar";
 import { AvailabilityTable, type AvailableInspector } from "@/components/availability/AvailabilityTable";
+import { NoResponseTable, type NoResponseInspector } from "@/components/availability/NoResponseTable";
+import { NoResponseFiltersBar } from "@/components/availability/NoResponseFiltersBar";
+import { SummaryStats } from "@/components/availability/SummaryStats";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Users } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 interface AvailabilityFilters {
   afdeling: string[];
@@ -22,6 +28,12 @@ interface AvailabilityData {
   totalPages: number;
 }
 
+interface NoResponseData {
+  inspectors: NoResponseInspector[];
+  total: number;
+  responseRate: number;
+}
+
 const DEFAULT_FILTERS: AvailabilityFilters = {
   afdeling: [],
   date: new Date().toISOString().split('T')[0],
@@ -34,6 +46,7 @@ export default function AvailabilityPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
   
+  const [activeTab, setActiveTab] = React.useState<"available" | "no-response">("available");
   const [filters, setFilters] = React.useState<AvailabilityFilters>(DEFAULT_FILTERS);
   const [departments, setDepartments] = React.useState<{ value: string; label: string }[]>([]);
   const [availabilityData, setAvailabilityData] = React.useState<AvailabilityData>({
@@ -46,6 +59,16 @@ export default function AvailabilityPage() {
   const [sortBy, setSortBy] = React.useState("dato");
   const [sortOrder, setSortOrder] = React.useState<"asc" | "desc">("asc");
   const [isLoading, setIsLoading] = React.useState(false);
+  
+  const [noResponseData, setNoResponseData] = React.useState<NoResponseData>({
+    inspectors: [],
+    total: 0,
+    responseRate: 0
+  });
+  const [noResponseFilters, setNoResponseFilters] = React.useState({
+    date: new Date().toISOString().split('T')[0]
+  });
+  const [selectedInspectors, setSelectedInspectors] = React.useState<Set<string>>(new Set());
 
   // Load filters from URL on mount
   React.useEffect(() => {
@@ -246,6 +269,56 @@ export default function AvailabilityPage() {
     }
   };
 
+  const fetchNoResponseInspectors = React.useCallback(async (targetDate: string) => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('get_availability_overview', {
+        p_target_dates: [targetDate]
+      });
+
+      if (error) throw error;
+
+      const noResponseInspectors = (data || [])
+        .filter((inspector: any) => inspector.availability_status === 'NO_RESPONSE')
+        .map((inspector: any) => ({
+          inspector_id: inspector.inspector_id,
+          inspector_name: inspector.inspector_name,
+          email: inspector.email,
+          phone: inspector.phone,
+          department: inspector.department,
+          date_local: inspector.date_local,
+          availability_status: 'NO_RESPONSE' as const
+        }));
+
+      const totalInspectors = data?.length || 0;
+      const noResponseCount = noResponseInspectors.length;
+      const responseRate = totalInspectors > 0 
+        ? ((totalInspectors - noResponseCount) / totalInspectors) * 100 
+        : 0;
+
+      setNoResponseData({
+        inspectors: noResponseInspectors,
+        total: totalInspectors,
+        responseRate
+      });
+    } catch (error) {
+      console.error("Failed to fetch no response data:", error);
+      toast({
+        title: "Fejl",
+        description: "Kunne ikke hente data for ikke-responderede synskonsulenter",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
+
+  React.useEffect(() => {
+    if (activeTab === 'no-response') {
+      fetchNoResponseInspectors(noResponseFilters.date);
+    }
+  }, [activeTab, noResponseFilters.date, fetchNoResponseInspectors]);
+
   return (
     <div className="container mx-auto py-8">
       <div className="mb-8">
@@ -253,35 +326,95 @@ export default function AvailabilityPage() {
           <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
             <Users className="h-6 w-6 text-primary" />
           </div>
-          <h1 className="page-title">Tilgængelige synskonsulenter</h1>
+          <h1 className="page-title">Tilgængelighed</h1>
         </div>
         <p className="text-caption ml-16">
-          Oversigt over tilgængelige synskonsulenter og deres kompetencer
+          Oversigt over synskonsulenter og deres tilgængelighedsstatus
         </p>
       </div>
 
-      <AvailabilityFiltersBar
-        filters={filters}
-        onFiltersChange={handleFiltersChange}
-        departments={departments}
-        onSearch={handleSearch}
-        onReset={handleReset}
-        onSync={handleSyncAvailability}
-        isLoading={isLoading}
-      />
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "available" | "no-response")}>
+        <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
+          <TabsTrigger value="available">
+            Tilgængelige synskonsulenter
+          </TabsTrigger>
+          <TabsTrigger value="no-response" className="relative">
+            Ikke angivet
+            {noResponseData.inspectors.length > 0 && (
+              <Badge variant="destructive" className="ml-2">
+                {noResponseData.inspectors.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+        </TabsList>
 
-      <AvailabilityTable
-        data={availabilityData.data}
-        total={availabilityData.total}
-        page={availabilityData.page}
-        pageSize={availabilityData.pageSize}
-        totalPages={availabilityData.totalPages}
-        onPageChange={handlePageChange}
-        onSortChange={handleSortChange}
-        sortBy={sortBy}
-        sortOrder={sortOrder}
-        isLoading={isLoading}
-      />
+        <TabsContent value="available">
+          <AvailabilityFiltersBar
+            filters={filters}
+            onFiltersChange={handleFiltersChange}
+            departments={departments}
+            onSearch={handleSearch}
+            onReset={handleReset}
+            onSync={handleSyncAvailability}
+            isLoading={isLoading}
+          />
+
+          <AvailabilityTable
+            data={availabilityData.data}
+            total={availabilityData.total}
+            page={availabilityData.page}
+            pageSize={availabilityData.pageSize}
+            totalPages={availabilityData.totalPages}
+            onPageChange={handlePageChange}
+            onSortChange={handleSortChange}
+            sortBy={sortBy}
+            sortOrder={sortOrder}
+            isLoading={isLoading}
+          />
+        </TabsContent>
+
+        <TabsContent value="no-response">
+          <NoResponseFiltersBar
+            selectedDate={noResponseFilters.date}
+            onDateChange={(date) => setNoResponseFilters({ date })}
+            onSearch={() => fetchNoResponseInspectors(noResponseFilters.date)}
+            onReset={() => {
+              const today = new Date().toISOString().split('T')[0];
+              setNoResponseFilters({ date: today });
+              fetchNoResponseInspectors(today);
+            }}
+            isLoading={isLoading}
+          />
+
+          <SummaryStats
+            totalInspectors={noResponseData.total}
+            noResponseCount={noResponseData.inspectors.length}
+            responseRate={noResponseData.responseRate}
+          />
+
+          <div className="mb-4 flex justify-between items-center">
+            <Button
+              variant="outline"
+              disabled={selectedInspectors.size === 0}
+              onClick={() => {
+                toast({
+                  title: "Funktionen er under udvikling",
+                  description: "Påmindelsesfunktionalitet kommer snart",
+                });
+              }}
+            >
+              Send påmindelse til alle ({selectedInspectors.size})
+            </Button>
+          </div>
+
+          <NoResponseTable
+            data={noResponseData.inspectors}
+            selectedInspectors={selectedInspectors}
+            onSelectionChange={setSelectedInspectors}
+            isLoading={isLoading}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
