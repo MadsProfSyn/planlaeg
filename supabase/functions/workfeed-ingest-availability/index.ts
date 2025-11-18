@@ -381,7 +381,7 @@ serve(async (req) => {
     const { data, error } = await supabase
       .from(TABLE)
       .upsert(rows, {
-        onConflict: "wf_availability_id",
+        onConflict: "inspector_id,date_local",
         ignoreDuplicates: false,
       })
       .select();
