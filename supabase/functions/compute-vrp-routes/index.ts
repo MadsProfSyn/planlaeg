@@ -129,39 +129,39 @@ Deno.serve(async (req) => {
 
     // Call the external Railway VRP API for optimized route planning
     const railwayApiUrl = "https://web-production-1b301.up.railway.app/api/schedule";
+    const railwayBaseUrl = "https://web-production-1b301.up.railway.app";
     
     const requestPayload = {
       inspection_ids,
       target_dates,
     };
 
-    console.log("Step 2: Calling external VRP API with validated data:", {
+    console.log("Step 2: Creating VRP job:", {
       url: railwayApiUrl,
       method: "POST",
       payload: requestPayload,
       inspection_count: inspections.length,
       inspector_count: inspectors.length,
       inspector_capacity_count: inspectorCapacity.length,
-      all_times_valid: invalidInspectors.length === 0,
     });
 
     let railwayData: any;
     
     try {
+      // Step 2: Create the VRP job (short timeout - just creating job)
       const railwayResponse = await fetch(railwayApiUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(requestPayload),
-        signal: AbortSignal.timeout(90000), // 90 second timeout
+        signal: AbortSignal.timeout(5000), // 5 second timeout for job creation
       });
 
       console.log("Step 2: Railway API response received:", {
         status: railwayResponse.status,
         statusText: railwayResponse.statusText,
         ok: railwayResponse.ok,
-        headers: Object.fromEntries(railwayResponse.headers.entries()),
       });
 
       if (!railwayResponse.ok) {
@@ -204,21 +204,17 @@ Deno.serve(async (req) => {
       
       console.log("Step 2 SUCCESS: Railway API response parsed:", {
         status: railwayData.status,
-        has_job_id: !!railwayData.job_id,
+        job_id: railwayData.job_id,
         has_vrp_run_id: !!railwayData.vrp_run_id,
-        has_summary: !!railwayData.summary,
-        full_response: JSON.stringify(railwayData, null, 2),
       });
 
-      // Check if response indicates completed job
+      // Check if job completed immediately (unlikely with worker)
       if (railwayData.status === "completed" && railwayData.vrp_run_id) {
-        console.log("VRP job completed immediately:", {
+        console.log("Step 2: VRP job completed immediately (legacy):", {
           job_id: railwayData.job_id,
           vrp_run_id: railwayData.vrp_run_id,
-          summary: railwayData.summary,
         });
         
-        // Return completed job info to frontend
         return new Response(
           JSON.stringify({
             success: true,
@@ -233,48 +229,119 @@ Deno.serve(async (req) => {
         );
       }
       
-      // Check if this is a queued job response
-      if (railwayData.job_id && railwayData.status !== "completed") {
-        console.log("VRP job queued/pending:", railwayData.job_id);
-        
-        // Return job info to frontend for polling
+      // Step 3: Job created - poll for completion
+      if (railwayData.status === 'pending' && railwayData.job_id) {
+        const jobId = railwayData.job_id;
+        console.log(`Step 3: Job created (${jobId}), polling for completion...`);
+
+        const maxAttempts = 40; // 40 × 3 seconds = 2 minutes max
+        let attempts = 0;
+
+        while (attempts < maxAttempts) {
+          // Wait 3 seconds before checking
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          attempts++;
+
+          const elapsedSeconds = attempts * 3;
+          console.log(`Step 3: Polling attempt ${attempts}/${maxAttempts} (${elapsedSeconds}s elapsed) for job ${jobId}`);
+
+          try {
+            const statusResponse = await fetch(
+              `${railwayBaseUrl}/api/job-status/${jobId}`,
+              {
+                method: "GET",
+                headers: { "Content-Type": "application/json" },
+                signal: AbortSignal.timeout(5000),
+              }
+            );
+
+            if (!statusResponse.ok) {
+              console.warn(`Step 3: Status check failed (${statusResponse.status}), will retry...`);
+              continue;
+            }
+
+            const statusData = await statusResponse.json();
+            console.log(`Step 3: Job status: ${statusData.status}`, {
+              attempt: attempts,
+              elapsed_seconds: elapsedSeconds,
+            });
+
+            if (statusData.status === 'completed') {
+              console.log("Step 3 SUCCESS: VRP job completed!", {
+                job_id: jobId,
+                vrp_run_id: statusData.result?.vrp_run_id,
+                duration_seconds: elapsedSeconds,
+                summary: statusData.result,
+              });
+
+              // Job completed - return success with results
+              return new Response(JSON.stringify({
+                success: true,
+                job_id: jobId,
+                vrp_run_id: statusData.result?.vrp_run_id,
+                status: 'completed',
+                summary: statusData.result,
+              }), {
+                headers: {
+                  ...corsHeaders,
+                  "Content-Type": "application/json",
+                },
+              });
+            }
+
+            if (statusData.status === 'failed') {
+              console.error("Step 3 FAILED: VRP job failed:", statusData.error);
+              throw new Error(statusData.error || 'VRP calculation failed');
+            }
+
+            // Status is still 'running' or 'pending' - continue polling
+          } catch (pollError: any) {
+            console.warn(`Step 3: Poll error (attempt ${attempts}):`, {
+              name: pollError.name,
+              message: pollError.message,
+            });
+            // Continue polling unless we're out of attempts
+          }
+        }
+
+        // Timeout after max attempts
+        console.error("Step 3 FAILED: VRP job timed out after 2 minutes");
         return new Response(
           JSON.stringify({
-            success: true,
-            job_id: railwayData.job_id,
-            status: railwayData.status || "pending",
+            success: false,
+            error: "VRP-beregningen tog for lang tid (over 2 minutter). Tjek job-status manuelt eller prøv igen.",
+            status: "timeout",
+            job_id: jobId,
           }),
           {
+            status: 408,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           }
         );
       }
 
-      // If we get here, it means we got an old-style response with assignments
-      console.log("VRP API response (legacy format):", {
-        assignments_count: railwayData.assignments?.length || 0,
-        total_scheduled: railwayData.metrics?.total_scheduled,
-        execution_seconds: railwayData.metrics?.execution_seconds,
-      });
-
-      if (!railwayData.assignments || railwayData.assignments.length === 0) {
-        throw new Error("Ingen synskonsulenter tilgængelige på de valgte datoer");
-      }
+      // Unexpected response format
+      console.error("Step 2 FAILED: Unexpected response format:", railwayData);
+      throw new Error('Unexpected response format from VRP API');
 
     } catch (error: any) {
-      console.error("Step 2 FAILED: Railway VRP API error:", {
+      console.error("Step 2/3 FAILED: Railway VRP API error:", {
         name: error.name,
         message: error.message,
         stack: error.stack,
-        cause: error.cause,
       });
       
-      // Return the actual error message for debugging
-      console.error("Step 2: Throwing error with full details");
+      // Don't re-wrap timeout errors
+      if (error.message.includes('VRP-beregningen tog for lang tid')) {
+        throw error;
+      }
+      
       throw new Error(`Railway API Error: ${error.message}`);
     }
 
+    // Legacy code path - shouldn't reach here with worker-based API
     // Transform Railway API response to match our VrpRoutePlan interface
+    console.warn("UNEXPECTED: Processing legacy response format with assignments");
     const assignments = railwayData.assignments.map((a: any) => {
       const inspection = inspections.find((i: any) => i.id === a.inspection_id);
       const inspector = inspectors.find((i: any) => i.inspector_id === a.inspector_id);

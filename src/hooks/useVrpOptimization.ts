@@ -54,31 +54,48 @@ export function useVrpOptimization({
     try {
       const result = await computeVrpRoutes(inspectionIds, targetDates);
       
-      // Check if this is a completed job response (immediate completion)
-      if ('job_id' in result && result.status === 'completed') {
-        // Job completed immediately
-        console.log('✅ VRP job completed immediately:', result);
-        console.log('📊 VRP Run ID received:', result.vrp_run_id);
+      console.log('VRP computation result:', result);
+      
+      // Type guard: result is always VrpComputeResponse from backend
+      const response = result as any; // Backend now always returns VrpComputeResponse format
+      
+      // Check if computation was successful
+      if (!response.success) {
+        // Handle blocked/error cases
+        if (response.blocked) {
+          setError(`En anden VRP-beregning kører. Prøv igen om ${response.retry_after || 30} sekunder.`);
+        } else {
+          setError(response.error || "VRP-beregning fejlede");
+        }
+        setProgress({ stage: "idle", percentage: 0, message: "" });
+        setIsLoading(false);
+        return;
+      }
+      
+      // Success - job completed (backend handled polling)
+      if (response.status === 'completed' && response.vrp_run_id) {
+        console.log('✅ VRP job completed:', {
+          job_id: response.job_id,
+          vrp_run_id: response.vrp_run_id,
+          summary: response.summary,
+        });
         
-        if (result.summary) {
+        if (response.summary) {
           // Show success toast with metrics
           toast({
             title: "Ruteberegning fuldført",
-            description: `${result.summary.total_scheduled} syn planlagt. Total distance: ${result.summary.total_travel_km.toFixed(1)} km, tid: ${result.summary.total_travel_minutes} min.`,
+            description: `${response.summary.total_scheduled} syn planlagt. Total distance: ${response.summary.total_travel_km.toFixed(1)} km, tid: ${response.summary.total_travel_minutes} min.`,
           });
         }
         
         // Fetch assignments from database using vrp_run_id
-        if (result.vrp_run_id) {
-          try {
-            const routePlanFromDb = await fetchAssignmentsByVrpRunId(result.vrp_run_id);
-            setRoutePlan(routePlanFromDb);
-          } catch (error) {
-            console.error('❌ Failed to fetch route plan from database:', error);
-            setError('Kunne ikke hente rutedetaljer fra databasen');
-          }
-        } else {
-          console.warn('⚠️ No vrp_run_id in response');
+        try {
+          const routePlanFromDb = await fetchAssignmentsByVrpRunId(response.vrp_run_id);
+          setRoutePlan(routePlanFromDb);
+          console.log('✅ Route plan loaded from database');
+        } catch (error) {
+          console.error('❌ Failed to fetch route plan from database:', error);
+          setError('Kunne ikke hente rutedetaljer fra databasen');
         }
         
         setProgress({
@@ -90,37 +107,10 @@ export function useVrpOptimization({
         return;
       }
       
-      // Check if this is a job queue response
-      if ('job_id' in result) {
-        if (result.blocked) {
-          setError("En anden VRP-beregning kører. Vent venligst.");
-          setProgress({ stage: "idle", percentage: 0, message: "" });
-          setIsLoading(false);
-          return;
-        }
-        
-        // Job queued - start polling
-        setJobId(result.job_id);
-        setJobStatus(result.status as any);
-        setProgress({
-          stage: "queued",
-          percentage: 40,
-          message: "Job sat i kø...",
-          jobId: result.job_id,
-        });
-        // Don't set isLoading to false - polling will continue
-      } else {
-        // Immediate result (backwards compatible) - result is VrpRoutePlan
-        if ('assignments' in result) {
-          setRoutePlan(result);
-          setProgress({
-            stage: "ready",
-            percentage: 100,
-            message: "Klar til visning",
-          });
-        }
-        setIsLoading(false);
-      }
+      // Unexpected response
+      console.warn('⚠️ Unexpected VRP response format:', response);
+      setError('Uventet svar fra VRP-tjenesten');
+      setIsLoading(false);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       setError(message);
@@ -141,86 +131,6 @@ export function useVrpOptimization({
 
     return () => clearTimeout(timeoutId);
   }, [fetchRoutes, enabled, debounceMs]);
-
-  // Poll for job status
-  useEffect(() => {
-    if (!jobId || jobStatus === 'completed' || jobStatus === 'failed') {
-      return;
-    }
-
-    console.log('Starting poll for job:', jobId, 'status:', jobStatus);
-
-    const pollInterval = setInterval(async () => {
-      try {
-        const statusResponse = await pollVrpJobStatus(jobId);
-        console.log('Poll result:', statusResponse.status);
-        
-        setJobStatus(statusResponse.status);
-
-        if (statusResponse.status === 'running') {
-          setProgress({
-            stage: "computing",
-            percentage: statusResponse.progress || 70,
-            message: "Beregner optimale ruter...",
-            jobId,
-          });
-        }
-
-        if (statusResponse.status === 'completed') {
-          console.log('✅ VRP job completed via polling:', statusResponse);
-          console.log('📊 VRP Run ID received:', statusResponse.vrp_run_id);
-          
-          // Check if we have the new format with summary
-          if (statusResponse.summary) {
-            // Show success toast with metrics
-            toast({
-              title: "Ruteberegning fuldført",
-              description: `${statusResponse.summary.total_scheduled} syn planlagt. Total distance: ${statusResponse.summary.total_travel_km.toFixed(1)} km, tid: ${statusResponse.summary.total_travel_minutes} min.`,
-            });
-          }
-          
-          // Fetch assignments from database using vrp_run_id
-          if (statusResponse.vrp_run_id) {
-            try {
-              const routePlanFromDb = await fetchAssignmentsByVrpRunId(statusResponse.vrp_run_id);
-              setRoutePlan(routePlanFromDb);
-              console.log('✅ Route plan successfully loaded and set');
-            } catch (error) {
-              console.error('❌ Failed to fetch route plan from database:', error);
-              setError('Kunne ikke hente rutedetaljer fra databasen');
-            }
-          } else {
-            console.warn('⚠️ No vrp_run_id in response');
-          }
-          
-          setProgress({
-            stage: "ready",
-            percentage: 100,
-            message: "Klar til visning",
-            jobId,
-          });
-          setIsLoading(false);
-          clearInterval(pollInterval);
-        }
-
-        if (statusResponse.status === 'failed') {
-          setError(statusResponse.error || "VRP job failed");
-          setRoutePlan(null);
-          setIsLoading(false);
-          setProgress({ stage: "idle", percentage: 0, message: "" });
-          clearInterval(pollInterval);
-        }
-      } catch (error) {
-        console.error("Error polling job status:", error);
-        // Don't stop polling on temporary network errors
-      }
-    }, 2000); // Poll every 2 seconds
-
-    return () => {
-      console.log('Clearing poll interval for job:', jobId);
-      clearInterval(pollInterval);
-    };
-  }, [jobId, jobStatus]);
 
   const refetch = useCallback(() => {
     fetchRoutes();
