@@ -48,6 +48,11 @@ const navigationItems = [
     adminOnly: true,
   },
   {
+    title: "Synskonsulenter",
+    url: "/inspectors",
+    icon: Shield,
+  },
+  {
     title: "ProfSyn AI",
     url: "/profsyn-ai",
     icon: Brain,

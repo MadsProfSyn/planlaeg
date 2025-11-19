@@ -12,6 +12,7 @@ import Inspections from "./pages/Inspections";
 import Scheduled from "./pages/Scheduled";
 import Availability from "./pages/Availability";
 import UnavailableConsultants from "./pages/UnavailableConsultants";
+import Inspectors from "./pages/Inspectors";
 import ProfSynAI from "./pages/ProfSynAI";
 import Overview from "./pages/admin/Overview";
 import Account from "./pages/admin/Account";
@@ -37,6 +38,7 @@ const App = () => {
                 <Route path="/scheduled" element={<ProtectedRoute><AppLayout><Scheduled /></AppLayout></ProtectedRoute>} />
                 <Route path="/availability" element={<ProtectedRoute><AppLayout><Availability /></AppLayout></ProtectedRoute>} />
                 <Route path="/unavailable-consultants" element={<ProtectedRoute><AppLayout><UnavailableConsultants /></AppLayout></ProtectedRoute>} />
+                <Route path="/inspectors" element={<ProtectedRoute><AppLayout><Inspectors /></AppLayout></ProtectedRoute>} />
                 <Route path="/profsyn-ai" element={<ProtectedRoute><AppLayout><ProfSynAI /></AppLayout></ProtectedRoute>} />
                 
                 {/* Admin Routes */}
