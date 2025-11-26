@@ -10,8 +10,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 
 interface EditInspectorDialogProps {
@@ -23,6 +31,8 @@ interface EditInspectorDialogProps {
     phone: string | null;
     address: string | null;
     skills: string[];
+    department_id: string | null;
+    department_name: string | null;
   } | null;
   onSave: () => void;
 }
@@ -44,9 +54,23 @@ export function EditInspectorDialog({
     phone: "",
     address: "",
     skills: [] as string[],
+    departmentId: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+
+  const { data: departments } = useQuery({
+    queryKey: ["departments-list"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("departments")
+        .select("id, name")
+        .eq("is_active", true)
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
 
   useEffect(() => {
     if (inspector && open) {
@@ -54,12 +78,14 @@ export function EditInspectorDialog({
         phone: inspector.phone || "",
         address: inspector.address || "",
         skills: inspector.skills || [],
+        departmentId: inspector.department_id || "",
       });
     } else {
       setFormData({
         phone: "",
         address: "",
         skills: [],
+        departmentId: "",
       });
     }
   }, [inspector, open]);
@@ -71,12 +97,13 @@ export function EditInspectorDialog({
     setIsSubmitting(true);
 
     try {
-      // 1. Update phone and address
+      // 1. Update phone, address, and department
       const { error: updateError } = await supabase
         .from("inspectors")
         .update({
           phone: formData.phone || null,
           address: formData.address || null,
+          department_id: formData.departmentId || null,
         })
         .eq("id", inspector.id);
 
@@ -207,6 +234,28 @@ export function EditInspectorDialog({
                 setFormData((prev) => ({ ...prev, address: e.target.value }))
               }
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="department">Afdeling</Label>
+            <Select
+              value={formData.departmentId}
+              onValueChange={(value) =>
+                setFormData((prev) => ({ ...prev, departmentId: value }))
+              }
+            >
+              <SelectTrigger id="department">
+                <SelectValue placeholder="Vælg afdeling" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">Ingen afdeling</SelectItem>
+                {departments?.map((dept) => (
+                  <SelectItem key={dept.id} value={dept.id}>
+                    {dept.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-3">
