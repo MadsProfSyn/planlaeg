@@ -359,34 +359,14 @@ export function groupAssignmentsByInspector(
       // Calculate roundtrip distance if enabled and base data available
       if (roundtripEnabled && inspectorBases) {
         const base = inspectorBases.get(inspector_id);
-        if (base?.lat && base?.lng && base.address) {
+        if (base?.address) {
           summary.base_address = base.address;
-
-          const firstAssignment = sorted[0];
-          const lastAssignment = sorted[sorted.length - 1];
-
-          const firstInspection = inspections.find(i => i.id === firstAssignment.inspection_id);
-          const lastInspection = inspections.find(i => i.id === lastAssignment.inspection_id);
-
-          if (firstInspection?.lat && firstInspection?.lng && lastInspection?.lat && lastInspection?.lng) {
-            const distanceToFirst = haversineDistance(
-              base.lat, base.lng,
-              firstInspection.lat, firstInspection.lng
-            );
-
-            const distanceFromLast = haversineDistance(
-              lastInspection.lat, lastInspection.lng,
-              base.lat, base.lng
-            );
-
-            summary.distance_to_first_km = distanceToFirst;
-            summary.distance_from_last_km = distanceFromLast;
-            summary.roundtrip_distance_km = distanceToFirst + total_distance_km + distanceFromLast;
-          } else {
-            console.warn(`Missing inspection coordinates for roundtrip calculation: ${inspector_id}`);
+          
+          // Use DB value directly - it already includes home legs
+          const dbRouteKm = sorted[0]?.inspector_route_km;
+          if (dbRouteKm) {
+            summary.roundtrip_distance_km = dbRouteKm;
           }
-        } else {
-          console.warn(`Missing base data for inspector: ${inspector_id}`);
         }
       }
 
@@ -398,11 +378,17 @@ export function groupAssignmentsByInspector(
   const assigned_ids = new Set(assignments.map((a) => a.inspection_id));
   const unassigned = inspections.filter((i) => !assigned_ids.has(i.id));
 
+  // Calculate overall distance by summing inspector roundtrip distances
+  const overall_total_distance = inspector_routes.reduce(
+    (sum, r) => sum + (r.roundtrip_distance_km ?? r.total_distance_km),
+    0
+  );
+
   return {
     inspector_routes,
     unassigned_inspections: unassigned,
     overall_total_time:
       routePlan?.total_eta_minutes ?? inspector_routes.reduce((s, r) => s + r.total_time_mins, 0),
-    overall_total_distance: routePlan?.total_distance_km ?? 0,
+    overall_total_distance,
   };
 }
