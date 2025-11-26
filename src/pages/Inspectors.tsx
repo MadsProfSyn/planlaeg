@@ -25,6 +25,7 @@ interface InspectorWithDetails {
   phone: string | null;
   address: string | null;
   is_active: boolean;
+  department_id: string | null;
   department: { name: string } | null;
   inspector_skills: Array<{
     inspection_type: string;
@@ -66,6 +67,8 @@ export default function Inspectors() {
     phone: string | null;
     address: string | null;
     skills: string[];
+    department_id: string | null;
+    department_name: string | null;
   } | null>(null);
   const queryClient = useQueryClient();
 
@@ -96,6 +99,7 @@ export default function Inspectors() {
           phone,
           address,
           is_active,
+          department_id,
           department:departments(name),
           inspector_skills(inspection_type, is_active)
         `
@@ -128,6 +132,8 @@ export default function Inspectors() {
       skills: inspector.inspector_skills
         ?.filter((s) => s.is_active)
         .map((s) => s.inspection_type) || [],
+      department_id: inspector.department_id,
+      department_name: inspector.department?.name || null,
     });
   };
 
