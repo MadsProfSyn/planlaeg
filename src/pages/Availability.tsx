@@ -7,10 +7,20 @@ import { NoResponseFiltersBar } from "@/components/availability/NoResponseFilter
 import { SummaryStats } from "@/components/availability/SummaryStats";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Users } from "lucide-react";
+import { Users, Loader2 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface AvailabilityFilters {
   afdeling: string[];
@@ -70,6 +80,8 @@ export default function AvailabilityPage() {
     departments: [] as string[]
   });
   const [selectedInspectors, setSelectedInspectors] = React.useState<Set<string>>(new Set());
+  const [isSendingSMS, setIsSendingSMS] = React.useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = React.useState(false);
 
   // Load filters from URL on mount
   React.useEffect(() => {
@@ -352,6 +364,60 @@ export default function AvailabilityPage() {
     }
   }, [activeTab, noResponseFilters.date, noResponseFilters.departments, fetchNoResponseInspectors]);
 
+  const handleSendReminders = async () => {
+    if (selectedInspectors.size === 0) {
+      toast({
+        title: "Ingen synskonsulenter valgt",
+        description: "Vælg mindst én synskonsulent for at sende påmindelser",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSendingSMS(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("send-sms-reminder", {
+        body: {
+          inspector_ids: Array.from(selectedInspectors),
+          target_date: noResponseFilters.date,
+        },
+      });
+
+      if (error) throw error;
+
+      const { sent, failed, skipped } = data;
+
+      if (sent > 0) {
+        toast({
+          title: "SMS sendt",
+          description: `${sent} SMS blev sendt. ${failed > 0 ? `${failed} fejlede. ` : ''}${skipped > 0 ? `${skipped} sprunget over (intet telefonnummer).` : ''}`,
+        });
+      } else {
+        toast({
+          title: "Ingen SMS sendt",
+          description: `${failed} SMS fejlede. ${skipped} synskonsulenter har intet telefonnummer.`,
+          variant: "destructive",
+        });
+      }
+
+      // Clear selection after successful send
+      if (sent > 0) {
+        setSelectedInspectors(new Set());
+      }
+    } catch (error: any) {
+      console.error("Error sending SMS reminders:", error);
+      toast({
+        title: "Fejl ved afsendelse af SMS",
+        description: error.message || "Der opstod en fejl",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSendingSMS(false);
+      setShowConfirmDialog(false);
+    }
+  };
+
   return (
     <div className="container mx-auto py-8">
       <div className="mb-8">
@@ -431,15 +497,17 @@ export default function AvailabilityPage() {
           <div className="mb-4 flex justify-between items-center">
             <Button
               variant="outline"
-              disabled={selectedInspectors.size === 0}
-              onClick={() => {
-                toast({
-                  title: "Funktionen er under udvikling",
-                  description: "Påmindelsesfunktionalitet kommer snart",
-                });
-              }}
+              disabled={selectedInspectors.size === 0 || isSendingSMS}
+              onClick={() => setShowConfirmDialog(true)}
             >
-              Send påmindelse til alle ({selectedInspectors.size})
+              {isSendingSMS ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Sender SMS...
+                </>
+              ) : (
+                `Send påmindelse til alle (${selectedInspectors.size})`
+              )}
             </Button>
           </div>
 
@@ -451,6 +519,36 @@ export default function AvailabilityPage() {
           />
         </TabsContent>
       </Tabs>
+
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Send SMS påmindelser?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Du er ved at sende SMS til {selectedInspectors.size} synskonsulent{selectedInspectors.size !== 1 ? 'er' : ''} om manglende tilbagemelding for{' '}
+              {new Date(noResponseFilters.date).toLocaleDateString('da-DK', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+              })}.
+              Vil du fortsætte?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isSendingSMS}>Annuller</AlertDialogCancel>
+            <AlertDialogAction onClick={handleSendReminders} disabled={isSendingSMS}>
+              {isSendingSMS ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Sender...
+                </>
+              ) : (
+                'Send SMS'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

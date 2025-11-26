@@ -39,3 +39,6 @@ verify_jwt = false
 
 [functions.workfeed-ingest-availability]
 verify_jwt = false
+
+[functions.send-sms-reminder]
+verify_jwt = false
