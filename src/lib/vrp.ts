@@ -348,10 +348,30 @@ export function groupAssignmentsByInspector(
       const relevantLegs = (legs || []).filter(
         (leg) => leg.to_syn_id && assignmentIds.has(leg.to_syn_id)
       );
-      const total_distance_km = relevantLegs.reduce(
-        (sum, leg) => sum + (leg.distance_km || 0),
-        0
-      );
+      
+      let total_distance_km = 0;
+      
+      // If legs are available, use them; otherwise calculate from coordinates
+      if (relevantLegs.length > 0) {
+        total_distance_km = relevantLegs.reduce(
+          (sum, leg) => sum + (leg.distance_km || 0),
+          0
+        );
+      } else {
+        // Calculate distances between consecutive inspections using Haversine
+        for (let i = 0; i < sorted.length - 1; i++) {
+          const currentInspection = inspections.find(insp => insp.id === sorted[i].inspection_id);
+          const nextInspection = inspections.find(insp => insp.id === sorted[i + 1].inspection_id);
+          
+          if (currentInspection?.lat && currentInspection?.lng && 
+              nextInspection?.lat && nextInspection?.lng) {
+            total_distance_km += haversineDistance(
+              currentInspection.lat, currentInspection.lng,
+              nextInspection.lat, nextInspection.lng
+            );
+          }
+        }
+      }
 
       const summary: import("@/types/vrp").InspectorRouteSummary = {
         inspector_id,
