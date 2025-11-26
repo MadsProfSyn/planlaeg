@@ -1147,6 +1147,27 @@ export type Database = {
         }
         Relationships: []
       }
+      worker_keepalive_log: {
+        Row: {
+          id: number
+          pinged_at: string | null
+          response_body: string | null
+          response_status: number | null
+        }
+        Insert: {
+          id?: number
+          pinged_at?: string | null
+          response_body?: string | null
+          response_status?: number | null
+        }
+        Update: {
+          id?: number
+          pinged_at?: string | null
+          response_body?: string | null
+          response_status?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       inspections_with_planner: {
