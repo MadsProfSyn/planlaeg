@@ -9,6 +9,7 @@ const corsHeaders = {
 interface SendSmsRequest {
   inspector_ids: string[];
   target_date: string;
+  message_template?: string;
 }
 
 interface SendResult {
@@ -29,9 +30,20 @@ serve(async (req) => {
   }
 
   try {
-    const { inspector_ids, target_date }: SendSmsRequest = await req.json();
+    const { inspector_ids, target_date, message_template }: SendSmsRequest = await req.json();
 
     console.log(`Sending SMS reminders to ${inspector_ids.length} inspectors for date ${target_date}`);
+
+    // Default template if none provided
+    const template = message_template || `Hej {first_name}
+
+Vi mangler hjælp til {date}, og du har ikke taget stilling i WorkFeed, hvorvidt du kan tage syn.
+
+Denne SMS kan ikke besvares.
+
+Ved spørgsmål henvend dig direkte til ProfSyn.
+Mvh
+ProfSyn`;
 
     // Get Twilio credentials
     const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID");
@@ -97,16 +109,10 @@ serve(async (req) => {
       // Format phone number with +45 prefix
       const phoneNumber = `+45${inspector.phone}`;
 
-      // Build SMS message
-      const message = `Hej ${firstName}
-
-Vi mangler hjælp til ${formattedDate}, og du har ikke taget stilling i WorkFeed, hvorvidt du kan tage syn.
-
-Denne SMS kan ikke besvares.
-
-Ved spørgsmål henvend dig direkte til ProfSyn.
-Mvh
-ProfSyn`;
+      // Build SMS message by replacing placeholders
+      const message = template
+        .replace(/{first_name}/g, firstName)
+        .replace(/{date}/g, formattedDate);
 
       try {
         // Send via Twilio API

@@ -82,6 +82,17 @@ export default function AvailabilityPage() {
   const [selectedInspectors, setSelectedInspectors] = React.useState<Set<string>>(new Set());
   const [isSendingSMS, setIsSendingSMS] = React.useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = React.useState(false);
+  const [smsMessage, setSmsMessage] = React.useState("");
+
+  const DEFAULT_SMS_TEMPLATE = `Hej {first_name}
+
+Vi mangler hjælp til {date}, og du har ikke taget stilling i WorkFeed, hvorvidt du kan tage syn.
+
+Denne SMS kan ikke besvares.
+
+Ved spørgsmål henvend dig direkte til ProfSyn.
+Mvh
+ProfSyn`;
 
   // Load filters from URL on mount
   React.useEffect(() => {
@@ -364,6 +375,12 @@ export default function AvailabilityPage() {
     }
   }, [activeTab, noResponseFilters.date, noResponseFilters.departments, fetchNoResponseInspectors]);
 
+  const handleOpenConfirmDialog = () => {
+    // Reset message to default template when opening
+    setSmsMessage(DEFAULT_SMS_TEMPLATE);
+    setShowConfirmDialog(true);
+  };
+
   const handleSendReminders = async () => {
     if (selectedInspectors.size === 0) {
       toast({
@@ -381,6 +398,7 @@ export default function AvailabilityPage() {
         body: {
           inspector_ids: Array.from(selectedInspectors),
           target_date: noResponseFilters.date,
+          message_template: smsMessage,
         },
       });
 
@@ -498,7 +516,7 @@ export default function AvailabilityPage() {
             <Button
               variant="outline"
               disabled={selectedInspectors.size === 0 || isSendingSMS}
-              onClick={() => setShowConfirmDialog(true)}
+              onClick={handleOpenConfirmDialog}
             >
               {isSendingSMS ? (
                 <>
@@ -521,9 +539,9 @@ export default function AvailabilityPage() {
       </Tabs>
 
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>Send SMS påmindelser?</AlertDialogTitle>
+            <AlertDialogTitle>Send SMS påmindelser</AlertDialogTitle>
             <AlertDialogDescription>
               Du er ved at sende SMS til {selectedInspectors.size} synskonsulent{selectedInspectors.size !== 1 ? 'er' : ''} om manglende tilbagemelding for{' '}
               {new Date(noResponseFilters.date).toLocaleDateString('da-DK', {
@@ -531,12 +549,28 @@ export default function AvailabilityPage() {
                 month: 'long',
                 year: 'numeric',
               })}.
-              Vil du fortsætte?
             </AlertDialogDescription>
           </AlertDialogHeader>
+          
+          <div className="my-4">
+            <label htmlFor="sms-message" className="text-sm font-medium mb-2 block">
+              Rediger SMS besked (brug {'{first_name}'} og {'{date}'} som pladsholdere):
+            </label>
+            <textarea
+              id="sms-message"
+              value={smsMessage}
+              onChange={(e) => setSmsMessage(e.target.value)}
+              className="w-full min-h-[200px] p-3 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary resize-y font-mono text-sm"
+              disabled={isSendingSMS}
+            />
+            <p className="text-xs text-muted-foreground mt-2">
+              Pladsholderne vil automatisk blive erstattet med synskonsulentens fornavn og datoen.
+            </p>
+          </div>
+
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isSendingSMS}>Annuller</AlertDialogCancel>
-            <AlertDialogAction onClick={handleSendReminders} disabled={isSendingSMS}>
+            <AlertDialogAction onClick={handleSendReminders} disabled={isSendingSMS || !smsMessage.trim()}>
               {isSendingSMS ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
