@@ -26,7 +26,7 @@ interface SendResult {
 
 serve(async (req) => {
   console.log("=== SMS Reminder Edge Function Started ===");
-  
+
   if (req.method === "OPTIONS") {
     console.log("Handling CORS preflight request");
     return new Response(null, { headers: corsHeaders });
@@ -41,13 +41,15 @@ serve(async (req) => {
     console.log(`[REQUEST] Custom template provided: ${!!message_template}`);
 
     // Default template if none provided
-    const template = message_template || `Hej {first_name}
+    const template =
+      message_template ||
+      `Hej {first_name}
 
 Vi mangler hjælp til {date}, og du har ikke taget stilling i WorkFeed, hvorvidt du kan tage syn.
 
 Denne SMS kan ikke besvares.
 
-Ved spørgsmål henvend dig direkte til ProfSyn.
+Ved spørgsmål henvend dig direkte på mail eller tlf. 
 Mvh
 ProfSyn`;
 
@@ -70,10 +72,7 @@ ProfSyn`;
 
     // Create Supabase client
     console.log("[SUPABASE] Creating Supabase client");
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
     // Fetch inspector details
     console.log(`[DATABASE] Fetching details for ${inspector_ids.length} inspectors`);
@@ -92,13 +91,10 @@ ProfSyn`;
 
     if (!inspectors || inspectors.length === 0) {
       console.warn("[WARNING] No inspectors found for the provided IDs");
-      return new Response(
-        JSON.stringify({ error: "No inspectors found" }),
-        {
-          status: 404,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ error: "No inspectors found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Format date in Danish
@@ -116,7 +112,7 @@ ProfSyn`;
 
     for (const inspector of inspectors) {
       console.log(`[SMS] Processing inspector: ${inspector.full_name} (ID: ${inspector.id})`);
-      
+
       const firstName = inspector.first_name || inspector.full_name.split(" ")[0];
       console.log(`[SMS] Using first name: ${firstName}`);
 
@@ -138,32 +134,27 @@ ProfSyn`;
       console.log(`[SMS] Formatted phone: ${phoneNumber}`);
 
       // Build SMS message by replacing placeholders
-      const message = template
-        .replace(/{first_name}/g, firstName)
-        .replace(/{date}/g, formattedDate);
-      
+      const message = template.replace(/{first_name}/g, firstName).replace(/{date}/g, formattedDate);
+
       console.log(`[SMS] Message length: ${message.length} characters`);
 
       try {
         console.log(`[TWILIO] Sending SMS to ${inspector.full_name}`);
         console.log(`[TWILIO] Request URL: https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`);
-        
+
         // Send via Twilio API
-        const twilioResponse = await fetch(
-          `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Basic ${btoa(`${accountSid}:${authToken}`)}`,
-              "Content-Type": "application/x-www-form-urlencoded",
-            },
-            body: new URLSearchParams({
-              From: "ProfSyn",
-              To: phoneNumber,
-              Body: message,
-            }),
-          }
-        );
+        const twilioResponse = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+          method: "POST",
+          headers: {
+            Authorization: `Basic ${btoa(`${accountSid}:${authToken}`)}`,
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: new URLSearchParams({
+            From: "ProfSyn",
+            To: phoneNumber,
+            Body: message,
+          }),
+        });
 
         console.log(`[TWILIO] Response status: ${twilioResponse.status} ${twilioResponse.statusText}`);
 
@@ -210,7 +201,9 @@ ProfSyn`;
     }
 
     console.log("=== SMS Sending Complete ===");
-    console.log(`[SUMMARY] Total: ${inspectors.length}, Sent: ${results.sent}, Failed: ${results.failed}, Skipped: ${results.skipped}`);
+    console.log(
+      `[SUMMARY] Total: ${inspectors.length}, Sent: ${results.sent}, Failed: ${results.failed}, Skipped: ${results.skipped}`,
+    );
 
     console.log("[RESPONSE] Returning results to client");
     return new Response(JSON.stringify(results), {
@@ -222,13 +215,10 @@ ProfSyn`;
     console.error("[ERROR] Error type:", error.constructor.name);
     console.error("[ERROR] Error message:", error.message);
     console.error("[ERROR] Stack trace:", error.stack);
-    
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
