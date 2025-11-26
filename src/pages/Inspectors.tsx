@@ -13,10 +13,21 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search, Pencil, X } from "lucide-react";
+import { Search, Pencil, X, Trash2 } from "lucide-react";
 import { DepartmentSingleSelect } from "@/components/filters/DepartmentSingleSelect";
 import { EditInspectorDialog } from "@/components/inspectors/EditInspectorDialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useToast } from "@/hooks/use-toast";
 
 interface InspectorWithDetails {
   id: string;
@@ -70,7 +81,9 @@ export default function Inspectors() {
     department_id: string | null;
     department_name: string | null;
   } | null>(null);
+  const [deletingInspector, setDeletingInspector] = useState<InspectorWithDetails | null>(null);
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const { data: departments } = useQuery({
     queryKey: ["departments"],
@@ -146,6 +159,31 @@ export default function Inspectors() {
 
   const handleSaveComplete = () => {
     queryClient.invalidateQueries({ queryKey: ["inspectors"] });
+  };
+
+  const handleDelete = async () => {
+    if (!deletingInspector) return;
+    
+    const { error } = await supabase
+      .from("inspectors")
+      .update({ is_active: false })
+      .eq("id", deletingInspector.id);
+    
+    if (error) {
+      toast({ 
+        title: "Fejl", 
+        description: "Kunne ikke slette synskonsulent", 
+        variant: "destructive" 
+      });
+    } else {
+      toast({ 
+        title: "Slettet", 
+        description: `${deletingInspector.full_name} blev slettet` 
+      });
+      queryClient.invalidateQueries({ queryKey: ["inspectors"] });
+    }
+    
+    setDeletingInspector(null);
   };
 
   const clearFilters = () => {
@@ -264,13 +302,22 @@ export default function Inspectors() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEdit(inspector)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEdit(inspector)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setDeletingInspector(inspector)}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -286,6 +333,24 @@ export default function Inspectors() {
         inspector={editingInspector}
         onSave={handleSaveComplete}
       />
+
+      <AlertDialog open={!!deletingInspector} onOpenChange={() => setDeletingInspector(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Slet synskonsulent?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Er du sikker på, at du vil slette {deletingInspector?.full_name}? 
+              Synskonsulenten vil blive fjernet fra listen.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuller</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Slet
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
