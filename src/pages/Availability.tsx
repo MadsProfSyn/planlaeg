@@ -7,7 +7,7 @@ import { NoResponseFiltersBar } from "@/components/availability/NoResponseFilter
 import { SummaryStats } from "@/components/availability/SummaryStats";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Loader2 } from "lucide-react";
+import { Users, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface AvailabilityFilters {
   afdeling: string[];
@@ -83,6 +84,7 @@ export default function AvailabilityPage() {
   const [isSendingSMS, setIsSendingSMS] = React.useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = React.useState(false);
   const [smsMessage, setSmsMessage] = React.useState("");
+  const [showAllRecipients, setShowAllRecipients] = React.useState(false);
 
   const DEFAULT_SMS_TEMPLATE = `Hej {first_name}
 
@@ -375,8 +377,9 @@ ProfSyn`;
   }, [activeTab, noResponseFilters.date, noResponseFilters.departments, fetchNoResponseInspectors]);
 
   const handleOpenConfirmDialog = () => {
-    // Reset message to default template when opening
+    // Reset message to default template and recipients visibility when opening
     setSmsMessage(DEFAULT_SMS_TEMPLATE);
+    setShowAllRecipients(false);
     setShowConfirmDialog(true);
   };
 
@@ -543,11 +546,56 @@ ProfSyn`;
               {new Date(noResponseFilters.date).toLocaleDateString("da-DK", {
                 day: "numeric",
                 month: "long",
-                year: "numeric",
               })}
               .
             </AlertDialogDescription>
           </AlertDialogHeader>
+
+          {/* Recipients list */}
+          <div className="border-t border-b py-3 my-2">
+            {selectedInspectors.size < 10 ? (
+              <div>
+                <p className="text-sm font-medium mb-2">Modtagere:</p>
+                <div className="flex flex-wrap gap-2">
+                  {Array.from(selectedInspectors)
+                    .map((id) => noResponseData.inspectors.find((i) => i.inspector_id === id))
+                    .filter(Boolean)
+                    .map((inspector) => (
+                      <Badge key={inspector!.inspector_id} variant="secondary">
+                        {inspector!.inspector_name}
+                      </Badge>
+                    ))}
+                </div>
+              </div>
+            ) : (
+              <Collapsible open={showAllRecipients} onOpenChange={setShowAllRecipients}>
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="w-full justify-between">
+                    <span className="text-sm font-medium">
+                      Vis alle {selectedInspectors.size} modtagere
+                    </span>
+                    {showAllRecipients ? (
+                      <ChevronUp className="h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-2">
+                  <div className="flex flex-wrap gap-2">
+                    {Array.from(selectedInspectors)
+                      .map((id) => noResponseData.inspectors.find((i) => i.inspector_id === id))
+                      .filter(Boolean)
+                      .map((inspector) => (
+                        <Badge key={inspector!.inspector_id} variant="secondary">
+                          {inspector!.inspector_name}
+                        </Badge>
+                      ))}
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
+          </div>
 
           <div className="my-4">
             <label htmlFor="sms-message" className="text-sm font-medium mb-2 block">
