@@ -268,6 +268,7 @@ export async function fetchAssignmentsByVrpRunId(vrpRunId: string): Promise<VrpR
       inspection_type: inspection?.inspection_type,
       scheduled_at: `${a.scheduled_date}T${a.start_time}`,
       scheduled_end: `${a.scheduled_date}T${a.end_time}`,
+      inspector_route_km: a.inspector_route_km,
     };
   });
   
@@ -343,35 +344,8 @@ export function groupAssignmentsByInspector(
       const total_inspection_mins = sorted.length * 60; // naive estimate
       const total_time_mins = total_travel_mins + total_inspection_mins;
 
-      // Calculate distance from legs for this inspector (if available)
-      const assignmentIds = new Set(sorted.map((a) => a.inspection_id));
-      const relevantLegs = (legs || []).filter(
-        (leg) => leg.to_syn_id && assignmentIds.has(leg.to_syn_id)
-      );
-      
-      let total_distance_km = 0;
-      
-      // If legs are available, use them; otherwise calculate from coordinates
-      if (relevantLegs.length > 0) {
-        total_distance_km = relevantLegs.reduce(
-          (sum, leg) => sum + (leg.distance_km || 0),
-          0
-        );
-      } else {
-        // Calculate distances between consecutive inspections using Haversine
-        for (let i = 0; i < sorted.length - 1; i++) {
-          const currentInspection = inspections.find(insp => insp.id === sorted[i].inspection_id);
-          const nextInspection = inspections.find(insp => insp.id === sorted[i + 1].inspection_id);
-          
-          if (currentInspection?.lat && currentInspection?.lng && 
-              nextInspection?.lat && nextInspection?.lng) {
-            total_distance_km += haversineDistance(
-              currentInspection.lat, currentInspection.lng,
-              nextInspection.lat, nextInspection.lng
-            );
-          }
-        }
-      }
+      // Use stored inspector_route_km from first assignment (all assignments for same inspector have same value)
+      const total_distance_km = sorted[0]?.inspector_route_km ?? 0;
 
       const summary: import("@/types/vrp").InspectorRouteSummary = {
         inspector_id,

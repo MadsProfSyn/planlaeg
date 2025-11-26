@@ -25,6 +25,7 @@ export interface VrpAssignment {
   travel_from_previous_mins: number;
   inspection_address?: string;
   inspection_type?: string;
+  inspector_route_km?: number;
 }
 
 export interface VrpRouteLeg {
