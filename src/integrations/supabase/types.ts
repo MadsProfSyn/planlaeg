@@ -1296,6 +1296,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      ping_vrp_worker: { Args: never; Returns: undefined }
       promote_user: { Args: { target_email: string }; Returns: undefined }
       reassign_inspector_manual: {
         Args: {
