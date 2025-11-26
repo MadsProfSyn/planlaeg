@@ -964,6 +964,22 @@ export function PlanlaegSynModal({
                       )}
                     </div>
                   </ScrollArea>
+
+                  {/* Total KM and Cost Summary */}
+                  <div className="mt-4 p-4 border rounded-lg bg-muted/50">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-sm">Total kørsel:</span>
+                      <div className="text-right">
+                        <span className="font-semibold">
+                          {groupedRoutes.overall_total_distance.toFixed(1)} km
+                        </span>
+                        <span className="text-muted-foreground mx-2">=</span>
+                        <span className="font-semibold text-primary">
+                          {(groupedRoutes.overall_total_distance * 3.81).toFixed(2).replace('.', ',')} DKK
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </>
               ) : (
                 <Alert>
