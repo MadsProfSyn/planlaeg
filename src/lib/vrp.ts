@@ -213,6 +213,17 @@ export async function fetchAssignmentsByVrpRunId(vrpRunId: string): Promise<VrpR
 
   console.log('📊 Found assignments:', assignments.length);
   
+  // Fetch total distance and time from vrp_runs table
+  const { data: vrpRunData, error: vrpRunError } = await supabase
+    .from('vrp_runs')
+    .select('total_travel_km, total_travel_minutes')
+    .eq('id', vrpRunId)
+    .maybeSingle();
+
+  if (vrpRunError) {
+    console.warn('Failed to fetch VRP run metrics:', vrpRunError);
+  }
+  
   // Get unique inspector IDs
   const inspectorIds = [...new Set(assignments.map(a => a.inspector_id))];
   
@@ -273,9 +284,9 @@ export async function fetchAssignmentsByVrpRunId(vrpRunId: string): Promise<VrpR
   return {
     ordered_syn_ids: vrpAssignments.map(a => a.inspection_id),
     assignments: vrpAssignments,
-    total_distance_km: 0, // Not stored per assignment, use summary from response
-    total_eta_minutes: totalTravelMins,
-    legs: [], // Legs not stored in DB, but not needed for display
+    total_distance_km: vrpRunData?.total_travel_km ?? 0,
+    total_eta_minutes: vrpRunData?.total_travel_minutes ?? totalTravelMins,
+    legs: [],
   };
 }
 
