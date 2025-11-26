@@ -378,6 +378,7 @@ export type Database = {
           created_at: string | null
           department_id: string | null
           email: string
+          first_name: string | null
           full_name: string
           geocode_error: string | null
           geocode_status: string | null
@@ -395,6 +396,7 @@ export type Database = {
           created_at?: string | null
           department_id?: string | null
           email: string
+          first_name?: string | null
           full_name: string
           geocode_error?: string | null
           geocode_status?: string | null
@@ -412,6 +414,7 @@ export type Database = {
           created_at?: string | null
           department_id?: string | null
           email?: string
+          first_name?: string | null
           full_name?: string
           geocode_error?: string | null
           geocode_status?: string | null
