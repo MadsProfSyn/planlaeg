@@ -33,6 +33,7 @@ export function useVrpOptimization({
   });
   const [jobId, setJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<'pending' | 'running' | 'completed' | 'failed' | null>(null);
+  const [vrpRunId, setVrpRunId] = useState<string | null>(null);
 
   const fetchRoutes = useCallback(async () => {
     if (!enabled || inspectionIds.length === 0) {
@@ -44,6 +45,7 @@ export function useVrpOptimization({
     setError(null);
     setJobId(null);
     setJobStatus(null);
+    setVrpRunId(null);
     
     setProgress({
       stage: "loading",
@@ -79,6 +81,9 @@ export function useVrpOptimization({
           vrp_run_id: response.vrp_run_id,
           summary: response.summary,
         });
+        
+        // Store the vrp_run_id for explanation feature
+        setVrpRunId(response.vrp_run_id);
         
         if (response.summary) {
           // Show success toast with metrics
@@ -144,5 +149,6 @@ export function useVrpOptimization({
     progress,
     jobId,
     jobStatus,
+    vrpRunId,
   };
 }

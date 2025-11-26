@@ -2,6 +2,7 @@ import * as React from "react";
 import { useState, useEffect, useRef } from "react";
 import { format } from "date-fns";
 import { da } from "date-fns/locale";
+import ReactMarkdown from "react-markdown";
 import {
   Dialog,
   DialogContent,
@@ -117,14 +118,43 @@ export function PlanlaegSynModal({
     progress,
     jobId,
     jobStatus,
+    vrpRunId,
   } = useVrpOptimization({
     inspectionIds: selectedInspectionIds,
     targetDates,
     enabled: open && inspections.length > 0,
   });
 
+  // Explanation modal state
+  const [isExplanationOpen, setIsExplanationOpen] = useState(false);
+  const [explanationText, setExplanationText] = useState<string | null>(null);
+  const [isLoadingExplanation, setIsLoadingExplanation] = useState(false);
+
   // Check if VRP results exist
   const hasVrpResults = routePlan && routePlan.assignments && routePlan.assignments.length > 0;
+
+  // Fetch AI explanation from vrp_runs table
+  const fetchExplanation = async () => {
+    if (!vrpRunId) return;
+    setIsLoadingExplanation(true);
+    setIsExplanationOpen(true);
+    
+    try {
+      const { data, error } = await supabase
+        .from('vrp_runs')
+        .select('ai_explanation')
+        .eq('id', vrpRunId)
+        .single();
+      
+      if (error) throw error;
+      setExplanationText(data?.ai_explanation || null);
+    } catch (error) {
+      console.error('Failed to fetch explanation:', error);
+      setExplanationText(null);
+    } finally {
+      setIsLoadingExplanation(false);
+    }
+  };
 
   // Load inspection details when modal opens
   useEffect(() => {
@@ -676,16 +706,28 @@ export function PlanlaegSynModal({
               </DialogTitle>
               
               {groupedRoutes && !isLoadingRoutes && (
-                <Button
-                  ref={mapButtonRef}
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsMapModalOpen(true)}
-                  className="flex items-center gap-2"
-                >
-                  <MapPin className="h-4 w-4" />
-                  Kortvisning
-                </Button>
+                <div className="flex items-center gap-2">
+                  {vrpRunId && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={fetchExplanation}
+                      className="flex items-center gap-2 text-orange-500 hover:text-orange-600 border-orange-200 hover:border-orange-300"
+                    >
+                      Forklaring
+                    </Button>
+                  )}
+                  <Button
+                    ref={mapButtonRef}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsMapModalOpen(true)}
+                    className="flex items-center gap-2"
+                  >
+                    <MapPin className="h-4 w-4" />
+                    Kortvisning
+                  </Button>
+                </div>
               )}
             </div>
           </DialogHeader>
@@ -1046,7 +1088,94 @@ export function PlanlaegSynModal({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Explanation Modal */}
+      <ExplanationModal
+        open={isExplanationOpen}
+        onClose={() => setIsExplanationOpen(false)}
+        explanationText={explanationText}
+        isLoading={isLoadingExplanation}
+      />
     </ErrorBoundary>
+  );
+}
+
+// Explanation Modal Component
+interface ExplanationModalProps {
+  open: boolean;
+  onClose: () => void;
+  explanationText: string | null;
+  isLoading: boolean;
+}
+
+function ExplanationModal({
+  open,
+  onClose,
+  explanationText,
+  isLoading,
+}: ExplanationModalProps) {
+  useEffect(() => {
+    if (!open) return;
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center"
+      style={{ pointerEvents: 'auto' }}
+    >
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-background/80 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      {/* Modal */}
+      <div
+        className="relative z-10 w-full max-w-[600px] max-h-[80vh] bg-background border rounded-lg shadow-lg flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b">
+          <h2 className="text-lg font-semibold">AI Forklaring af rutevalg</h2>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            className="h-8 w-8"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {/* Content */}
+        <ScrollArea className="flex-1 p-4">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : explanationText ? (
+            <div className="prose prose-sm dark:prose-invert max-w-none">
+              <ReactMarkdown>{explanationText}</ReactMarkdown>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              Ingen forklaring tilgængelig for denne kørsel.
+            </div>
+          )}
+        </ScrollArea>
+      </div>
+    </div>
   );
 }
 

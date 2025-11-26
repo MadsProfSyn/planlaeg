@@ -1098,6 +1098,7 @@ export type Database = {
       }
       vrp_runs: {
         Row: {
+          ai_explanation: string | null
           approved_at: string | null
           created_at: string | null
           execution_seconds: number | null
@@ -1114,6 +1115,7 @@ export type Database = {
           triggered_by: string | null
         }
         Insert: {
+          ai_explanation?: string | null
           approved_at?: string | null
           created_at?: string | null
           execution_seconds?: number | null
@@ -1130,6 +1132,7 @@ export type Database = {
           triggered_by?: string | null
         }
         Update: {
+          ai_explanation?: string | null
           approved_at?: string | null
           created_at?: string | null
           execution_seconds?: number | null
