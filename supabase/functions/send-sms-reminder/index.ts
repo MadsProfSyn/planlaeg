@@ -45,11 +45,11 @@ serve(async (req) => {
       message_template ||
       `Hej {first_name}
 
-Vi mangler hjælp til {date}, og du har ikke taget stilling i WorkFeed, hvorvidt du kan tage syn.
+Vi mangler hjælp til {date}, og du har ikke taget stilling i WorkFeed, venligst gå ind og tag stilling til hvorvidt du kan arbejde. 
 
 Denne SMS kan ikke besvares.
 
-Ved spørgsmål henvend dig direkte på mail eller tlf. 
+Ved spørgsmål henvend dig direkte på mail eller tlf.
 Mvh
 ProfSyn`;
 

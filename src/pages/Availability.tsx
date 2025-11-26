@@ -88,7 +88,7 @@ export default function AvailabilityPage() {
 
   const DEFAULT_SMS_TEMPLATE = `Hej {first_name}
 
-Vi mangler hjælp til {date}, og du har ikke taget stilling i WorkFeed, hvorvidt du kan tage syn.
+Vi mangler hjælp til {date}, og du har ikke taget stilling i WorkFeed, venligst gå ind og tag stilling til hvorvidt du kan arbejde. 
 
 Denne SMS kan ikke besvares.
 
@@ -571,14 +571,8 @@ ProfSyn`;
               <Collapsible open={showAllRecipients} onOpenChange={setShowAllRecipients}>
                 <CollapsibleTrigger asChild>
                   <Button variant="ghost" size="sm" className="w-full justify-between">
-                    <span className="text-sm font-medium">
-                      Vis alle {selectedInspectors.size} modtagere
-                    </span>
-                    {showAllRecipients ? (
-                      <ChevronUp className="h-4 w-4" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4" />
-                    )}
+                    <span className="text-sm font-medium">Vis alle {selectedInspectors.size} modtagere</span>
+                    {showAllRecipients ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                   </Button>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="mt-2">
