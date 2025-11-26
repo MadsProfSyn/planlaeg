@@ -97,11 +97,10 @@ ProfSyn`;
       });
     }
 
-    // Format date in Danish
+    // Format date in Danish (without year)
     const formattedDate = new Date(target_date).toLocaleDateString("da-DK", {
       day: "numeric",
       month: "long",
-      year: "numeric",
     });
     console.log(`[DATE] Formatted date: ${formattedDate}`);
 
