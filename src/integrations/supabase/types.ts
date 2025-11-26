@@ -708,6 +708,8 @@ export type Database = {
           id: string
           inspection_id: string
           inspector_id: string
+          inspector_route_km: number | null
+          inspector_total_route_km: number | null
           manual_override_at: string | null
           manual_override_by: string | null
           scheduled_date: string
@@ -724,6 +726,8 @@ export type Database = {
           id?: string
           inspection_id: string
           inspector_id: string
+          inspector_route_km?: number | null
+          inspector_total_route_km?: number | null
           manual_override_at?: string | null
           manual_override_by?: string | null
           scheduled_date: string
@@ -740,6 +744,8 @@ export type Database = {
           id?: string
           inspection_id?: string
           inspector_id?: string
+          inspector_route_km?: number | null
+          inspector_total_route_km?: number | null
           manual_override_at?: string | null
           manual_override_by?: string | null
           scheduled_date?: string
