@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -77,14 +77,21 @@ export default function Inspectors() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("departments")
-        .select("name")
+        .select("id, name")
         .eq("is_active", true)
         .order("name");
 
       if (error) throw error;
-      return data.map((d) => d.name);
+      return data;
     },
   });
+
+  // Create lookup map from department name to ID for filtering
+  const departmentIdByName = useMemo(() => {
+    const map: Record<string, string> = {};
+    departments?.forEach(d => { map[d.name] = d.id; });
+    return map;
+  }, [departments]);
 
   const { data: inspectors, isLoading } = useQuery({
     queryKey: ["inspectors", searchQuery, departmentFilter],
@@ -113,8 +120,8 @@ export default function Inspectors() {
         );
       }
 
-      if (departmentFilter) {
-        query = query.eq("department.name", departmentFilter);
+      if (departmentFilter && departmentIdByName[departmentFilter]) {
+        query = query.eq("department_id", departmentIdByName[departmentFilter]);
       }
 
       const { data, error } = await query;
@@ -167,7 +174,7 @@ export default function Inspectors() {
             </div>
             <div className="w-full sm:w-64">
               <DepartmentSingleSelect
-                departments={departments || []}
+                departments={departments?.map(d => d.name) || []}
                 selectedDepartment={departmentFilter}
                 onSelectionChange={setDepartmentFilter}
                 placeholder="Alle afdelinger"
