@@ -44,6 +44,8 @@ const SKILL_OPTIONS = [
   { value: "Fraflytningssyn", label: "Fraflytningssyn (FF)" },
 ];
 
+const NO_DEPARTMENT = "__none__";
+
 export function EditInspectorDialog({
   open,
   onClose,
@@ -78,14 +80,14 @@ export function EditInspectorDialog({
         phone: inspector.phone || "",
         address: inspector.address || "",
         skills: inspector.skills || [],
-        departmentId: inspector.department_id || "",
+        departmentId: inspector.department_id || NO_DEPARTMENT,
       });
     } else {
       setFormData({
         phone: "",
         address: "",
         skills: [],
-        departmentId: "",
+        departmentId: NO_DEPARTMENT,
       });
     }
   }, [inspector, open]);
@@ -103,7 +105,7 @@ export function EditInspectorDialog({
         .update({
           phone: formData.phone || null,
           address: formData.address || null,
-          department_id: formData.departmentId || null,
+          department_id: formData.departmentId === NO_DEPARTMENT ? null : formData.departmentId,
         })
         .eq("id", inspector.id);
 
@@ -248,7 +250,7 @@ export function EditInspectorDialog({
                 <SelectValue placeholder="Vælg afdeling" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Ingen afdeling</SelectItem>
+                <SelectItem value={NO_DEPARTMENT}>Ingen afdeling</SelectItem>
                 {departments?.map((dept) => (
                   <SelectItem key={dept.id} value={dept.id}>
                     {dept.name}
