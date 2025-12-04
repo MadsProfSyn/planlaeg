@@ -5,8 +5,10 @@ import { AvailabilityTable, type AvailableInspector } from "@/components/availab
 import { NoResponseTable, type NoResponseInspector } from "@/components/availability/NoResponseTable";
 import { NoResponseFiltersBar } from "@/components/availability/NoResponseFiltersBar";
 import { SummaryStats } from "@/components/availability/SummaryStats";
+import { SmsHistoryTab } from "@/components/availability/SmsHistoryTab";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 import { Users, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -56,8 +58,9 @@ const DEFAULT_FILTERS: AvailabilityFilters = {
 export default function AvailabilityPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
+  const { user } = useAuth();
 
-  const [activeTab, setActiveTab] = React.useState<"available" | "no-response">("available");
+  const [activeTab, setActiveTab] = React.useState<"available" | "no-response" | "sms-history">("available");
   const [filters, setFilters] = React.useState<AvailabilityFilters>(DEFAULT_FILTERS);
   const [departments, setDepartments] = React.useState<{ value: string; label: string }[]>([]);
   const [availabilityData, setAvailabilityData] = React.useState<AvailabilityData>({
@@ -401,6 +404,7 @@ ProfSyn`;
           inspector_ids: Array.from(selectedInspectors),
           target_date: noResponseFilters.date,
           message_template: smsMessage,
+          sent_by: user?.id || null,
         },
       });
 
@@ -450,9 +454,9 @@ ProfSyn`;
         <p className="text-caption ml-16">Oversigt over synskonsulenter og deres tilgængelighedsstatus</p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "available" | "no-response")}>
-        <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
-          <TabsTrigger value="available">Tilgængelige synskonsulenter</TabsTrigger>
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "available" | "no-response" | "sms-history")}>
+        <TabsList className="grid w-full max-w-xl grid-cols-3 mb-6">
+          <TabsTrigger value="available">Tilgængelige</TabsTrigger>
           <TabsTrigger value="no-response" className="relative">
             Ikke angivet
             {noResponseData.inspectors.length > 0 && (
@@ -461,6 +465,7 @@ ProfSyn`;
               </Badge>
             )}
           </TabsTrigger>
+          <TabsTrigger value="sms-history">SMS Historik</TabsTrigger>
         </TabsList>
 
         <TabsContent value="available">
@@ -533,6 +538,10 @@ ProfSyn`;
             onSelectionChange={setSelectedInspectors}
             isLoading={isLoading}
           />
+        </TabsContent>
+
+        <TabsContent value="sms-history">
+          <SmsHistoryTab />
         </TabsContent>
       </Tabs>
 

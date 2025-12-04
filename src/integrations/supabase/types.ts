@@ -881,6 +881,51 @@ export type Database = {
           },
         ]
       }
+      sms_reminder_logs: {
+        Row: {
+          batch_id: string
+          created_at: string | null
+          failure_reason: string | null
+          id: string
+          inspector_id: string
+          inspector_name: string
+          message_preview: string | null
+          phone: string | null
+          sent_at: string | null
+          sent_by: string | null
+          status: string
+          target_date: string
+        }
+        Insert: {
+          batch_id: string
+          created_at?: string | null
+          failure_reason?: string | null
+          id?: string
+          inspector_id: string
+          inspector_name: string
+          message_preview?: string | null
+          phone?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+          status: string
+          target_date: string
+        }
+        Update: {
+          batch_id?: string
+          created_at?: string | null
+          failure_reason?: string | null
+          id?: string
+          inspector_id?: string
+          inspector_name?: string
+          message_preview?: string | null
+          phone?: string | null
+          sent_at?: string | null
+          sent_by?: string | null
+          status?: string
+          target_date?: string
+        }
+        Relationships: []
+      }
       supabase_availability: {
         Row: {
           availability_status: string | null
