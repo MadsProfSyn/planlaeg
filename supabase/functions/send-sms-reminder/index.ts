@@ -10,12 +10,14 @@ interface SendSmsRequest {
   inspector_ids: string[];
   target_date: string;
   message_template?: string;
+  sent_by?: string;
 }
 
 interface SendResult {
   sent: number;
   failed: number;
   skipped: number;
+  batch_id: string;
   details: Array<{
     inspector_id: string;
     inspector_name: string;
@@ -34,11 +36,16 @@ serve(async (req) => {
 
   try {
     const requestBody = await req.json();
-    const { inspector_ids, target_date, message_template }: SendSmsRequest = requestBody;
+    const { inspector_ids, target_date, message_template, sent_by }: SendSmsRequest = requestBody;
 
     console.log(`[REQUEST] Sending SMS reminders to ${inspector_ids.length} inspectors for date ${target_date}`);
     console.log(`[REQUEST] Inspector IDs: ${inspector_ids.join(", ")}`);
     console.log(`[REQUEST] Custom template provided: ${!!message_template}`);
+    console.log(`[REQUEST] Sent by user ID: ${sent_by || "not provided"}`);
+
+    // Generate batch ID for this send operation
+    const batchId = crypto.randomUUID();
+    console.log(`[BATCH] Generated batch ID: ${batchId}`);
 
     // Default template if none provided
     const template =
@@ -70,7 +77,7 @@ ProfSyn`;
       throw new Error("Twilio credentials not configured");
     }
 
-    // Create Supabase client
+    // Create Supabase client with service role for logging
     console.log("[SUPABASE] Creating Supabase client");
     const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
@@ -105,7 +112,7 @@ ProfSyn`;
     console.log(`[DATE] Formatted date: ${formattedDate}`);
 
     // Send SMS to each inspector
-    const results: SendResult = { sent: 0, failed: 0, skipped: 0, details: [] };
+    const results: SendResult = { sent: 0, failed: 0, skipped: 0, batch_id: batchId, details: [] };
 
     console.log(`[SMS] Starting to process ${inspectors.length} inspectors`);
 
@@ -114,6 +121,10 @@ ProfSyn`;
 
       const firstName = inspector.first_name || inspector.full_name.split(" ")[0];
       console.log(`[SMS] Using first name: ${firstName}`);
+
+      // Build SMS message by replacing placeholders
+      const message = template.replace(/{first_name}/g, firstName).replace(/{date}/g, formattedDate);
+      const messagePreview = message.substring(0, 100);
 
       // Skip if no phone number
       if (!inspector.phone) {
@@ -125,16 +136,26 @@ ProfSyn`;
           reason: "No phone number",
         });
         console.warn(`[SKIP] ${inspector.full_name} - no phone number`);
+
+        // Log skipped SMS to database
+        await supabase.from("sms_reminder_logs").insert({
+          batch_id: batchId,
+          inspector_id: inspector.id,
+          inspector_name: inspector.full_name,
+          phone: null,
+          target_date: target_date,
+          sent_by: sent_by || null,
+          status: "skipped",
+          failure_reason: "No phone number",
+          message_preview: messagePreview,
+        });
+
         continue;
       }
 
       // Format phone number with +45 prefix
       const phoneNumber = `+45${inspector.phone}`;
       console.log(`[SMS] Formatted phone: ${phoneNumber}`);
-
-      // Build SMS message by replacing placeholders
-      const message = template.replace(/{first_name}/g, firstName).replace(/{date}/g, formattedDate);
-
       console.log(`[SMS] Message length: ${message.length} characters`);
 
       try {
@@ -168,14 +189,28 @@ ProfSyn`;
           console.log(`[SUCCESS] SMS sent to ${inspector.full_name} (${phoneNumber})`);
           console.log(`[SUCCESS] Twilio SID: ${twilioData.sid}`);
           console.log(`[SUCCESS] Status: ${twilioData.status}`);
+
+          // Log successful SMS to database
+          await supabase.from("sms_reminder_logs").insert({
+            batch_id: batchId,
+            inspector_id: inspector.id,
+            inspector_name: inspector.full_name,
+            phone: inspector.phone,
+            target_date: target_date,
+            sent_by: sent_by || null,
+            status: "sent",
+            failure_reason: null,
+            message_preview: messagePreview,
+          });
         } else {
           const errorData = await twilioResponse.json();
           results.failed++;
+          const failureReason = errorData.message || "Twilio API error";
           results.details.push({
             inspector_id: inspector.id,
             inspector_name: inspector.full_name,
             status: "failed",
-            reason: errorData.message || "Twilio API error",
+            reason: failureReason,
           });
           console.error(`[TWILIO ERROR] Failed to send SMS to ${inspector.full_name}`);
           console.error(`[TWILIO ERROR] Status: ${twilioResponse.status}`);
@@ -183,19 +218,46 @@ ProfSyn`;
           console.error(`[TWILIO ERROR] Message: ${errorData.message}`);
           console.error(`[TWILIO ERROR] More info: ${errorData.more_info}`);
           console.error(`[TWILIO ERROR] Full error data:`, JSON.stringify(errorData, null, 2));
+
+          // Log failed SMS to database
+          await supabase.from("sms_reminder_logs").insert({
+            batch_id: batchId,
+            inspector_id: inspector.id,
+            inspector_name: inspector.full_name,
+            phone: inspector.phone,
+            target_date: target_date,
+            sent_by: sent_by || null,
+            status: "failed",
+            failure_reason: failureReason,
+            message_preview: messagePreview,
+          });
         }
       } catch (error) {
         results.failed++;
+        const failureReason = error.message;
         results.details.push({
           inspector_id: inspector.id,
           inspector_name: inspector.full_name,
           status: "failed",
-          reason: error.message,
+          reason: failureReason,
         });
         console.error(`[EXCEPTION] Error sending SMS to ${inspector.full_name}:`, error);
         console.error(`[EXCEPTION] Error type: ${error.constructor.name}`);
         console.error(`[EXCEPTION] Error message: ${error.message}`);
         console.error(`[EXCEPTION] Stack trace:`, error.stack);
+
+        // Log failed SMS to database
+        await supabase.from("sms_reminder_logs").insert({
+          batch_id: batchId,
+          inspector_id: inspector.id,
+          inspector_name: inspector.full_name,
+          phone: inspector.phone,
+          target_date: target_date,
+          sent_by: sent_by || null,
+          status: "failed",
+          failure_reason: failureReason,
+          message_preview: messagePreview,
+        });
       }
     }
 
@@ -203,6 +265,7 @@ ProfSyn`;
     console.log(
       `[SUMMARY] Total: ${inspectors.length}, Sent: ${results.sent}, Failed: ${results.failed}, Skipped: ${results.skipped}`,
     );
+    console.log(`[SUMMARY] Batch ID: ${batchId}`);
 
     console.log("[RESPONSE] Returning results to client");
     return new Response(JSON.stringify(results), {
