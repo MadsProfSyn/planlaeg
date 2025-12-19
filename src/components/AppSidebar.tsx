@@ -8,6 +8,7 @@ import {
   User,
   FileText,
   Brain,
+  CalendarPlus,
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -56,6 +57,12 @@ const navigationItems = [
     title: "ProfSyn AI",
     url: "/profsyn-ai",
     icon: Brain,
+  },
+  {
+    title: "Planlæg syn",
+    url: "/planlaeg-syn",
+    icon: CalendarPlus,
+    adminOnly: true,
   },
 ];
 

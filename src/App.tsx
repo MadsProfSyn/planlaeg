@@ -14,6 +14,7 @@ import Availability from "./pages/Availability";
 import UnavailableConsultants from "./pages/UnavailableConsultants";
 import Inspectors from "./pages/Inspectors";
 import ProfSynAI from "./pages/ProfSynAI";
+import PlanlaegSyn from "./pages/PlanlaegSyn";
 import Overview from "./pages/admin/Overview";
 import Account from "./pages/admin/Account";
 import MySyn from "./pages/admin/MySyn";
@@ -40,6 +41,7 @@ const App = () => {
                 <Route path="/unavailable-consultants" element={<ProtectedRoute><AppLayout><UnavailableConsultants /></AppLayout></ProtectedRoute>} />
                 <Route path="/inspectors" element={<ProtectedRoute><AppLayout><Inspectors /></AppLayout></ProtectedRoute>} />
                 <Route path="/profsyn-ai" element={<ProtectedRoute><AppLayout><ProfSynAI /></AppLayout></ProtectedRoute>} />
+                <Route path="/planlaeg-syn" element={<ProtectedRoute><AppLayout><PlanlaegSyn /></AppLayout></ProtectedRoute>} />
                 
                 {/* Admin Routes */}
                 <Route path="/admin" element={<ProtectedRoute><AppLayout><Navigate to="/admin/overview" replace /></AppLayout></ProtectedRoute>} />
