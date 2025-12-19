@@ -11,7 +11,7 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { supabase } from "@/integrations/supabase/client";
-import { getMondayItems, MondayItem } from "@/lib/supabase";
+import { getMondayItems, getRegions, MondayItem } from "@/lib/supabase";
 import { PlanlaegSynFiltersBar } from "@/components/planlaeg-syn/PlanlaegSynFiltersBar";
 import { InspectionsPanel } from "@/components/planlaeg-syn/InspectionsPanel";
 import { InspectorsPanel } from "@/components/planlaeg-syn/InspectorsPanel";
@@ -29,17 +29,6 @@ export interface Inspector {
   tidspunkt_label: string;
 }
 
-// Mapping from Afdeling (department) to Landsdel (region) for inspections
-const getLandsdelFromAfdeling = (afdeling: string): string | null => {
-  const mapping: Record<string, string> = {
-    "Storkøbenhavn": "Sjælland",
-    "Odense": "Fyn",
-    "Århus": "Jylland",
-    "Aalborg": "Jylland",
-  };
-  return mapping[afdeling] || null;
-};
-
 // Drag preview component
 function DragPreview({ count }: { count: number }) {
   return (
@@ -51,6 +40,7 @@ function DragPreview({ count }: { count: number }) {
 
 export default function PlanlaegSyn() {
   const [selectedDate, setSelectedDate] = useState<string | undefined>();
+  const [selectedLandsdel, setSelectedLandsdel] = useState<string>("all");
   const [selectedAfdeling, setSelectedAfdeling] = useState<string>("all");
   const [selectedInspectionIds, setSelectedInspectionIds] = useState<number[]>([]);
   const [selectedInspectorId, setSelectedInspectorId] = useState<string | null>(null);
@@ -70,7 +60,13 @@ export default function PlanlaegSyn() {
   // Drag state
   const [activeDragId, setActiveDragId] = useState<number | null>(null);
 
-  // Fetch departments for the filter dropdown
+  // Fetch landsdele (regions) for inspections filter
+  const { data: landsdele = [] } = useQuery({
+    queryKey: ["regions"],
+    queryFn: getRegions,
+  });
+
+  // Fetch afdelinger (departments) for inspectors filter
   const { data: afdelinger = [] } = useQuery({
     queryKey: ["departments"],
     queryFn: async () => {
@@ -79,9 +75,9 @@ export default function PlanlaegSyn() {
     },
   });
 
-  // Fetch inspections for the selected date and afdeling (mapped to landsdel)
+  // Fetch inspections for the selected date and landsdel (independent filter)
   const { data: inspectionsData, isLoading: isLoadingInspections } = useQuery({
-    queryKey: ["planlaeg-inspections", selectedDate, selectedAfdeling],
+    queryKey: ["planlaeg-inspections", selectedDate, selectedLandsdel],
     queryFn: async () => {
       if (!selectedDate) return { data: [], count: 0 };
       
@@ -90,12 +86,9 @@ export default function PlanlaegSyn() {
         dateTo: selectedDate,
       };
       
-      // Map afdeling to landsdel for inspections filter
-      if (selectedAfdeling !== "all") {
-        const landsdel = getLandsdelFromAfdeling(selectedAfdeling);
-        if (landsdel) {
-          filters.regions = [landsdel];
-        }
+      // Filter by landsdel directly (Sjælland, Fyn, Jylland)
+      if (selectedLandsdel !== "all") {
+        filters.regions = [selectedLandsdel];
       }
       
       return getMondayItems(1, 500, filters);
@@ -103,7 +96,7 @@ export default function PlanlaegSyn() {
     enabled: !!selectedDate,
   });
 
-  // Fetch inspectors for the selected date and afdeling
+  // Fetch inspectors for the selected date and afdeling (independent filter)
   const { data: inspectorsData, isLoading: isLoadingInspectors } = useQuery({
     queryKey: ["planlaeg-inspectors", selectedDate, selectedAfdeling],
     queryFn: async () => {
@@ -120,7 +113,7 @@ export default function PlanlaegSyn() {
         no_pagination: true,
       };
       
-      // Pass afdeling directly (department values like "Storkøbenhavn")
+      // Filter by afdeling directly (Storkøbenhavn, Odense, Århus, Aalborg)
       if (selectedAfdeling !== "all") {
         params.afdeling = [selectedAfdeling];
       }
@@ -254,8 +247,11 @@ export default function PlanlaegSyn() {
       <PlanlaegSynFiltersBar
         selectedDate={selectedDate}
         onDateChange={setSelectedDate}
+        selectedLandsdel={selectedLandsdel}
+        onLandsdelChange={setSelectedLandsdel}
         selectedAfdeling={selectedAfdeling}
         onAfdelingChange={setSelectedAfdeling}
+        landsdele={landsdele}
         afdelinger={afdelinger}
       />
 
