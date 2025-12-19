@@ -48,6 +48,18 @@ export default function PlanlaegSyn() {
   // Assignment state
   const [assignments, setAssignments] = useState<Map<string, MondayItem[]>>(new Map());
   
+  // Scheduled times state: inspectionId -> { start, end }
+  const [scheduledTimes, setScheduledTimes] = useState<Map<number, { start: string; end: string }>>(new Map());
+  
+  // Handler for updating scheduled times
+  const handleUpdateScheduledTimes = (newTimes: Map<number, { start: string; end: string }>) => {
+    setScheduledTimes((prev) => {
+      const next = new Map(prev);
+      newTimes.forEach((value, key) => next.set(key, value));
+      return next;
+    });
+  };
+  
   // Configure sensors with distance constraint to prevent clicks from triggering drag
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -282,6 +294,8 @@ export default function PlanlaegSyn() {
               assignments={assignments}
               onRemoveAssignment={handleRemoveAssignment}
               hasSelectedInspections={hasSelectedInspections}
+              scheduledTimes={scheduledTimes}
+              onUpdateScheduledTimes={handleUpdateScheduledTimes}
             />
           </div>
           
