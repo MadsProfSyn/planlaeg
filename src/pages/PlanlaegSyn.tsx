@@ -1,6 +1,15 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { DndContext, DragOverlay, closestCenter, DragStartEvent, DragEndEvent } from "@dnd-kit/core";
+import { 
+  DndContext, 
+  DragOverlay, 
+  closestCenter, 
+  DragStartEvent, 
+  DragEndEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
 import { supabase } from "@/integrations/supabase/client";
 import { getMondayItems, getRegions, MondayItem } from "@/lib/supabase";
 import { PlanlaegSynFiltersBar } from "@/components/planlaeg-syn/PlanlaegSynFiltersBar";
@@ -38,6 +47,15 @@ export default function PlanlaegSyn() {
   // Assignment state
   const [assignments, setAssignments] = useState<Map<string, MondayItem[]>>(new Map());
   
+  // Configure sensors with distance constraint to prevent clicks from triggering drag
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // Must drag 8px before drag activates
+      },
+    })
+  );
+
   // Drag state
   const [activeDragId, setActiveDragId] = useState<number | null>(null);
 
@@ -229,6 +247,7 @@ export default function PlanlaegSyn() {
         </div>
       ) : (
         <DndContext
+          sensors={sensors}
           collisionDetection={closestCenter}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
