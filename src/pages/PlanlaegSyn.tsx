@@ -1,12 +1,11 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { DndContext, DragOverlay, closestCenter, DragStartEvent, DragEndEvent } from "@dnd-kit/core";
 import { supabase } from "@/integrations/supabase/client";
 import { getMondayItems, getRegions, MondayItem } from "@/lib/supabase";
 import { PlanlaegSynFiltersBar } from "@/components/planlaeg-syn/PlanlaegSynFiltersBar";
 import { InspectionsPanel } from "@/components/planlaeg-syn/InspectionsPanel";
 import { InspectorsPanel } from "@/components/planlaeg-syn/InspectorsPanel";
-import { Button } from "@/components/ui/button";
-import { Lock, CheckCircle } from "lucide-react";
 
 export interface Inspector {
   availability_id: string;
@@ -21,15 +20,26 @@ export interface Inspector {
   tidspunkt_label: string;
 }
 
+// Drag preview component
+function DragPreview({ count }: { count: number }) {
+  return (
+    <div className="bg-primary text-primary-foreground px-4 py-2 rounded-lg shadow-lg text-sm font-medium pointer-events-none">
+      {count} synsopgave{count !== 1 ? "r" : ""}
+    </div>
+  );
+}
+
 export default function PlanlaegSyn() {
   const [selectedDate, setSelectedDate] = useState<string | undefined>();
   const [selectedLandsdel, setSelectedLandsdel] = useState<string>("all");
   const [selectedInspectionIds, setSelectedInspectionIds] = useState<number[]>([]);
   const [selectedInspectorId, setSelectedInspectorId] = useState<string | null>(null);
   
-  // Phase 2: Assignment state
+  // Assignment state
   const [assignments, setAssignments] = useState<Map<string, MondayItem[]>>(new Map());
-  const [isLocked, setIsLocked] = useState(false);
+  
+  // Drag state
+  const [activeDragId, setActiveDragId] = useState<number | null>(null);
 
   // Fetch regions for the filter dropdown
   const { data: regions = [] } = useQuery({
@@ -92,7 +102,7 @@ export default function PlanlaegSyn() {
   const inspections = inspectionsData?.data || [];
   const inspectors: Inspector[] = inspectorsData?.data || [];
 
-  // Compute assigned inspection IDs for filtering left panel when locked
+  // Compute assigned inspection IDs - always hide assigned inspections
   const assignedInspectionIds = useMemo(() => {
     const ids = new Set<number>();
     assignments.forEach((items) => {
@@ -109,6 +119,15 @@ export default function PlanlaegSyn() {
   // Check if any inspections are currently selected
   const hasSelectedInspections = selectedInspectionIds.length > 0;
 
+  // Count for drag preview (selected items or 1 if dragging without selection)
+  const dragCount = useMemo(() => {
+    if (activeDragId === null) return 0;
+    if (selectedInspectionIds.includes(activeDragId)) {
+      return selectedInspectionIds.length;
+    }
+    return 1;
+  }, [activeDragId, selectedInspectionIds]);
+
   const handleInspectionSelect = (id: number) => {
     setSelectedInspectionIds((prev) => {
       if (prev.includes(id)) {
@@ -118,34 +137,40 @@ export default function PlanlaegSyn() {
     });
   };
 
+  const assignInspectionsToInspector = (inspectorId: string, inspectionIdsToAssign: number[]) => {
+    const inspectionsToAssign = inspections.filter(
+      (insp) => inspectionIdsToAssign.includes(insp.id)
+    );
+    
+    if (inspectionsToAssign.length === 0) return;
+    
+    setAssignments((prev) => {
+      const next = new Map(prev);
+      const existing = next.get(inspectorId) || [];
+      
+      // Add new inspections (avoid duplicates)
+      const existingIds = new Set(existing.map((i) => i.id));
+      const newItems = inspectionsToAssign.filter((i) => !existingIds.has(i.id));
+      
+      // Also remove from other inspectors (each inspection can only be assigned to one)
+      next.forEach((items, key) => {
+        if (key !== inspectorId) {
+          next.set(key, items.filter((item) => !inspectionIdsToAssign.includes(item.id)));
+        }
+      });
+      
+      next.set(inspectorId, [...existing, ...newItems]);
+      return next;
+    });
+    
+    // Clear selection after assignment
+    setSelectedInspectionIds([]);
+  };
+
   const handleInspectorSelect = (inspectorId: string) => {
     // If inspections are selected, assign them to this inspector
     if (selectedInspectionIds.length > 0) {
-      const inspectionsToAssign = inspections.filter(
-        (insp) => selectedInspectionIds.includes(insp.id)
-      );
-      
-      setAssignments((prev) => {
-        const next = new Map(prev);
-        const existing = next.get(inspectorId) || [];
-        
-        // Add new inspections (avoid duplicates)
-        const existingIds = new Set(existing.map((i) => i.id));
-        const newItems = inspectionsToAssign.filter((i) => !existingIds.has(i.id));
-        
-        // Also remove from other inspectors (each inspection can only be assigned to one)
-        next.forEach((items, key) => {
-          if (key !== inspectorId) {
-            next.set(key, items.filter((item) => !selectedInspectionIds.includes(item.id)));
-          }
-        });
-        
-        next.set(inspectorId, [...existing, ...newItems]);
-        return next;
-      });
-      
-      // Clear selection after assignment
-      setSelectedInspectionIds([]);
+      assignInspectionsToInspector(inspectorId, selectedInspectionIds);
     } else {
       // No inspections selected - toggle inspector highlight
       setSelectedInspectorId((prev) => (prev === inspectorId ? null : inspectorId));
@@ -161,8 +186,26 @@ export default function PlanlaegSyn() {
     });
   };
 
-  const handleLockAssignments = () => {
-    setIsLocked(true);
+  // Drag handlers
+  const handleDragStart = (event: DragStartEvent) => {
+    const inspectionId = Number(event.active.id.toString().replace("inspection-", ""));
+    setActiveDragId(inspectionId);
+    
+    // If dragged item is not selected, select only it
+    if (!selectedInspectionIds.includes(inspectionId)) {
+      setSelectedInspectionIds([inspectionId]);
+    }
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { over } = event;
+    
+    if (over && over.id.toString().startsWith("inspector-")) {
+      const inspectorId = over.id.toString().replace("inspector-", "");
+      assignInspectionsToInspector(inspectorId, selectedInspectionIds);
+    }
+    
+    setActiveDragId(null);
   };
 
   return (
@@ -185,15 +228,18 @@ export default function PlanlaegSyn() {
           Vælg en dato for at se synsopgaver og tilgængelige konsulenter
         </div>
       ) : (
-        <>
+        <DndContext
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1 min-h-0 mt-4">
             <InspectionsPanel
               inspections={inspections}
               isLoading={isLoadingInspections}
               selectedIds={selectedInspectionIds}
               onSelect={handleInspectionSelect}
-              hiddenIds={isLocked ? assignedInspectionIds : undefined}
-              assignedIds={assignedInspectionIds}
+              hiddenIds={assignedInspectionIds}
             />
             <InspectorsPanel
               inspectors={inspectors}
@@ -205,35 +251,23 @@ export default function PlanlaegSyn() {
               hasSelectedInspections={hasSelectedInspections}
             />
           </div>
+          
+          <DragOverlay>
+            {activeDragId !== null && <DragPreview count={dragCount} />}
+          </DragOverlay>
 
-          {/* Sticky footer with lock button */}
+          {/* Footer with assignment summary */}
           {totalAssignments > 0 && (
             <div className="sticky bottom-0 bg-background border-t py-4 mt-4 -mx-6 px-6 lg:-mx-8 lg:px-8">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">
                   {totalAssignments} inspektion{totalAssignments !== 1 ? "er" : ""} tildelt
                 </span>
-                <Button 
-                  onClick={handleLockAssignments}
-                  disabled={isLocked}
-                  className="gap-2"
-                >
-                  {isLocked ? (
-                    <>
-                      <CheckCircle className="h-4 w-4" />
-                      Inspektioner låst
-                    </>
-                  ) : (
-                    <>
-                      <Lock className="h-4 w-4" />
-                      Lås inspektioner
-                    </>
-                  )}
-                </Button>
+                {/* Future: "Gem" button for Phase 3 */}
               </div>
             </div>
           )}
-        </>
+        </DndContext>
       )}
     </div>
   );
