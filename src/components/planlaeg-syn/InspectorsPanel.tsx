@@ -7,6 +7,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useDroppable } from "@dnd-kit/core";
 import { Info, X, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Inspector } from "@/pages/PlanlaegSyn";
@@ -60,6 +61,122 @@ function getTypeColor(abbr: string): string {
   return TYPE_COLORS[abbr] || "bg-muted text-muted-foreground";
 }
 
+interface DroppableInspectorProps {
+  inspector: Inspector;
+  isSelected: boolean;
+  onSelect: (id: string) => void;
+  assignedItems: MondayItem[];
+  onRemoveAssignment: (inspectorId: string, inspectionId: number) => void;
+  hasSelectedInspections: boolean;
+}
+
+function DroppableInspector({
+  inspector,
+  isSelected,
+  onSelect,
+  assignedItems,
+  onRemoveAssignment,
+  hasSelectedInspections,
+}: DroppableInspectorProps) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: `inspector-${inspector.inspector_uuid}`,
+    data: { inspectorId: inspector.inspector_uuid },
+  });
+  
+  const hasCustomTime = isCustomTime(inspector.start_tid, inspector.slut_tid);
+  
+  return (
+    <div ref={setNodeRef} className="space-y-0">
+      <div
+        onClick={() => onSelect(inspector.inspector_uuid)}
+        className={cn(
+          "p-3 rounded-lg border cursor-pointer transition-all",
+          "hover:bg-muted/50",
+          isSelected && "ring-2 ring-primary bg-primary/5",
+          hasSelectedInspections && "ring-1 ring-primary/30 border-primary/50",
+          isOver && "ring-2 ring-primary border-dashed bg-primary/10"
+        )}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="font-medium text-sm truncate">
+                {inspector.navn}
+              </p>
+              {hasCustomTime && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="h-4 w-4 text-orange-500 flex-shrink-0" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Kun tilgængelig {formatTimeRange(inspector.start_tid, inspector.slut_tid)}</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {(hasSelectedInspections || isOver) && (
+                <Plus className="h-4 w-4 text-primary flex-shrink-0" />
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1 truncate">
+              {inspector.adresse || "Ingen adresse"}
+            </p>
+            <div className="flex flex-wrap gap-1 mt-2">
+              {inspector.synstyper.map((type) => (
+                <Badge
+                  key={type}
+                  className={cn(
+                    "text-xs",
+                    TYPE_COLORS[type] || "bg-muted text-muted-foreground"
+                  )}
+                >
+                  {type}
+                </Badge>
+              ))}
+            </div>
+          </div>
+          <div className="text-xs text-muted-foreground text-right flex-shrink-0">
+            <span className="font-medium">KM:</span> -
+          </div>
+        </div>
+      </div>
+
+      {/* Assigned inspections as sub-items */}
+      {assignedItems.length > 0 && (
+        <div className="ml-4 mt-1 space-y-1 border-l-2 border-primary/30 pl-3 pb-2">
+          {assignedItems.map((item) => {
+            const abbr = getTypeAbbreviation(item.synstype);
+            return (
+              <div
+                key={item.id}
+                className="flex items-center gap-2 text-xs bg-muted/50 rounded px-2 py-1.5"
+              >
+                <span className="flex-1 truncate text-foreground">
+                  {item.adresse || "Ukendt adresse"}
+                </span>
+                <Badge className={cn("text-[10px] px-1.5 py-0", getTypeColor(abbr))}>
+                  {abbr}
+                </Badge>
+                <span className="text-muted-foreground whitespace-nowrap">
+                  {item.antal_vaerelser ?? "?"} vær.
+                </span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemoveAssignment(inspector.inspector_uuid, item.id);
+                  }}
+                  className="text-muted-foreground hover:text-destructive transition-colors p-0.5 rounded hover:bg-destructive/10"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function InspectorsPanel({
   inspectors,
   isLoading,
@@ -88,101 +205,17 @@ export function InspectorsPanel({
             </div>
           ) : (
             <div className="space-y-2">
-              {inspectors.map((inspector) => {
-                const isSelected = selectedId === inspector.inspector_uuid;
-                const hasCustomTime = isCustomTime(inspector.start_tid, inspector.slut_tid);
-                const assignedItems = assignments.get(inspector.inspector_uuid) || [];
-                
-                return (
-                  <div key={inspector.availability_id} className="space-y-0">
-                    <div
-                      onClick={() => onSelect(inspector.inspector_uuid)}
-                      className={cn(
-                        "p-3 rounded-lg border cursor-pointer transition-all",
-                        "hover:bg-muted/50",
-                        isSelected && "ring-2 ring-primary bg-primary/5",
-                        hasSelectedInspections && "ring-1 ring-primary/30 border-primary/50"
-                      )}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium text-sm truncate">
-                              {inspector.navn}
-                            </p>
-                            {hasCustomTime && (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Info className="h-4 w-4 text-orange-500 flex-shrink-0" />
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Kun tilgængelig {formatTimeRange(inspector.start_tid, inspector.slut_tid)}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            )}
-                            {hasSelectedInspections && (
-                              <Plus className="h-4 w-4 text-primary flex-shrink-0" />
-                            )}
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1 truncate">
-                            {inspector.adresse || "Ingen adresse"}
-                          </p>
-                          <div className="flex flex-wrap gap-1 mt-2">
-                            {inspector.synstyper.map((type) => (
-                              <Badge
-                                key={type}
-                                className={cn(
-                                  "text-xs",
-                                  TYPE_COLORS[type] || "bg-muted text-muted-foreground"
-                                )}
-                              >
-                                {type}
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="text-xs text-muted-foreground text-right flex-shrink-0">
-                          <span className="font-medium">KM:</span> -
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Assigned inspections as sub-items */}
-                    {assignedItems.length > 0 && (
-                      <div className="ml-4 mt-1 space-y-1 border-l-2 border-primary/30 pl-3 pb-2">
-                        {assignedItems.map((item) => {
-                          const abbr = getTypeAbbreviation(item.synstype);
-                          return (
-                            <div
-                              key={item.id}
-                              className="flex items-center gap-2 text-xs bg-muted/50 rounded px-2 py-1.5"
-                            >
-                              <span className="flex-1 truncate text-foreground">
-                                {item.adresse || "Ukendt adresse"}
-                              </span>
-                              <Badge className={cn("text-[10px] px-1.5 py-0", getTypeColor(abbr))}>
-                                {abbr}
-                              </Badge>
-                              <span className="text-muted-foreground whitespace-nowrap">
-                                {item.antal_vaerelser ?? "?"} vær.
-                              </span>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onRemoveAssignment(inspector.inspector_uuid, item.id);
-                                }}
-                                className="text-muted-foreground hover:text-destructive transition-colors p-0.5 rounded hover:bg-destructive/10"
-                              >
-                                <X className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              {inspectors.map((inspector) => (
+                <DroppableInspector
+                  key={inspector.availability_id}
+                  inspector={inspector}
+                  isSelected={selectedId === inspector.inspector_uuid}
+                  onSelect={onSelect}
+                  assignedItems={assignments.get(inspector.inspector_uuid) || []}
+                  onRemoveAssignment={onRemoveAssignment}
+                  hasSelectedInspections={hasSelectedInspections}
+                />
+              ))}
             </div>
           )}
         </ScrollArea>

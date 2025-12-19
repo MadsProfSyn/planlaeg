@@ -2,8 +2,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useDraggable } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
-import { UserCheck } from "lucide-react";
 import type { MondayItem } from "@/lib/supabase";
 
 interface InspectionsPanelProps {
@@ -12,7 +12,6 @@ interface InspectionsPanelProps {
   selectedIds: number[];
   onSelect: (id: number) => void;
   hiddenIds?: Set<number>;
-  assignedIds?: Set<number>;
 }
 
 const TYPE_MAP: Record<string, string> = {
@@ -38,15 +37,58 @@ function getTypeColor(abbr: string): string {
   return TYPE_COLORS[abbr] || "bg-muted text-muted-foreground";
 }
 
+interface DraggableInspectionProps {
+  inspection: MondayItem;
+  isSelected: boolean;
+  onSelect: (id: number) => void;
+}
+
+function DraggableInspection({ inspection, isSelected, onSelect }: DraggableInspectionProps) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `inspection-${inspection.id}`,
+    data: { inspection },
+  });
+  
+  const abbr = getTypeAbbreviation(inspection.synstype);
+  
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      onClick={() => onSelect(inspection.id)}
+      className={cn(
+        "p-3 rounded-lg border cursor-grab transition-all touch-none",
+        "hover:bg-muted/50",
+        isSelected && "ring-2 ring-primary bg-primary/5",
+        isDragging && "opacity-50 cursor-grabbing"
+      )}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <p className="font-medium text-sm truncate">
+            {inspection.adresse || "Ukendt adresse"}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {inspection.antal_vaerelser ?? "?"} værelser
+          </p>
+        </div>
+        <Badge className={cn("flex-shrink-0", getTypeColor(abbr))}>
+          {abbr}
+        </Badge>
+      </div>
+    </div>
+  );
+}
+
 export function InspectionsPanel({
   inspections,
   isLoading,
   selectedIds,
   onSelect,
   hiddenIds,
-  assignedIds,
 }: InspectionsPanelProps) {
-  // Filter out hidden inspections (when locked)
+  // Filter out hidden inspections (assigned ones)
   const visibleInspections = hiddenIds
     ? inspections.filter((i) => !hiddenIds.has(i.id))
     : inspections;
@@ -70,43 +112,14 @@ export function InspectionsPanel({
             </div>
           ) : (
             <div className="space-y-2">
-              {visibleInspections.map((inspection) => {
-                const abbr = getTypeAbbreviation(inspection.synstype);
-                const isSelected = selectedIds.includes(inspection.id);
-                const isAssigned = assignedIds?.has(inspection.id) ?? false;
-                
-                return (
-                  <div
-                    key={inspection.id}
-                    onClick={() => onSelect(inspection.id)}
-                    className={cn(
-                      "p-3 rounded-lg border cursor-pointer transition-all",
-                      "hover:bg-muted/50",
-                      isSelected && "ring-2 ring-primary bg-primary/5",
-                      isAssigned && !isSelected && "bg-muted/30 border-dashed"
-                    )}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-sm truncate">
-                            {inspection.adresse || "Ukendt adresse"}
-                          </p>
-                          {isAssigned && (
-                            <UserCheck className="h-3.5 w-3.5 text-green-600 dark:text-green-400 flex-shrink-0" />
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {inspection.antal_vaerelser ?? "?"} værelser
-                        </p>
-                      </div>
-                      <Badge className={cn("flex-shrink-0", getTypeColor(abbr))}>
-                        {abbr}
-                      </Badge>
-                    </div>
-                  </div>
-                );
-              })}
+              {visibleInspections.map((inspection) => (
+                <DraggableInspection
+                  key={inspection.id}
+                  inspection={inspection}
+                  isSelected={selectedIds.includes(inspection.id)}
+                  onSelect={onSelect}
+                />
+              ))}
             </div>
           )}
         </ScrollArea>
