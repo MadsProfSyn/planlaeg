@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -8,8 +10,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useDroppable } from "@dnd-kit/core";
-import { Info, X, Plus } from "lucide-react";
+import { Info, X, Plus, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ScheduleTimesDialog } from "./ScheduleTimesDialog";
 import type { Inspector } from "@/pages/PlanlaegSyn";
 import type { MondayItem } from "@/lib/supabase";
 
@@ -21,6 +24,8 @@ interface InspectorsPanelProps {
   assignments: Map<string, MondayItem[]>;
   onRemoveAssignment: (inspectorId: string, inspectionId: number) => void;
   hasSelectedInspections: boolean;
+  scheduledTimes: Map<number, { start: string; end: string }>;
+  onUpdateScheduledTimes: (times: Map<number, { start: string; end: string }>) => void;
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -68,6 +73,8 @@ interface DroppableInspectorProps {
   assignedItems: MondayItem[];
   onRemoveAssignment: (inspectorId: string, inspectionId: number) => void;
   hasSelectedInspections: boolean;
+  scheduledTimes: Map<number, { start: string; end: string }>;
+  onUpdateScheduledTimes: (times: Map<number, { start: string; end: string }>) => void;
 }
 
 function DroppableInspector({
@@ -77,7 +84,11 @@ function DroppableInspector({
   assignedItems,
   onRemoveAssignment,
   hasSelectedInspections,
+  scheduledTimes,
+  onUpdateScheduledTimes,
 }: DroppableInspectorProps) {
+  const [timeDialogOpen, setTimeDialogOpen] = useState(false);
+  
   const { setNodeRef, isOver } = useDroppable({
     id: `inspector-${inspector.inspector_uuid}`,
     data: { inspectorId: inspector.inspector_uuid },
@@ -85,95 +96,129 @@ function DroppableInspector({
   
   const hasCustomTime = isCustomTime(inspector.start_tid, inspector.slut_tid);
   
+  // Check if any assigned items have scheduled times
+  const hasScheduledTimes = assignedItems.some((item) => scheduledTimes.has(item.id));
+  
   return (
-    <div ref={setNodeRef} className="space-y-0">
-      <div
-        onClick={() => onSelect(inspector.inspector_uuid)}
-        className={cn(
-          "p-3 rounded-lg border cursor-pointer transition-all",
-          "hover:bg-muted/50",
-          isSelected && "ring-2 ring-primary bg-primary/5",
-          hasSelectedInspections && "ring-1 ring-primary/30 border-primary/50",
-          isOver && "ring-2 ring-primary border-dashed bg-primary/10"
-        )}
-      >
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <p className="font-medium text-sm truncate">
-                {inspector.navn}
+    <>
+      <div ref={setNodeRef} className="space-y-0">
+        <div
+          onClick={() => onSelect(inspector.inspector_uuid)}
+          className={cn(
+            "p-3 rounded-lg border cursor-pointer transition-all",
+            "hover:bg-muted/50",
+            isSelected && "ring-2 ring-primary bg-primary/5",
+            hasSelectedInspections && "ring-1 ring-primary/30 border-primary/50",
+            isOver && "ring-2 ring-primary border-dashed bg-primary/10"
+          )}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="font-medium text-sm truncate">
+                  {inspector.navn}
+                </p>
+                {hasCustomTime && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Info className="h-4 w-4 text-orange-500 flex-shrink-0" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Kun tilgængelig {formatTimeRange(inspector.start_tid, inspector.slut_tid)}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+                {(hasSelectedInspections || isOver) && (
+                  <Plus className="h-4 w-4 text-primary flex-shrink-0" />
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1 truncate">
+                {inspector.adresse || "Ingen adresse"}
               </p>
-              {hasCustomTime && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Info className="h-4 w-4 text-orange-500 flex-shrink-0" />
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Kun tilgængelig {formatTimeRange(inspector.start_tid, inspector.slut_tid)}</p>
-                  </TooltipContent>
-                </Tooltip>
-              )}
-              {(hasSelectedInspections || isOver) && (
-                <Plus className="h-4 w-4 text-primary flex-shrink-0" />
-              )}
+              <div className="flex flex-wrap gap-1 mt-2">
+                {inspector.synstyper.map((type) => (
+                  <Badge
+                    key={type}
+                    className={cn(
+                      "text-xs",
+                      TYPE_COLORS[type] || "bg-muted text-muted-foreground"
+                    )}
+                  >
+                    {type}
+                  </Badge>
+                ))}
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-1 truncate">
-              {inspector.adresse || "Ingen adresse"}
-            </p>
-            <div className="flex flex-wrap gap-1 mt-2">
-              {inspector.synstyper.map((type) => (
-                <Badge
-                  key={type}
-                  className={cn(
-                    "text-xs",
-                    TYPE_COLORS[type] || "bg-muted text-muted-foreground"
-                  )}
-                >
-                  {type}
-                </Badge>
-              ))}
-            </div>
-          </div>
-          <div className="text-xs text-muted-foreground text-right flex-shrink-0">
-            <span className="font-medium">KM:</span> -
-          </div>
-        </div>
-      </div>
-
-      {/* Assigned inspections as sub-items */}
-      {assignedItems.length > 0 && (
-        <div className="ml-4 mt-1 space-y-1 border-l-2 border-primary/30 pl-3 pb-2">
-          {assignedItems.map((item) => {
-            const abbr = getTypeAbbreviation(item.synstype);
-            return (
-              <div
-                key={item.id}
-                className="flex items-center gap-2 text-xs bg-muted/50 rounded px-2 py-1.5"
-              >
-                <span className="flex-1 truncate text-foreground">
-                  {item.adresse || "Ukendt adresse"}
-                </span>
-                <Badge className={cn("text-[10px] px-1.5 py-0", getTypeColor(abbr))}>
-                  {abbr}
-                </Badge>
-                <span className="text-muted-foreground whitespace-nowrap">
-                  {item.antal_vaerelser ?? "?"} vær.
-                </span>
-                <button
+            <div className="text-xs text-muted-foreground text-right flex-shrink-0 flex items-center gap-2">
+              <span><span className="font-medium">KM:</span> -</span>
+              {assignedItems.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-6 text-xs gap-1"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onRemoveAssignment(inspector.inspector_uuid, item.id);
+                    setTimeDialogOpen(true);
                   }}
-                  className="text-muted-foreground hover:text-destructive transition-colors p-0.5 rounded hover:bg-destructive/10"
                 >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            );
-          })}
+                  <Clock className="h-3 w-3" />
+                  {hasScheduledTimes ? "Rediger" : "Vælg tidspunkt"}
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
-      )}
-    </div>
+
+        {/* Assigned inspections as sub-items */}
+        {assignedItems.length > 0 && (
+          <div className="ml-4 mt-1 space-y-1 border-l-2 border-primary/30 pl-3 pb-2">
+            {assignedItems.map((item) => {
+              const abbr = getTypeAbbreviation(item.synstype);
+              const scheduledTime = scheduledTimes.get(item.id);
+              return (
+                <div
+                  key={item.id}
+                  className="flex items-center gap-2 text-xs bg-muted/50 rounded px-2 py-1.5"
+                >
+                  <span className="flex-1 truncate text-foreground">
+                    {item.adresse || "Ukendt adresse"}
+                  </span>
+                  <Badge className={cn("text-[10px] px-1.5 py-0", getTypeColor(abbr))}>
+                    {abbr}
+                  </Badge>
+                  <span className="text-muted-foreground whitespace-nowrap">
+                    {item.antal_vaerelser ?? "?"} vær.
+                  </span>
+                  {scheduledTime && (
+                    <span className="text-muted-foreground font-mono text-[10px] whitespace-nowrap">
+                      {scheduledTime.start}-{scheduledTime.end}
+                    </span>
+                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemoveAssignment(inspector.inspector_uuid, item.id);
+                    }}
+                    className="text-muted-foreground hover:text-destructive transition-colors p-0.5 rounded hover:bg-destructive/10"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <ScheduleTimesDialog
+        open={timeDialogOpen}
+        onOpenChange={setTimeDialogOpen}
+        inspectorName={inspector.navn}
+        inspections={assignedItems}
+        existingTimes={scheduledTimes}
+        onSave={onUpdateScheduledTimes}
+      />
+    </>
   );
 }
 
@@ -185,6 +230,8 @@ export function InspectorsPanel({
   assignments,
   onRemoveAssignment,
   hasSelectedInspections,
+  scheduledTimes,
+  onUpdateScheduledTimes,
 }: InspectorsPanelProps) {
   return (
     <Card className="flex flex-col h-full overflow-hidden">
@@ -214,6 +261,8 @@ export function InspectorsPanel({
                   assignedItems={assignments.get(inspector.inspector_uuid) || []}
                   onRemoveAssignment={onRemoveAssignment}
                   hasSelectedInspections={hasSelectedInspections}
+                  scheduledTimes={scheduledTimes}
+                  onUpdateScheduledTimes={onUpdateScheduledTimes}
                 />
               ))}
             </div>
