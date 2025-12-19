@@ -638,7 +638,14 @@ export type Database = {
           note: string | null
           raw: Json | null
           region: string | null
+          schedule_status: string | null
+          scheduled_at: string | null
+          scheduled_by: string | null
+          scheduled_end_time: string | null
+          scheduled_inspector_id: string | null
+          scheduled_start_time: string | null
           synstype: string | null
+          wf_shift_id: string | null
         }
         Insert: {
           adresse?: string | null
@@ -655,7 +662,14 @@ export type Database = {
           note?: string | null
           raw?: Json | null
           region?: string | null
+          schedule_status?: string | null
+          scheduled_at?: string | null
+          scheduled_by?: string | null
+          scheduled_end_time?: string | null
+          scheduled_inspector_id?: string | null
+          scheduled_start_time?: string | null
           synstype?: string | null
+          wf_shift_id?: string | null
         }
         Update: {
           adresse?: string | null
@@ -672,9 +686,24 @@ export type Database = {
           note?: string | null
           raw?: Json | null
           region?: string | null
+          schedule_status?: string | null
+          scheduled_at?: string | null
+          scheduled_by?: string | null
+          scheduled_end_time?: string | null
+          scheduled_inspector_id?: string | null
+          scheduled_start_time?: string | null
           synstype?: string | null
+          wf_shift_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "monday_items_selected_scheduled_inspector_id_fkey"
+            columns: ["scheduled_inspector_id"]
+            isOneToOne: false
+            referencedRelation: "inspectors"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {

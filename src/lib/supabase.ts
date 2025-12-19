@@ -15,6 +15,14 @@ export interface MondayItem {
   landsdel: string | null;
   inserted_at: string | null;
   raw: any | null;
+  // Schedule tracking fields
+  schedule_status?: string | null;
+  wf_shift_id?: string | null;
+  scheduled_inspector_id?: string | null;
+  scheduled_start_time?: string | null;
+  scheduled_end_time?: string | null;
+  scheduled_at?: string | null;
+  scheduled_by?: string | null;
 }
 
 export interface MondayItemFilters {
@@ -61,7 +69,9 @@ export async function getMondayItems(
   let query = supabase
     .from("monday_items_selected")
     .select("*", { count: "exact" })
-    .abortSignal(signal || new AbortController().signal);
+    .abortSignal(signal || new AbortController().signal)
+    // Filter out items already sent to WorkFeed
+    .or("schedule_status.is.null,schedule_status.neq.sent_to_workfeed");
 
   // Apply filters
   if (filters.regions && filters.regions.length > 0) {
