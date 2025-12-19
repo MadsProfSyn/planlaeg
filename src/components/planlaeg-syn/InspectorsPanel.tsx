@@ -149,8 +149,7 @@ function DroppableInspector({
                 ))}
               </div>
             </div>
-            <div className="text-xs text-muted-foreground text-right flex-shrink-0 flex items-center gap-2">
-              <span><span className="font-medium">KM:</span> -</span>
+            <div className="flex-shrink-0">
               {assignedItems.length > 0 && (
                 <Button
                   variant="outline"
