@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { 
   DndContext, 
   DragOverlay, 
@@ -15,6 +15,9 @@ import { getMondayItems, getRegions, MondayItem } from "@/lib/supabase";
 import { PlanlaegSynFiltersBar } from "@/components/planlaeg-syn/PlanlaegSynFiltersBar";
 import { InspectionsPanel } from "@/components/planlaeg-syn/InspectionsPanel";
 import { InspectorsPanel } from "@/components/planlaeg-syn/InspectorsPanel";
+import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 export interface Inspector {
   availability_id: string;
@@ -39,6 +42,7 @@ function DragPreview({ count }: { count: number }) {
 }
 
 export default function PlanlaegSyn() {
+  const queryClient = useQueryClient();
   const [selectedDate, setSelectedDate] = useState<string | undefined>();
   const [selectedLandsdel, setSelectedLandsdel] = useState<string>("all");
   const [selectedAfdeling, setSelectedAfdeling] = useState<string>("all");
@@ -50,6 +54,9 @@ export default function PlanlaegSyn() {
   
   // Scheduled times state: inspectionId -> { start, end }
   const [scheduledTimes, setScheduledTimes] = useState<Map<number, { start: string; end: string }>>(new Map());
+  
+  // Sending state
+  const [isSending, setIsSending] = useState(false);
   
   // Handler for updating scheduled times
   const handleUpdateScheduledTimes = (newTimes: Map<number, { start: string; end: string }>) => {
@@ -160,6 +167,17 @@ export default function PlanlaegSyn() {
   // Check if any inspections are currently selected
   const hasSelectedInspections = selectedInspectionIds.length > 0;
 
+  // Check all assigned inspections have scheduled times
+  const allAssignmentsHaveTimes = useMemo(() => {
+    if (totalAssignments === 0) return false;
+    for (const [_, items] of assignments) {
+      for (const item of items) {
+        if (!scheduledTimes.has(item.id)) return false;
+      }
+    }
+    return true;
+  }, [assignments, scheduledTimes, totalAssignments]);
+
   // Count for drag preview (selected items or 1 if dragging without selection)
   const dragCount = useMemo(() => {
     if (activeDragId === null) return 0;
@@ -249,6 +267,87 @@ export default function PlanlaegSyn() {
     setActiveDragId(null);
   };
 
+  // Handle sending to WorkFeed
+  const handleSendToWorkfeed = async () => {
+    // Validate all assignments have times
+    const missingTimes: string[] = [];
+    assignments.forEach((items) => {
+      items.forEach((item) => {
+        if (!scheduledTimes.has(item.id)) {
+          missingTimes.push(item.adresse || `ID ${item.id}`);
+        }
+      });
+    });
+
+    if (missingTimes.length > 0) {
+      toast.error("Alle inspektioner skal have et tidspunkt");
+      return;
+    }
+
+    if (!selectedDate) {
+      toast.error("Vælg en dato først");
+      return;
+    }
+
+    // Build payload
+    const payload = {
+      assignments: [] as {
+        monday_item_id: number;
+        inspector_id: string;
+        start_time: string;
+        end_time: string;
+        date: string;
+      }[],
+    };
+
+    assignments.forEach((items, inspectorId) => {
+      items.forEach((item) => {
+        const times = scheduledTimes.get(item.id)!;
+        payload.assignments.push({
+          monday_item_id: item.id,
+          inspector_id: inspectorId,
+          start_time: times.start,
+          end_time: times.end,
+          date: selectedDate,
+        });
+      });
+    });
+
+    setIsSending(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "send-manual-shifts-to-workfeed",
+        { body: payload }
+      );
+
+      if (error) {
+        console.error("Edge function error:", error);
+        toast.error("Fejl ved afsendelse til WorkFeed");
+        return;
+      }
+
+      if (!data?.success && data?.failed > 0) {
+        toast.error(`${data.failed} inspektion${data.failed !== 1 ? "er" : ""} fejlede`);
+      } else {
+        toast.success(`${data.sent} inspektion${data.sent !== 1 ? "er" : ""} sendt til WorkFeed`);
+      }
+
+      // Clear state and refresh
+      setAssignments(new Map());
+      setScheduledTimes(new Map());
+      setSelectedInspectionIds([]);
+      
+      // Refetch inspections to remove sent items
+      queryClient.invalidateQueries({ queryKey: ["planlaeg-inspections"] });
+    } catch (err) {
+      console.error("Send to WorkFeed error:", err);
+      toast.error("Fejl ved afsendelse til WorkFeed");
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full px-6 lg:px-8">
       <div className="mb-6">
@@ -309,8 +408,25 @@ export default function PlanlaegSyn() {
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">
                   {totalAssignments} inspektion{totalAssignments !== 1 ? "er" : ""} tildelt
+                  {!allAssignmentsHaveTimes && (
+                    <span className="text-destructive ml-2">
+                      (mangler tidspunkter)
+                    </span>
+                  )}
                 </span>
-                {/* Future: "Gem" button for Phase 3 */}
+                <Button 
+                  onClick={handleSendToWorkfeed}
+                  disabled={isSending || !allAssignmentsHaveTimes}
+                >
+                  {isSending ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Sender...
+                    </>
+                  ) : (
+                    "Send til WorkFeed"
+                  )}
+                </Button>
               </div>
             </div>
           )}
