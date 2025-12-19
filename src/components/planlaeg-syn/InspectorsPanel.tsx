@@ -88,7 +88,7 @@ export function InspectorsPanel({
                           {hasCustomTime && (
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Info className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                <Info className="h-4 w-4 text-orange-500 flex-shrink-0" />
                               </TooltipTrigger>
                               <TooltipContent>
                                 <p>Kun tilgængelig {formatTimeRange(inspector.start_tid, inspector.slut_tid)}</p>
