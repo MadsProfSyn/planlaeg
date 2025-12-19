@@ -10,17 +10,17 @@ import {
 interface PlanlaegSynFiltersBarProps {
   selectedDate?: string;
   onDateChange: (date?: string) => void;
-  selectedLandsdel: string;
-  onLandsdelChange: (landsdel: string) => void;
-  regions: string[];
+  selectedAfdeling: string;
+  onAfdelingChange: (afdeling: string) => void;
+  afdelinger: string[];
 }
 
 export function PlanlaegSynFiltersBar({
   selectedDate,
   onDateChange,
-  selectedLandsdel,
-  onLandsdelChange,
-  regions,
+  selectedAfdeling,
+  onAfdelingChange,
+  afdelinger,
 }: PlanlaegSynFiltersBarProps) {
   return (
     <div className="flex flex-wrap gap-4 items-center">
@@ -33,15 +33,15 @@ export function PlanlaegSynFiltersBar({
       </div>
       
       <div className="w-48">
-        <Select value={selectedLandsdel} onValueChange={onLandsdelChange}>
+        <Select value={selectedAfdeling} onValueChange={onAfdelingChange}>
           <SelectTrigger>
-            <SelectValue placeholder="Alle landsdele" />
+            <SelectValue placeholder="Alle afdelinger" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Alle landsdele</SelectItem>
-            {regions.map((region) => (
-              <SelectItem key={region} value={region}>
-                {region}
+            <SelectItem value="all">Alle afdelinger</SelectItem>
+            {afdelinger.map((afdeling) => (
+              <SelectItem key={afdeling} value={afdeling}>
+                {afdeling}
               </SelectItem>
             ))}
           </SelectContent>

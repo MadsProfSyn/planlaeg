@@ -11,7 +11,7 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { supabase } from "@/integrations/supabase/client";
-import { getMondayItems, getRegions, MondayItem } from "@/lib/supabase";
+import { getMondayItems, MondayItem } from "@/lib/supabase";
 import { PlanlaegSynFiltersBar } from "@/components/planlaeg-syn/PlanlaegSynFiltersBar";
 import { InspectionsPanel } from "@/components/planlaeg-syn/InspectionsPanel";
 import { InspectorsPanel } from "@/components/planlaeg-syn/InspectorsPanel";
@@ -29,6 +29,17 @@ export interface Inspector {
   tidspunkt_label: string;
 }
 
+// Mapping from Afdeling (department) to Landsdel (region) for inspections
+const getLandsdelFromAfdeling = (afdeling: string): string | null => {
+  const mapping: Record<string, string> = {
+    "Storkøbenhavn": "Sjælland",
+    "Odense": "Fyn",
+    "Århus": "Jylland",
+    "Aalborg": "Jylland",
+  };
+  return mapping[afdeling] || null;
+};
+
 // Drag preview component
 function DragPreview({ count }: { count: number }) {
   return (
@@ -40,7 +51,7 @@ function DragPreview({ count }: { count: number }) {
 
 export default function PlanlaegSyn() {
   const [selectedDate, setSelectedDate] = useState<string | undefined>();
-  const [selectedLandsdel, setSelectedLandsdel] = useState<string>("all");
+  const [selectedAfdeling, setSelectedAfdeling] = useState<string>("all");
   const [selectedInspectionIds, setSelectedInspectionIds] = useState<number[]>([]);
   const [selectedInspectorId, setSelectedInspectorId] = useState<string | null>(null);
   
@@ -59,15 +70,18 @@ export default function PlanlaegSyn() {
   // Drag state
   const [activeDragId, setActiveDragId] = useState<number | null>(null);
 
-  // Fetch regions for the filter dropdown
-  const { data: regions = [] } = useQuery({
-    queryKey: ["regions"],
-    queryFn: getRegions,
+  // Fetch departments for the filter dropdown
+  const { data: afdelinger = [] } = useQuery({
+    queryKey: ["departments"],
+    queryFn: async () => {
+      const { data } = await supabase.functions.invoke("fetch-departments");
+      return (data?.data || []).map((d: { value: string }) => d.value);
+    },
   });
 
-  // Fetch inspections for the selected date and region
+  // Fetch inspections for the selected date and afdeling (mapped to landsdel)
   const { data: inspectionsData, isLoading: isLoadingInspections } = useQuery({
-    queryKey: ["planlaeg-inspections", selectedDate, selectedLandsdel],
+    queryKey: ["planlaeg-inspections", selectedDate, selectedAfdeling],
     queryFn: async () => {
       if (!selectedDate) return { data: [], count: 0 };
       
@@ -76,8 +90,12 @@ export default function PlanlaegSyn() {
         dateTo: selectedDate,
       };
       
-      if (selectedLandsdel !== "all") {
-        filters.regions = [selectedLandsdel];
+      // Map afdeling to landsdel for inspections filter
+      if (selectedAfdeling !== "all") {
+        const landsdel = getLandsdelFromAfdeling(selectedAfdeling);
+        if (landsdel) {
+          filters.regions = [landsdel];
+        }
       }
       
       return getMondayItems(1, 500, filters);
@@ -85,9 +103,9 @@ export default function PlanlaegSyn() {
     enabled: !!selectedDate,
   });
 
-  // Fetch inspectors for the selected date and region
+  // Fetch inspectors for the selected date and afdeling
   const { data: inspectorsData, isLoading: isLoadingInspectors } = useQuery({
-    queryKey: ["planlaeg-inspectors", selectedDate, selectedLandsdel],
+    queryKey: ["planlaeg-inspectors", selectedDate, selectedAfdeling],
     queryFn: async () => {
       if (!selectedDate) return { data: [] };
       
@@ -102,9 +120,9 @@ export default function PlanlaegSyn() {
         no_pagination: true,
       };
       
-      // Map landsdel to department filter if needed
-      if (selectedLandsdel !== "all") {
-        params.afdeling = [selectedLandsdel];
+      // Pass afdeling directly (department values like "Storkøbenhavn")
+      if (selectedAfdeling !== "all") {
+        params.afdeling = [selectedAfdeling];
       }
       
       const { data, error } = await supabase.functions.invoke("fetch-available-inspectors", {
@@ -236,9 +254,9 @@ export default function PlanlaegSyn() {
       <PlanlaegSynFiltersBar
         selectedDate={selectedDate}
         onDateChange={setSelectedDate}
-        selectedLandsdel={selectedLandsdel}
-        onLandsdelChange={setSelectedLandsdel}
-        regions={regions}
+        selectedAfdeling={selectedAfdeling}
+        onAfdelingChange={setSelectedAfdeling}
+        afdelinger={afdelinger}
       />
 
       {!selectedDate ? (
