@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -54,29 +54,27 @@ export function ScheduleTimesDialog({
   existingTimes,
   onSave,
 }: ScheduleTimesDialogProps) {
-  // Local state for editing times
-  const [localTimes, setLocalTimes] = useState<Map<number, string>>(new Map());
+  // Local state for editing times (both start and end)
+  const [localTimes, setLocalTimes] = useState<Map<number, { start: string; end: string }>>(new Map());
 
   // Initialize local times when dialog opens
   useEffect(() => {
     if (open) {
-      const initialTimes = new Map<number, string>();
+      const initialTimes = new Map<number, { start: string; end: string }>();
       let nextStartTime = "08:00";
 
       inspections.forEach((inspection) => {
         const existing = existingTimes.get(inspection.id);
         if (existing) {
-          initialTimes.set(inspection.id, existing.start);
-          // Calculate next start based on this inspection's end
+          initialTimes.set(inspection.id, { start: existing.start, end: existing.end });
           nextStartTime = existing.end;
         } else {
-          initialTimes.set(inspection.id, nextStartTime);
-          // Calculate end time for this inspection to get next start
           const endTime = calculateEndTime(nextStartTime, {
             synstype: inspection.synstype,
             antalVaerelser: inspection.antal_vaerelser,
             raw: inspection.raw,
           });
+          initialTimes.set(inspection.id, { start: nextStartTime, end: endTime });
           nextStartTime = endTime;
         }
       });
@@ -85,37 +83,33 @@ export function ScheduleTimesDialog({
     }
   }, [open, inspections, existingTimes]);
 
-  // Calculate end times based on current start times
-  const calculatedEndTimes = useMemo(() => {
-    const endTimes = new Map<number, string>();
-    inspections.forEach((inspection) => {
-      const startTime = localTimes.get(inspection.id) || "08:00";
-      const endTime = calculateEndTime(startTime, {
+  const handleStartTimeChange = (inspectionId: number, newStartTime: string, inspection: MondayItem) => {
+    setLocalTimes((prev) => {
+      const next = new Map(prev);
+      // Auto-calculate new end time based on new start
+      const newEndTime = calculateEndTime(newStartTime, {
         synstype: inspection.synstype,
         antalVaerelser: inspection.antal_vaerelser,
         raw: inspection.raw,
       });
-      endTimes.set(inspection.id, endTime);
+      next.set(inspectionId, { start: newStartTime, end: newEndTime });
+      return next;
     });
-    return endTimes;
-  }, [localTimes, inspections]);
+  };
 
-  const handleStartTimeChange = (inspectionId: number, newTime: string) => {
+  const handleEndTimeChange = (inspectionId: number, newEndTime: string) => {
     setLocalTimes((prev) => {
       const next = new Map(prev);
-      next.set(inspectionId, newTime);
+      const existing = prev.get(inspectionId);
+      if (existing) {
+        next.set(inspectionId, { ...existing, end: newEndTime });
+      }
       return next;
     });
   };
 
   const handleSave = () => {
-    const times = new Map<number, { start: string; end: string }>();
-    inspections.forEach((inspection) => {
-      const start = localTimes.get(inspection.id) || "08:00";
-      const end = calculatedEndTimes.get(inspection.id) || "09:00";
-      times.set(inspection.id, { start, end });
-    });
-    onSave(times);
+    onSave(localTimes);
     onOpenChange(false);
   };
 
@@ -130,8 +124,7 @@ export function ScheduleTimesDialog({
           <div className="space-y-3">
             {inspections.map((inspection) => {
               const abbr = getTypeAbbreviation(inspection.synstype);
-              const startTime = localTimes.get(inspection.id) || "08:00";
-              const endTime = calculatedEndTimes.get(inspection.id) || "09:00";
+              const times = localTimes.get(inspection.id) || { start: "08:00", end: "09:00" };
               const duration = calculateInspectionDuration({
                 synstype: inspection.synstype,
                 antalVaerelser: inspection.antal_vaerelser,
@@ -165,17 +158,20 @@ export function ScheduleTimesDialog({
                       <span className="text-[10px] text-muted-foreground mb-0.5">Start</span>
                       <Input
                         type="time"
-                        value={startTime}
-                        onChange={(e) => handleStartTimeChange(inspection.id, e.target.value)}
+                        value={times.start}
+                        onChange={(e) => handleStartTimeChange(inspection.id, e.target.value, inspection)}
                         className="w-24 h-8 text-sm"
                       />
                     </div>
                     <span className="text-muted-foreground mt-4">→</span>
                     <div className="flex flex-col items-center">
                       <span className="text-[10px] text-muted-foreground mb-0.5">Slut</span>
-                      <div className="w-24 h-8 flex items-center justify-center bg-muted rounded-md text-sm font-mono">
-                        {endTime}
-                      </div>
+                      <Input
+                        type="time"
+                        value={times.end}
+                        onChange={(e) => handleEndTimeChange(inspection.id, e.target.value)}
+                        className="w-24 h-8 text-sm"
+                      />
                     </div>
                   </div>
                 </div>
