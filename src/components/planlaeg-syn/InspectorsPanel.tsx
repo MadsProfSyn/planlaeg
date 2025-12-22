@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -10,7 +11,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useDroppable } from "@dnd-kit/core";
-import { Info, X, Plus, Clock } from "lucide-react";
+import { Info, X, Plus, Clock, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScheduleTimesDialog } from "./ScheduleTimesDialog";
 import type { Inspector } from "@/pages/PlanlaegSyn";
@@ -232,10 +233,29 @@ export function InspectorsPanel({
   scheduledTimes,
   onUpdateScheduledTimes,
 }: InspectorsPanelProps) {
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredInspectors = useMemo(() => {
+    if (!searchQuery.trim()) return inspectors;
+    const query = searchQuery.toLowerCase();
+    return inspectors.filter((inspector) =>
+      inspector.navn.toLowerCase().includes(query)
+    );
+  }, [inspectors, searchQuery]);
+
   return (
     <Card className="flex flex-col h-full overflow-hidden">
-      <CardHeader className="pb-3 flex-shrink-0">
+      <CardHeader className="pb-3 flex-shrink-0 space-y-3">
         <CardTitle className="text-lg">Tilgængelige konsulenter</CardTitle>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Søg efter konsulent..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
+        </div>
       </CardHeader>
       <CardContent className="flex-1 overflow-hidden p-0">
         <ScrollArea className="h-full px-6 pb-6">
@@ -245,13 +265,13 @@ export function InspectorsPanel({
                 <Skeleton key={i} className="h-24 w-full" />
               ))}
             </div>
-          ) : inspectors.length === 0 ? (
+          ) : filteredInspectors.length === 0 ? (
             <div className="flex items-center justify-center h-40 text-muted-foreground">
-              Ingen tilgængelige konsulenter for denne dato
+              {searchQuery ? "Ingen konsulenter matcher søgningen" : "Ingen tilgængelige konsulenter for denne dato"}
             </div>
           ) : (
             <div className="space-y-2">
-              {inspectors.map((inspector) => (
+              {filteredInspectors.map((inspector) => (
                 <DroppableInspector
                   key={inspector.availability_id}
                   inspector={inspector}
