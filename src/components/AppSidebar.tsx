@@ -26,15 +26,15 @@ import {
 
 const navigationItems = [
   {
-    title: "Syn ikke planlagt",
+    title: "Planlæg syn (Manuelt)",
     url: "/inspections",
     icon: ClipboardList,
     adminOnly: true,
   },
   {
-    title: "Planlagte syn",
-    url: "/scheduled",
-    icon: CalendarCheck,
+    title: "Planlæg syn (Automatisk)",
+    url: "/planlaeg-syn",
+    icon: CalendarPlus,
     adminOnly: true,
   },
   {
@@ -59,9 +59,9 @@ const navigationItems = [
     icon: Brain,
   },
   {
-    title: "Planlæg syn",
-    url: "/planlaeg-syn",
-    icon: CalendarPlus,
+    title: "Planlagte syn",
+    url: "/scheduled",
+    icon: CalendarCheck,
     adminOnly: true,
   },
 ];
