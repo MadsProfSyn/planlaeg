@@ -94,16 +94,17 @@ export default function PlanlaegSyn() {
     },
   });
 
-  // Fetch inspections for the selected date and landsdel (independent filter)
+  // Fetch inspections - all unscheduled by default, with optional date/landsdel filters
   const { data: inspectionsData, isLoading: isLoadingInspections } = useQuery({
     queryKey: ["planlaeg-inspections", selectedDate, selectedLandsdel],
     queryFn: async () => {
-      if (!selectedDate) return { data: [], count: 0 };
+      const filters: { dateFrom?: string; dateTo?: string; regions?: string[] } = {};
       
-      const filters: { dateFrom?: string; dateTo?: string; regions?: string[] } = {
-        dateFrom: selectedDate,
-        dateTo: selectedDate,
-      };
+      // Only apply date filter if a date is selected
+      if (selectedDate) {
+        filters.dateFrom = selectedDate;
+        filters.dateTo = selectedDate;
+      }
       
       // Filter by landsdel directly (Sjælland, Fyn, Jylland)
       if (selectedLandsdel !== "all") {
@@ -112,7 +113,6 @@ export default function PlanlaegSyn() {
       
       return getMondayItems(1, 500, filters);
     },
-    enabled: !!selectedDate,
   });
 
   // Fetch inspectors for the selected date and afdeling (independent filter)
@@ -366,72 +366,66 @@ export default function PlanlaegSyn() {
         afdelinger={afdelinger}
       />
 
-      {!selectedDate ? (
-        <div className="flex-1 flex items-center justify-center text-muted-foreground">
-          Vælg en dato for at se synsopgaver og tilgængelige konsulenter
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1 min-h-0 mt-4">
+          <InspectionsPanel
+            inspections={inspections}
+            isLoading={isLoadingInspections}
+            selectedIds={selectedInspectionIds}
+            onSelect={handleInspectionSelect}
+            hiddenIds={assignedInspectionIds}
+          />
+          <InspectorsPanel
+            inspectors={inspectors}
+            isLoading={isLoadingInspectors}
+            selectedId={selectedInspectorId}
+            onSelect={handleInspectorSelect}
+            assignments={assignments}
+            onRemoveAssignment={handleRemoveAssignment}
+            hasSelectedInspections={hasSelectedInspections}
+            scheduledTimes={scheduledTimes}
+            onUpdateScheduledTimes={handleUpdateScheduledTimes}
+          />
         </div>
-      ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-        >
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1 min-h-0 mt-4">
-            <InspectionsPanel
-              inspections={inspections}
-              isLoading={isLoadingInspections}
-              selectedIds={selectedInspectionIds}
-              onSelect={handleInspectionSelect}
-              hiddenIds={assignedInspectionIds}
-            />
-            <InspectorsPanel
-              inspectors={inspectors}
-              isLoading={isLoadingInspectors}
-              selectedId={selectedInspectorId}
-              onSelect={handleInspectorSelect}
-              assignments={assignments}
-              onRemoveAssignment={handleRemoveAssignment}
-              hasSelectedInspections={hasSelectedInspections}
-              scheduledTimes={scheduledTimes}
-              onUpdateScheduledTimes={handleUpdateScheduledTimes}
-            />
-          </div>
-          
-          <DragOverlay>
-            {activeDragId !== null && <DragPreview count={dragCount} />}
-          </DragOverlay>
+        
+        <DragOverlay>
+          {activeDragId !== null && <DragPreview count={dragCount} />}
+        </DragOverlay>
 
-          {/* Footer with assignment summary */}
-          {totalAssignments > 0 && (
-            <div className="sticky bottom-0 bg-background border-t py-4 mt-4 -mx-6 px-6 lg:-mx-8 lg:px-8">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">
-                  {totalAssignments} inspektion{totalAssignments !== 1 ? "er" : ""} tildelt
-                  {!allAssignmentsHaveTimes && (
-                    <span className="text-destructive ml-2">
-                      (mangler tidspunkter)
-                    </span>
-                  )}
-                </span>
-                <Button 
-                  onClick={handleSendToWorkfeed}
-                  disabled={isSending || !allAssignmentsHaveTimes}
-                >
-                  {isSending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Sender...
-                    </>
-                  ) : (
-                    "Send til WorkFeed"
-                  )}
-                </Button>
-              </div>
+        {/* Footer with assignment summary */}
+        {totalAssignments > 0 && (
+          <div className="sticky bottom-0 bg-background border-t py-4 mt-4 -mx-6 px-6 lg:-mx-8 lg:px-8">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">
+                {totalAssignments} inspektion{totalAssignments !== 1 ? "er" : ""} tildelt
+                {!allAssignmentsHaveTimes && (
+                  <span className="text-destructive ml-2">
+                    (mangler tidspunkter)
+                  </span>
+                )}
+              </span>
+              <Button 
+                onClick={handleSendToWorkfeed}
+                disabled={isSending || !allAssignmentsHaveTimes}
+              >
+                {isSending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Sender...
+                  </>
+                ) : (
+                  "Send til WorkFeed"
+                )}
+              </Button>
             </div>
-          )}
-        </DndContext>
-      )}
+          </div>
+        )}
+      </DndContext>
     </div>
   );
 }
