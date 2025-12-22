@@ -260,18 +260,19 @@ Deno.serve(async (req) => {
         console.log(`[send-manual-shifts] WorkFeed response:`, wfResult);
 
         // 8. Update monday_items_selected with status
-        const { error: updateError } = await supabase
-          .from("monday_items_selected")
-          .update({
-            schedule_status: "sent_to_workfeed",
-            wf_shift_id: wfResult.id,
-            scheduled_inspector_id: assignment.inspector_id,
-            scheduled_date: assignment.date,
-            scheduled_start_time: assignment.start_time,
-            scheduled_end_time: assignment.end_time,
-            scheduled_at: new Date().toISOString(),
-          })
-          .eq("id", assignment.monday_item_id);
+          const { error: updateError } = await supabase
+            .from("monday_items_selected")
+            .update({
+              schedule_status: "sent_to_workfeed",
+              wf_shift_id: wfResult.id,
+              scheduled_inspector_id: assignment.inspector_id,
+              scheduled_inspector_name: inspector.full_name,
+              scheduled_date: assignment.date,
+              scheduled_start_time: assignment.start_time,
+              scheduled_end_time: assignment.end_time,
+              scheduled_at: new Date().toISOString(),
+            })
+            .eq("id", assignment.monday_item_id);
 
         if (updateError) {
           console.error(`[send-manual-shifts] Failed to update monday item:`, updateError);
