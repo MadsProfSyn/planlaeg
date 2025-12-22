@@ -45,3 +45,6 @@ verify_jwt = false
 
 [functions.send-manual-shifts-to-workfeed]
 verify_jwt = false
+
+[functions.update-monday-after-workfeed]
+verify_jwt = false
