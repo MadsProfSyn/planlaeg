@@ -5,9 +5,15 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// WorkFeed API config
 const WORKFEED_API_URL = "https://europe-west1-production-eu-327a3.cloudfunctions.net/api";
 const WORKFEED_API_KEY = Deno.env.get("WORKFEED_API_KEY") ?? "";
 const WORKFEED_COMPANY_ID = Deno.env.get("WORKFEED_COMPANY_ID") ?? "";
+
+// Monday.com API config
+const MONDAY_API_URL = "https://api.monday.com/v2";
+const MONDAY_TOKEN = Deno.env.get("MONDAY_TOKEN") ?? "";
+const MONDAY_BOARD_ID = "3797295927";
 
 // Role name mapping (inspection type to WorkFeed role code)
 const ROLE_MAPPING: Record<string, string> = {
@@ -42,7 +48,86 @@ interface AssignmentResult {
   monday_item_id: number;
   wf_shift_id: string | null;
   status: "success" | "failed";
+  monday_synced: boolean;
   error?: string;
+}
+
+/**
+ * Normalize time to HH:MM:SS format
+ */
+function normalizeTime(time: string): string {
+  if (!time) return "00:00:00";
+  const parts = time.split(":");
+  const hours = parts[0]?.padStart(2, "0") || "00";
+  const minutes = parts[1]?.padStart(2, "0") || "00";
+  const seconds = parts[2]?.padStart(2, "0") || "00";
+  return `${hours}:${minutes}:${seconds}`;
+}
+
+/**
+ * Update Monday.com item with scheduling info
+ */
+async function updateMondayItem(
+  itemId: number,
+  inspectorName: string,
+  date: string,
+  startTime: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!MONDAY_TOKEN) {
+    return { success: false, error: "MONDAY_TOKEN not configured" };
+  }
+
+  try {
+    const normalizedTime = normalizeTime(startTime);
+    
+    const columnValues = {
+      text_mkyw2jhq: inspectorName,
+      date5: { date, time: normalizedTime },
+      boolean: { checked: "true" },
+    };
+
+    const mutation = `
+      mutation {
+        change_multiple_column_values(
+          board_id: ${MONDAY_BOARD_ID},
+          item_id: ${itemId},
+          column_values: ${JSON.stringify(JSON.stringify(columnValues))}
+        ) {
+          id
+        }
+      }
+    `;
+
+    console.log(`[monday-sync] Updating item ${itemId} with:`, { inspectorName, date, normalizedTime });
+
+    const response = await fetch(MONDAY_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: MONDAY_TOKEN,
+        "API-Version": "2024-10",
+      },
+      body: JSON.stringify({ query: mutation }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return { success: false, error: `Monday API HTTP error (${response.status}): ${errorText}` };
+    }
+
+    const result = await response.json();
+
+    if (result.errors && result.errors.length > 0) {
+      return { success: false, error: result.errors.map((e: any) => e.message).join(", ") };
+    }
+
+    console.log(`[monday-sync] ✅ Successfully updated Monday item ${itemId}`);
+    return { success: true };
+
+  } catch (error: any) {
+    console.error(`[monday-sync] ❌ Error updating Monday item ${itemId}:`, error);
+    return { success: false, error: error.message };
+  }
 }
 
 /**
@@ -172,8 +257,11 @@ Deno.serve(async (req) => {
     const results: AssignmentResult[] = [];
     let successCount = 0;
     let failedCount = 0;
+    let mondaySyncedCount = 0;
 
     for (const assignment of assignments) {
+      let mondaySynced = false;
+      
       try {
         console.log(`[send-manual-shifts] Processing monday_item_id: ${assignment.monday_item_id}`);
 
@@ -259,33 +347,62 @@ Deno.serve(async (req) => {
         const wfResult = await wfResponse.json();
         console.log(`[send-manual-shifts] WorkFeed response:`, wfResult);
 
-        // 8. Update monday_items_selected with status
-          const { error: updateError } = await supabase
-            .from("monday_items_selected")
-            .update({
-              schedule_status: "sent_to_workfeed",
-              wf_shift_id: wfResult.id,
-              scheduled_inspector_id: assignment.inspector_id,
-              scheduled_inspector_name: inspector.full_name,
-              scheduled_date: assignment.date,
-              scheduled_start_time: assignment.start_time,
-              scheduled_end_time: assignment.end_time,
-              scheduled_at: new Date().toISOString(),
-            })
-            .eq("id", assignment.monday_item_id);
+        // 8. Update monday_items_selected with status (initially sent_to_workfeed)
+        const { error: updateError } = await supabase
+          .from("monday_items_selected")
+          .update({
+            schedule_status: "sent_to_workfeed",
+            wf_shift_id: wfResult.id,
+            scheduled_inspector_id: assignment.inspector_id,
+            scheduled_inspector_name: inspector.full_name,
+            scheduled_date: assignment.date,
+            scheduled_start_time: assignment.start_time,
+            scheduled_end_time: assignment.end_time,
+            scheduled_at: new Date().toISOString(),
+          })
+          .eq("id", assignment.monday_item_id);
 
         if (updateError) {
           console.error(`[send-manual-shifts] Failed to update monday item:`, updateError);
-          // Don't throw - shift was created successfully in WorkFeed
+        }
+
+        // 9. Sync to Monday.com board
+        if (mondayItem.item_id) {
+          const mondayResult = await updateMondayItem(
+            mondayItem.item_id,
+            inspector.full_name,
+            assignment.date,
+            assignment.start_time
+          );
+
+          if (mondayResult.success) {
+            mondaySynced = true;
+            mondaySyncedCount++;
+
+            // Update status to scheduled_in_monday
+            const { error: mondayUpdateError } = await supabase
+              .from("monday_items_selected")
+              .update({ schedule_status: "scheduled_in_monday" })
+              .eq("id", assignment.monday_item_id);
+
+            if (mondayUpdateError) {
+              console.error(`[send-manual-shifts] Failed to update monday sync status:`, mondayUpdateError);
+            }
+          } else {
+            console.error(`[send-manual-shifts] Monday sync failed for item ${mondayItem.item_id}:`, mondayResult.error);
+          }
+        } else {
+          console.warn(`[send-manual-shifts] No item_id on monday_items_selected row, skipping Monday sync`);
         }
 
         results.push({
           monday_item_id: assignment.monday_item_id,
           wf_shift_id: wfResult.id,
           status: "success",
+          monday_synced: mondaySynced,
         });
         successCount++;
-        console.log(`[send-manual-shifts] ✅ Successfully sent shift for monday_item_id: ${assignment.monday_item_id}`);
+        console.log(`[send-manual-shifts] ✅ Successfully sent shift for monday_item_id: ${assignment.monday_item_id}, monday_synced: ${mondaySynced}`);
 
       } catch (error: any) {
         console.error(`[send-manual-shifts] ❌ Error for monday_item_id ${assignment.monday_item_id}:`, error);
@@ -293,19 +410,21 @@ Deno.serve(async (req) => {
           monday_item_id: assignment.monday_item_id,
           wf_shift_id: null,
           status: "failed",
+          monday_synced: false,
           error: error.message,
         });
         failedCount++;
       }
     }
 
-    console.log(`[send-manual-shifts] Completed: ${successCount} success, ${failedCount} failed`);
+    console.log(`[send-manual-shifts] Completed: ${successCount} success, ${failedCount} failed, ${mondaySyncedCount} monday synced`);
 
     return new Response(
       JSON.stringify({
         success: failedCount === 0,
         sent: successCount,
         failed: failedCount,
+        monday_synced: mondaySyncedCount,
         results,
       }),
       {
