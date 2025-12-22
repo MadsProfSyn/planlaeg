@@ -641,6 +641,7 @@ export type Database = {
           schedule_status: string | null
           scheduled_at: string | null
           scheduled_by: string | null
+          scheduled_date: string | null
           scheduled_end_time: string | null
           scheduled_inspector_id: string | null
           scheduled_start_time: string | null
@@ -665,6 +666,7 @@ export type Database = {
           schedule_status?: string | null
           scheduled_at?: string | null
           scheduled_by?: string | null
+          scheduled_date?: string | null
           scheduled_end_time?: string | null
           scheduled_inspector_id?: string | null
           scheduled_start_time?: string | null
@@ -689,6 +691,7 @@ export type Database = {
           schedule_status?: string | null
           scheduled_at?: string | null
           scheduled_by?: string | null
+          scheduled_date?: string | null
           scheduled_end_time?: string | null
           scheduled_inspector_id?: string | null
           scheduled_start_time?: string | null
