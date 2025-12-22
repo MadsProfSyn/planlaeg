@@ -266,6 +266,7 @@ Deno.serve(async (req) => {
             schedule_status: "sent_to_workfeed",
             wf_shift_id: wfResult.id,
             scheduled_inspector_id: assignment.inspector_id,
+            scheduled_date: assignment.date,
             scheduled_start_time: assignment.start_time,
             scheduled_end_time: assignment.end_time,
             scheduled_at: new Date().toISOString(),
