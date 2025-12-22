@@ -26,13 +26,13 @@ import {
 
 const navigationItems = [
   {
-    title: "Planlæg syn (Manuelt)",
+    title: "Planlæg syn (Automatisk)",
     url: "/inspections",
     icon: ClipboardList,
     adminOnly: true,
   },
   {
-    title: "Planlæg syn (Automatisk)",
+    title: "Planlæg syn (Manuelt)",
     url: "/planlaeg-syn",
     icon: CalendarPlus,
     adminOnly: true,
