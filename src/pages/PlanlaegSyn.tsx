@@ -16,8 +16,9 @@ import { PlanlaegSynFiltersBar } from "@/components/planlaeg-syn/PlanlaegSynFilt
 import { InspectionsPanel } from "@/components/planlaeg-syn/InspectionsPanel";
 import { InspectorsPanel } from "@/components/planlaeg-syn/InspectorsPanel";
 import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
+import { Loader2, Route } from "lucide-react";
 import { toast } from "sonner";
+import { useRouteOptimizer } from "@/hooks/useRouteOptimizer";
 
 export interface Inspector {
   availability_id: string;
@@ -78,6 +79,19 @@ export default function PlanlaegSyn() {
 
   // Drag state
   const [activeDragId, setActiveDragId] = useState<number | null>(null);
+
+  // Route optimizer hook - triggers preview on assignment changes
+  const {
+    preview: routePreview,
+    isPreviewLoading: isRouteLoading,
+    error: routeError,
+    getInspectorRoute,
+  } = useRouteOptimizer({
+    date: selectedDate || "",
+    assignments,
+    enabled: !!selectedDate && assignments.size > 0,
+    debounceMs: 500,
+  });
 
   // Fetch landsdele (regions) for inspections filter
   const { data: landsdele = [] } = useQuery({
@@ -390,6 +404,8 @@ export default function PlanlaegSyn() {
             hasSelectedInspections={hasSelectedInspections}
             scheduledTimes={scheduledTimes}
             onUpdateScheduledTimes={handleUpdateScheduledTimes}
+            getInspectorRoute={getInspectorRoute}
+            isRouteLoading={isRouteLoading}
           />
         </div>
         
