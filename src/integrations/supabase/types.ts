@@ -628,12 +628,15 @@ export type Database = {
           antal_vaerelser: number | null
           board_id: number | null
           dato_tid: string | null
+          geocode_status: string | null
           id: number
           inserted_at: string | null
           item_id: number | null
           Kunde: string | null
           landsdel: string | null
+          lat: number | null
           lejemalsnr: string | null
+          lng: number | null
           name: string | null
           note: string | null
           raw: Json | null
@@ -654,12 +657,15 @@ export type Database = {
           antal_vaerelser?: number | null
           board_id?: number | null
           dato_tid?: string | null
+          geocode_status?: string | null
           id?: number
           inserted_at?: string | null
           item_id?: number | null
           Kunde?: string | null
           landsdel?: string | null
+          lat?: number | null
           lejemalsnr?: string | null
+          lng?: number | null
           name?: string | null
           note?: string | null
           raw?: Json | null
@@ -680,12 +686,15 @@ export type Database = {
           antal_vaerelser?: number | null
           board_id?: number | null
           dato_tid?: string | null
+          geocode_status?: string | null
           id?: number
           inserted_at?: string | null
           item_id?: number | null
           Kunde?: string | null
           landsdel?: string | null
+          lat?: number | null
           lejemalsnr?: string | null
+          lng?: number | null
           name?: string | null
           note?: string | null
           raw?: Json | null
