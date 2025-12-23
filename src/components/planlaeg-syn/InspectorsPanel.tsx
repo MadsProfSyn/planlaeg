@@ -112,9 +112,9 @@ function DroppableInspector({
     if (routeData && routeData.stops.length > 0) {
       const newTimes = new Map<number, { start: string; end: string }>();
       routeData.stops.forEach((stop) => {
-        const itemId = parseInt(stop.inspection_id, 10);
-        if (!isNaN(itemId)) {
-          newTimes.set(itemId, {
+        // Use monday_item_id directly (it's already a number from the API)
+        if (stop.monday_item_id) {
+          newTimes.set(stop.monday_item_id, {
             start: stop.start_time,
             end: stop.end_time,
           });
@@ -212,18 +212,18 @@ function DroppableInspector({
         {assignedItems.length > 0 && (
           <div className="ml-4 mt-1 space-y-1 border-l-2 border-primary/30 pl-3 pb-2">
             {(() => {
-              // Sort items by route sequence if available
+              // Sort items by route sequence if available (using monday_item_id)
               const sortedItems = [...assignedItems].sort((a, b) => {
                 if (!routeData) return 0;
-                const seqA = routeData.stops.find((s) => s.inspection_id === String(a.id))?.sequence ?? 999;
-                const seqB = routeData.stops.find((s) => s.inspection_id === String(b.id))?.sequence ?? 999;
+                const seqA = routeData.stops.find((s) => s.monday_item_id === a.id)?.sequence ?? 999;
+                const seqB = routeData.stops.find((s) => s.monday_item_id === b.id)?.sequence ?? 999;
                 return seqA - seqB;
               });
 
-              return sortedItems.map((item, index) => {
+              return sortedItems.map((item) => {
                 const abbr = getTypeAbbreviation(item.synstype);
                 const scheduledTime = scheduledTimes.get(item.id);
-                const routeStop = routeData?.stops.find((s) => s.inspection_id === String(item.id));
+                const routeStop = routeData?.stops.find((s) => s.monday_item_id === item.id);
                 
                 return (
                   <div
