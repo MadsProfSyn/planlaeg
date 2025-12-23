@@ -10,7 +10,8 @@ export interface RouteOptimizerRequest {
 
 export interface RouteStop {
   sequence: number;
-  inspection_id: string;
+  monday_item_id: number;
+  inspection_id?: string;  // Deprecated, use monday_item_id
   address: string;
   start_time: string;
   end_time: string;
