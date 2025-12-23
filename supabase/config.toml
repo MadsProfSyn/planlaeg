@@ -51,3 +51,6 @@ verify_jwt = false
 
 [functions.geocode-monday-items]
 verify_jwt = false
+
+[functions.cache-travel-times]
+verify_jwt = false
