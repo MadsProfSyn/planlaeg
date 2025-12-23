@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,11 +11,12 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useDroppable } from "@dnd-kit/core";
-import { Info, X, Plus, Clock, Search } from "lucide-react";
+import { Info, X, Plus, Clock, Search, Route, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScheduleTimesDialog } from "./ScheduleTimesDialog";
 import type { Inspector } from "@/pages/PlanlaegSyn";
 import type { MondayItem } from "@/lib/supabase";
+import type { InspectorRoute } from "@/types/route-optimizer";
 
 interface InspectorsPanelProps {
   inspectors: Inspector[];
@@ -27,6 +28,8 @@ interface InspectorsPanelProps {
   hasSelectedInspections: boolean;
   scheduledTimes: Map<number, { start: string; end: string }>;
   onUpdateScheduledTimes: (times: Map<number, { start: string; end: string }>) => void;
+  getInspectorRoute?: (inspectorId: string) => InspectorRoute | undefined;
+  isRouteLoading?: boolean;
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -76,6 +79,8 @@ interface DroppableInspectorProps {
   hasSelectedInspections: boolean;
   scheduledTimes: Map<number, { start: string; end: string }>;
   onUpdateScheduledTimes: (times: Map<number, { start: string; end: string }>) => void;
+  routeData?: InspectorRoute;
+  isRouteLoading?: boolean;
 }
 
 function DroppableInspector({
@@ -87,6 +92,8 @@ function DroppableInspector({
   hasSelectedInspections,
   scheduledTimes,
   onUpdateScheduledTimes,
+  routeData,
+  isRouteLoading,
 }: DroppableInspectorProps) {
   const [timeDialogOpen, setTimeDialogOpen] = useState(false);
   
@@ -99,6 +106,25 @@ function DroppableInspector({
   
   // Check if any assigned items have scheduled times
   const hasScheduledTimes = assignedItems.some((item) => scheduledTimes.has(item.id));
+
+  // Auto-apply route optimizer times when route data arrives
+  useEffect(() => {
+    if (routeData && routeData.stops.length > 0) {
+      const newTimes = new Map<number, { start: string; end: string }>();
+      routeData.stops.forEach((stop) => {
+        const itemId = parseInt(stop.inspection_id, 10);
+        if (!isNaN(itemId)) {
+          newTimes.set(itemId, {
+            start: stop.start_time,
+            end: stop.end_time,
+          });
+        }
+      });
+      if (newTimes.size > 0) {
+        onUpdateScheduledTimes(newTimes);
+      }
+    }
+  }, [routeData, onUpdateScheduledTimes]);
   
   return (
     <>
@@ -150,7 +176,20 @@ function DroppableInspector({
                 ))}
               </div>
             </div>
-            <div className="flex-shrink-0">
+            <div className="flex-shrink-0 flex items-center gap-2">
+              {/* Route summary when available */}
+              {routeData && assignedItems.length > 0 && (
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded">
+                  <Route className="h-3 w-3" />
+                  <span>{routeData.total_km.toFixed(1)} km</span>
+                  <span className="text-muted-foreground/60">•</span>
+                  <span>{routeData.total_travel_minutes} min</span>
+                </div>
+              )}
+              {/* Loading indicator */}
+              {isRouteLoading && assignedItems.length > 0 && !routeData && (
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              )}
               {assignedItems.length > 0 && (
                 <Button
                   variant="outline"
@@ -169,43 +208,74 @@ function DroppableInspector({
           </div>
         </div>
 
-        {/* Assigned inspections as sub-items */}
+        {/* Assigned inspections as sub-items - sorted by route sequence */}
         {assignedItems.length > 0 && (
           <div className="ml-4 mt-1 space-y-1 border-l-2 border-primary/30 pl-3 pb-2">
-            {assignedItems.map((item) => {
-              const abbr = getTypeAbbreviation(item.synstype);
-              const scheduledTime = scheduledTimes.get(item.id);
-              return (
-                <div
-                  key={item.id}
-                  className="flex items-center gap-2 text-xs bg-muted/50 rounded px-2 py-1.5"
-                >
-                  <span className="flex-1 truncate text-foreground">
-                    {item.adresse || "Ukendt adresse"}
-                  </span>
-                  <Badge className={cn("text-[10px] px-1.5 py-0", getTypeColor(abbr))}>
-                    {abbr}
-                  </Badge>
-                  <span className="text-muted-foreground whitespace-nowrap">
-                    {item.antal_vaerelser ?? "?"} vær.
-                  </span>
-                  {scheduledTime && (
-                    <span className="text-muted-foreground font-mono text-[10px] whitespace-nowrap">
-                      {scheduledTime.start}-{scheduledTime.end}
-                    </span>
-                  )}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRemoveAssignment(inspector.inspector_uuid, item.id);
-                    }}
-                    className="text-muted-foreground hover:text-destructive transition-colors p-0.5 rounded hover:bg-destructive/10"
+            {(() => {
+              // Sort items by route sequence if available
+              const sortedItems = [...assignedItems].sort((a, b) => {
+                if (!routeData) return 0;
+                const seqA = routeData.stops.find((s) => s.inspection_id === String(a.id))?.sequence ?? 999;
+                const seqB = routeData.stops.find((s) => s.inspection_id === String(b.id))?.sequence ?? 999;
+                return seqA - seqB;
+              });
+
+              return sortedItems.map((item, index) => {
+                const abbr = getTypeAbbreviation(item.synstype);
+                const scheduledTime = scheduledTimes.get(item.id);
+                const routeStop = routeData?.stops.find((s) => s.inspection_id === String(item.id));
+                
+                return (
+                  <div
+                    key={item.id}
+                    className="flex items-center gap-2 text-xs bg-muted/50 rounded px-2 py-1.5"
                   >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              );
-            })}
+                    {/* Sequence number when route available */}
+                    {routeStop && (
+                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/10 text-primary text-[10px] font-medium flex items-center justify-center">
+                        {routeStop.sequence}
+                      </span>
+                    )}
+                    <span className="flex-1 truncate text-foreground">
+                      {item.adresse || "Ukendt adresse"}
+                    </span>
+                    <Badge className={cn("text-[10px] px-1.5 py-0", getTypeColor(abbr))}>
+                      {abbr}
+                    </Badge>
+                    <span className="text-muted-foreground whitespace-nowrap">
+                      {item.antal_vaerelser ?? "?"} vær.
+                    </span>
+                    {scheduledTime && (
+                      <span className="text-muted-foreground font-mono text-[10px] whitespace-nowrap">
+                        {scheduledTime.start}-{scheduledTime.end}
+                      </span>
+                    )}
+                    {/* Travel time from previous */}
+                    {routeStop && routeStop.travel_from_previous_mins > 0 && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="text-muted-foreground/70 text-[10px] whitespace-nowrap">
+                            +{routeStop.travel_from_previous_mins}m
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Køretid fra forrige: {routeStop.travel_from_previous_mins} min</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveAssignment(inspector.inspector_uuid, item.id);
+                      }}
+                      className="text-muted-foreground hover:text-destructive transition-colors p-0.5 rounded hover:bg-destructive/10"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                );
+              });
+            })()}
           </div>
         )}
       </div>
@@ -232,6 +302,8 @@ export function InspectorsPanel({
   hasSelectedInspections,
   scheduledTimes,
   onUpdateScheduledTimes,
+  getInspectorRoute,
+  isRouteLoading,
 }: InspectorsPanelProps) {
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -282,6 +354,8 @@ export function InspectorsPanel({
                   hasSelectedInspections={hasSelectedInspections}
                   scheduledTimes={scheduledTimes}
                   onUpdateScheduledTimes={onUpdateScheduledTimes}
+                  routeData={getInspectorRoute?.(inspector.inspector_uuid)}
+                  isRouteLoading={isRouteLoading}
                 />
               ))}
             </div>
