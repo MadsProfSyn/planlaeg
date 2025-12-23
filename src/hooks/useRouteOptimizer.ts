@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import type {
   RouteOptimizerAssignment,
   RouteOptimizerResponse,
@@ -10,6 +11,7 @@ const ROUTE_OPTIMIZER_URL = "https://web-production-95fdd.up.railway.app";
 
 interface MondayItemLike {
   id: number;
+  item_id: number | null; // Monday.com item ID
 }
 
 interface UseRouteOptimizerOptions {
@@ -17,6 +19,36 @@ interface UseRouteOptimizerOptions {
   assignments: Map<string, MondayItemLike[]>;
   enabled?: boolean;
   debounceMs?: number;
+}
+
+// Lookup UUIDs from inspection_queue by Monday item IDs
+async function lookupInspectionQueueUUIDs(
+  mondayItemIds: number[]
+): Promise<Map<number, string>> {
+  const uuidMap = new Map<number, string>();
+  
+  if (mondayItemIds.length === 0) return uuidMap;
+  
+  console.log("🔍 Looking up UUIDs for Monday item IDs:", mondayItemIds);
+  
+  const { data, error } = await supabase
+    .from("inspection_queue")
+    .select("id, monday_item_id")
+    .in("monday_item_id", mondayItemIds);
+  
+  if (error) {
+    console.error("❌ Failed to lookup inspection_queue UUIDs:", error);
+    return uuidMap;
+  }
+  
+  data?.forEach((row) => {
+    if (row.monday_item_id !== null) {
+      uuidMap.set(row.monday_item_id, row.id);
+    }
+  });
+  
+  console.log("✅ UUID lookup result:", Object.fromEntries(uuidMap));
+  return uuidMap;
 }
 
 export function useRouteOptimizer({
@@ -41,17 +73,45 @@ export function useRouteOptimizer({
   const abortControllerRef = useRef<AbortController | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Transform assignments Map to API format
+  // Transform assignments Map to API format with UUID lookup
   const transformAssignments = useCallback(
-    (assignmentsMap: Map<string, MondayItemLike[]>): RouteOptimizerAssignment[] => {
+    async (assignmentsMap: Map<string, MondayItemLike[]>): Promise<RouteOptimizerAssignment[]> => {
+      // Collect all unique Monday item IDs
+      const allMondayItemIds: number[] = [];
+      assignmentsMap.forEach((items) => {
+        items.forEach((item) => {
+          if (item.item_id !== null && item.item_id !== undefined) {
+            allMondayItemIds.push(item.item_id);
+          }
+        });
+      });
+      
+      // Lookup UUIDs from inspection_queue
+      const uuidMap = await lookupInspectionQueueUUIDs(allMondayItemIds);
+      
       const result: RouteOptimizerAssignment[] = [];
       
       assignmentsMap.forEach((items, inspectorId) => {
         if (items.length > 0) {
-          result.push({
-            inspector_id: inspectorId,
-            inspection_ids: items.map((item) => String(item.id)),
-          });
+          const inspectionIds = items
+            .map((item) => {
+              if (item.item_id !== null && item.item_id !== undefined) {
+                const uuid = uuidMap.get(item.item_id);
+                if (!uuid) {
+                  console.warn(`⚠️ No UUID found for Monday item ID: ${item.item_id}`);
+                }
+                return uuid;
+              }
+              return undefined;
+            })
+            .filter((id): id is string => id !== undefined);
+          
+          if (inspectionIds.length > 0) {
+            result.push({
+              inspector_id: inspectorId,
+              inspection_ids: inspectionIds,
+            });
+          }
         }
       });
       
@@ -77,9 +137,19 @@ export function useRouteOptimizer({
     setError(null);
 
     try {
+      // Await the async transform
+      const transformedAssignments = await transformAssignments(assignments);
+      
+      if (transformedAssignments.length === 0) {
+        console.warn("⚠️ No valid assignments after UUID lookup");
+        setPreview({ routes: [], metrics: null, vrpRunId: null });
+        setIsPreviewLoading(false);
+        return;
+      }
+      
       const payload = {
         date,
-        assignments: transformAssignments(assignments),
+        assignments: transformedAssignments,
       };
 
       console.log("🚗 Fetching route preview:", payload);
@@ -165,9 +235,16 @@ export function useRouteOptimizer({
     setError(null);
 
     try {
+      // Await the async transform
+      const transformedAssignments = await transformAssignments(assignments);
+      
+      if (transformedAssignments.length === 0) {
+        return { success: false, error: "No valid assignments after UUID lookup" };
+      }
+      
       const payload = {
         date,
-        assignments: transformAssignments(assignments),
+        assignments: transformedAssignments,
       };
 
       console.log("💾 Optimizing and saving routes:", payload);
