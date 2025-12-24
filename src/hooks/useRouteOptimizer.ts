@@ -5,8 +5,57 @@ import type {
   InspectorRoute,
   RouteOptimizerMetrics,
 } from "@/types/route-optimizer";
+import { supabase } from "@/integrations/supabase/client";
 
 const ROUTE_OPTIMIZER_URL = "https://web-production-95fdd.up.railway.app";
+
+// Pre-cache travel times between coordinates via Edge Function
+async function preCacheTravelTimes(itemIds: number[]): Promise<void> {
+  if (itemIds.length < 2) return;
+  
+  console.log("⏱️ Pre-caching travel times for", itemIds.length, "locations...");
+  
+  try {
+    // Fetch coordinates from monday_items_selected
+    const { data: items, error: fetchError } = await supabase
+      .from("monday_items_selected")
+      .select("id, lat, lng")
+      .in("id", itemIds)
+      .not("lat", "is", null)
+      .not("lng", "is", null);
+    
+    if (fetchError) {
+      console.warn("⚠️ Failed to fetch coordinates:", fetchError.message);
+      return;
+    }
+    
+    if (!items || items.length < 2) {
+      console.log("⏭️ Not enough geocoded items to cache travel times");
+      return;
+    }
+    
+    console.log("📍 Found", items.length, "geocoded items, calling cache-travel-times...");
+    
+    const coordinates = items.map(i => ({
+      id: String(i.id),
+      lng: i.lng!,
+      lat: i.lat!,
+    }));
+    
+    const { data, error } = await supabase.functions.invoke("cache-travel-times", {
+      body: { coordinates },
+    });
+    
+    if (error) {
+      console.warn("⚠️ cache-travel-times failed:", error.message);
+      return;
+    }
+    
+    console.log("✅ Travel times cached:", data?.stats || data);
+  } catch (err) {
+    console.warn("⚠️ Pre-cache travel times error:", err);
+  }
+}
 
 interface MondayItemLike {
   id: number;
@@ -85,6 +134,12 @@ export function useRouteOptimizer({
         setIsPreviewLoading(false);
         return;
       }
+      
+      // Pre-cache travel times before calling Railway API
+      const allItemIds = Array.from(assignments.values())
+        .flat()
+        .map(item => item.id);
+      await preCacheTravelTimes(allItemIds);
       
       const payload = {
         date,
