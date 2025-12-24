@@ -17,7 +17,85 @@ interface GeocodeResult {
   error?: string;
 }
 
+interface Coordinate {
+  id: string;
+  lat: number;
+  lng: number;
+}
+
+// Cache travel times between all geocoded items for the same dates
+async function cacheTravelTimes(
+  supabase: ReturnType<typeof createClient>,
+  geocodedItems: Array<{ id: number; lat: number; lng: number; scheduled_date: string | null }>
+): Promise<void> {
+  if (geocodedItems.length < 2) {
+    console.log("⏭️ Not enough geocoded items to cache travel times");
+    return;
+  }
+
+  // Group items by scheduled_date
+  const dateGroups = new Map<string, typeof geocodedItems>();
+  for (const item of geocodedItems) {
+    const date = item.scheduled_date || "unscheduled";
+    if (!dateGroups.has(date)) {
+      dateGroups.set(date, []);
+    }
+    dateGroups.get(date)!.push(item);
+  }
+
+  console.log(`📅 Found items across ${dateGroups.size} date groups`);
+
+  // For each date group, fetch ALL items for that date and cache travel times
+  for (const [date, items] of dateGroups) {
+    if (date === "unscheduled" || items.length < 2) continue;
+
+    // Fetch ALL geocoded items for this date (not just the newly geocoded ones)
+    const { data: allItemsForDate, error: fetchError } = await supabase
+      .from("monday_items_selected")
+      .select("id, lat, lng")
+      .eq("scheduled_date", date)
+      .eq("geocode_status", "success")
+      .not("lat", "is", null)
+      .not("lng", "is", null);
+
+    if (fetchError || !allItemsForDate || allItemsForDate.length < 2) {
+      console.log(`⏭️ Skipping date ${date}: not enough geocoded items`);
+      continue;
+    }
+
+    console.log(`🗓️ Caching travel times for ${allItemsForDate.length} items on ${date}`);
+
+    const coordinates: Coordinate[] = allItemsForDate.map(i => ({
+      id: String(i.id),
+      lat: i.lat!,
+      lng: i.lng!,
+    }));
+
+    // Call the cache-travel-times function internally
+    try {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const response = await fetch(`${supabaseUrl}/functions/v1/cache-travel-times`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        },
+        body: JSON.stringify({ coordinates }),
+      });
+
+      const result = await response.json();
+      console.log(`✅ Travel times cached for ${date}:`, result.stats || result);
+    } catch (err) {
+      console.warn(`⚠️ Failed to cache travel times for ${date}:`, err);
+    }
+  }
+}
+
 Deno.serve(async (req) => {
+  console.log("🌍 ========================================");
+  console.log("🌍 geocode-monday-items Edge Function invoked");
+  console.log("🌍 ========================================");
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -29,9 +107,28 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { item_ids } = await req.json() as GeocodeRequest;
+    // Support both direct calls with item_ids and webhook payloads
+    const body = await req.json();
+    let item_ids: number[] = [];
 
-    if (!item_ids || item_ids.length === 0) {
+    if (body.item_ids && Array.isArray(body.item_ids)) {
+      // Direct call with item_ids
+      item_ids = body.item_ids;
+      console.log(`📥 Direct call with ${item_ids.length} item IDs`);
+    } else if (body.type === 'INSERT' && body.record) {
+      // Database webhook payload (single record)
+      item_ids = [body.record.id];
+      console.log(`📥 Webhook INSERT for item ID: ${body.record.id}`);
+    } else if (body.type === 'INSERT' && body.old_record === null && body.record) {
+      // Alternative webhook format
+      item_ids = [body.record.id];
+      console.log(`📥 Webhook INSERT (alt format) for item ID: ${body.record.id}`);
+    } else {
+      console.log("⚠️ Unknown payload format:", JSON.stringify(body).slice(0, 200));
+      throw new Error('No item IDs provided - expected item_ids array or webhook INSERT payload');
+    }
+
+    if (item_ids.length === 0) {
       throw new Error('No item IDs provided');
     }
 
@@ -40,7 +137,7 @@ Deno.serve(async (req) => {
     // Fetch items that need geocoding
     const { data: items, error: fetchError } = await supabase
       .from('monday_items_selected')
-      .select('id, adresse')
+      .select('id, adresse, scheduled_date')
       .in('id', item_ids)
       .or('geocode_status.eq.pending,geocode_status.is.null');
 
@@ -49,14 +146,14 @@ Deno.serve(async (req) => {
     }
 
     if (!items || items.length === 0) {
-      console.log('No items need geocoding');
+      console.log('✅ No items need geocoding (all already geocoded)');
       return new Response(
         JSON.stringify({ success: true, results: [], summary: { total: 0, successful: 0, failed: 0 } }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log(`Found ${items.length} items to geocode`);
+    console.log(`📍 Found ${items.length} items to geocode`);
 
     // Process each item
     const results: GeocodeResult[] = [];
@@ -152,7 +249,29 @@ Deno.serve(async (req) => {
     }
 
     const successCount = results.filter(r => r.success).length;
-    console.log(`Geocoding complete: ${successCount}/${results.length} successful`);
+    console.log(`📊 Geocoding complete: ${successCount}/${results.length} successful`);
+
+    // After geocoding, cache travel times for successfully geocoded items
+    const geocodedItems = results
+      .filter(r => r.success && r.lat && r.lng)
+      .map(r => {
+        const originalItem = items.find(i => i.id === r.item_id);
+        return {
+          id: r.item_id,
+          lat: r.lat!,
+          lng: r.lng!,
+          scheduled_date: originalItem?.scheduled_date || null,
+        };
+      });
+
+    if (geocodedItems.length > 0) {
+      console.log(`🚗 Now caching travel times for ${geocodedItems.length} geocoded items...`);
+      await cacheTravelTimes(supabase, geocodedItems);
+    }
+
+    console.log("✅ ========================================");
+    console.log("✅ geocode-monday-items COMPLETE");
+    console.log("✅ ========================================");
 
     return new Response(
       JSON.stringify({
