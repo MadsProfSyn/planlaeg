@@ -65,6 +65,10 @@ async function fetchTravelTime(
 }
 
 Deno.serve(async (req) => {
+  console.log("🌍 ========================================");
+  console.log("🌍 cache-travel-times Edge Function invoked");
+  console.log("🌍 ========================================");
+  
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -73,16 +77,21 @@ Deno.serve(async (req) => {
   try {
     const mapboxToken = Deno.env.get("MAPBOX_PUBLIC_TOKEN");
     if (!mapboxToken) {
+      console.error("❌ MAPBOX_PUBLIC_TOKEN not configured!");
       throw new Error("MAPBOX_PUBLIC_TOKEN not configured");
     }
+    console.log("✅ MAPBOX_PUBLIC_TOKEN is configured");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const { coordinates } = (await req.json()) as CacheTravelTimesRequest;
+    
+    console.log(`📍 Received ${coordinates?.length || 0} coordinates`);
 
     if (!coordinates || coordinates.length < 2) {
+      console.log("⏭️ Not enough coordinates (need at least 2), returning early");
       return new Response(
         JSON.stringify({ 
           success: true, 
@@ -93,8 +102,6 @@ Deno.serve(async (req) => {
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    console.log(`Processing ${coordinates.length} coordinates for travel time caching`);
 
     // Generate all unique pairs
     const pairs: Array<{ from: Coordinate; to: Coordinate; key: string }> = [];
@@ -109,7 +116,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`Generated ${pairs.length} coordinate pairs`);
+    console.log(`🔗 Generated ${pairs.length} unique coordinate pairs to check`);
 
     // Check cache for existing entries
     const allKeys = pairs.map(p => p.key);
@@ -127,7 +134,7 @@ Deno.serve(async (req) => {
       cachedMap.set(entry.key, entry.minutes);
     });
 
-    console.log(`Found ${cachedMap.size} cached entries, need to fetch ${pairs.length - cachedMap.size}`);
+    console.log(`📊 Cache status: ${cachedMap.size} HITS, ${pairs.length - cachedMap.size} MISSES (need to fetch from Mapbox)`);
 
     // Separate cached and uncached pairs
     const results: TravelTimeResult[] = [];
@@ -213,7 +220,9 @@ Deno.serve(async (req) => {
       failed: failedCount,
     };
 
-    console.log("Travel time caching complete:", stats);
+    console.log("✅ ========================================");
+    console.log("✅ Travel time caching COMPLETE:", stats);
+    console.log("✅ ========================================");
 
     return new Response(
       JSON.stringify({
