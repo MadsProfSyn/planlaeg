@@ -81,21 +81,68 @@ export default function PlanlaegSyn() {
   const [activeDragId, setActiveDragId] = useState<number | null>(null);
 
   // Fetch existing scheduled inspections per inspector for the selected date
+  // Cross-references against supabase_shifts to detect and reset orphaned records
   const { data: existingScheduledData = [] } = useQuery({
     queryKey: ["existing-scheduled-inspections", selectedDate],
     queryFn: async () => {
       if (!selectedDate) return [];
       
-      const { data, error } = await supabase
+      // Step 1: Get all monday items marked as scheduled for this date
+      const { data: mondayItems, error: mondayError } = await supabase
         .from("monday_items_selected")
         .select("*")
         .eq("scheduled_date", selectedDate)
         .in("schedule_status", ["sent_to_workfeed", "scheduled_in_monday"])
         .not("scheduled_inspector_id", "is", null)
-        .order("scheduled_start_time", { ascending: true });
+        .not("wf_shift_id", "is", null);
       
-      if (error) throw error;
-      return data || [];
+      if (mondayError) throw mondayError;
+      if (!mondayItems?.length) return [];
+      
+      // Step 2: Get all valid shift IDs from supabase_shifts for this date
+      const { data: validShifts, error: shiftsError } = await supabase
+        .from("supabase_shifts")
+        .select("wf_shift_id")
+        .eq("date_local", selectedDate);
+      
+      if (shiftsError) throw shiftsError;
+      
+      const validShiftIds = new Set(validShifts?.map(s => s.wf_shift_id).filter(Boolean) || []);
+      
+      // Step 3: Filter to only include inspections whose shifts still exist
+      const validItems: typeof mondayItems = [];
+      const orphanedIds: number[] = [];
+      
+      for (const item of mondayItems) {
+        if (item.wf_shift_id && validShiftIds.has(item.wf_shift_id)) {
+          validItems.push(item);
+        } else {
+          orphanedIds.push(item.id);
+          console.log(`[PlanlaegSyn] Detected orphaned shift: monday_item ${item.id}, wf_shift_id ${item.wf_shift_id}`);
+        }
+      }
+      
+      // Step 4: Auto-reset orphaned records so they reappear in the left panel
+      if (orphanedIds.length > 0) {
+        console.log(`[PlanlaegSyn] Resetting ${orphanedIds.length} orphaned items to unscheduled`);
+        await supabase
+          .from("monday_items_selected")
+          .update({
+            schedule_status: "unscheduled",
+            wf_shift_id: null,
+            scheduled_inspector_id: null,
+            scheduled_inspector_name: null,
+            scheduled_date: null,
+            scheduled_start_time: null,
+            scheduled_end_time: null,
+          })
+          .in("id", orphanedIds);
+      }
+      
+      // Return valid items sorted by start time
+      return validItems.sort((a, b) => 
+        (a.scheduled_start_time || "").localeCompare(b.scheduled_start_time || "")
+      );
     },
     enabled: !!selectedDate,
   });
