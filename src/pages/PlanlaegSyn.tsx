@@ -50,8 +50,8 @@ export default function PlanlaegSyn() {
   const [selectedInspectionIds, setSelectedInspectionIds] = useState<number[]>([]);
   const [selectedInspectorId, setSelectedInspectorId] = useState<string | null>(null);
   
-  // Assignment state
-  const [assignments, setAssignments] = useState<Map<string, MondayItem[]>>(new Map());
+  // NEW assignments state (drag-dropped by user)
+  const [newAssignments, setNewAssignments] = useState<Map<string, MondayItem[]>>(new Map());
   
   // Scheduled times state: inspectionId -> { start, end }
   const [scheduledTimes, setScheduledTimes] = useState<Map<number, { start: string; end: string }>>(new Map());
@@ -80,6 +80,40 @@ export default function PlanlaegSyn() {
   // Drag state
   const [activeDragId, setActiveDragId] = useState<number | null>(null);
 
+  // Fetch existing scheduled inspections per inspector for the selected date
+  const { data: existingScheduledData = [] } = useQuery({
+    queryKey: ["existing-scheduled-inspections", selectedDate],
+    queryFn: async () => {
+      if (!selectedDate) return [];
+      
+      const { data, error } = await supabase
+        .from("monday_items_selected")
+        .select("*")
+        .eq("scheduled_date", selectedDate)
+        .in("schedule_status", ["sent_to_workfeed", "scheduled_in_monday"])
+        .not("scheduled_inspector_id", "is", null)
+        .order("scheduled_start_time", { ascending: true });
+      
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!selectedDate,
+  });
+
+  // Build Map of inspector → existing (already scheduled) inspections
+  const existingAssignments = useMemo(() => {
+    const map = new Map<string, MondayItem[]>();
+    (existingScheduledData || []).forEach((item) => {
+      const inspectorId = item.scheduled_inspector_id;
+      if (inspectorId) {
+        const existing = map.get(inspectorId) || [];
+        existing.push(item as MondayItem);
+        map.set(inspectorId, existing);
+      }
+    });
+    return map;
+  }, [existingScheduledData]);
+
   // Route optimizer hook - triggers preview on assignment changes
   const {
     preview: routePreview,
@@ -88,8 +122,9 @@ export default function PlanlaegSyn() {
     getInspectorRoute,
   } = useRouteOptimizer({
     date: selectedDate || "",
-    assignments,
-    enabled: !!selectedDate && assignments.size > 0,
+    newAssignments,
+    existingAssignments,
+    enabled: !!selectedDate && (newAssignments.size > 0 || existingAssignments.size > 0),
     debounceMs: 500,
   });
 
@@ -164,33 +199,56 @@ export default function PlanlaegSyn() {
   const inspections = inspectionsData?.data || [];
   const inspectors: Inspector[] = inspectorsData?.data || [];
 
-  // Compute assigned inspection IDs - always hide assigned inspections
+  // Combine existing + new assignments for display (but keep them separate for sending)
+  const combinedAssignments = useMemo(() => {
+    const combined = new Map<string, MondayItem[]>();
+    
+    // Add existing assignments first
+    existingAssignments.forEach((items, inspectorId) => {
+      combined.set(inspectorId, [...items]);
+    });
+    
+    // Add new assignments (append to existing for same inspector)
+    newAssignments.forEach((items, inspectorId) => {
+      const existing = combined.get(inspectorId) || [];
+      combined.set(inspectorId, [...existing, ...items]);
+    });
+    
+    return combined;
+  }, [existingAssignments, newAssignments]);
+
+  // Compute assigned inspection IDs - hide both existing and new assignments from left panel
   const assignedInspectionIds = useMemo(() => {
     const ids = new Set<number>();
-    assignments.forEach((items) => {
+    combinedAssignments.forEach((items) => {
       items.forEach((item) => ids.add(item.id));
     });
     return ids;
-  }, [assignments]);
+  }, [combinedAssignments]);
 
-  // Total assignments count
-  const totalAssignments = useMemo(() => {
-    return Array.from(assignments.values()).reduce((acc, items) => acc + items.length, 0);
-  }, [assignments]);
+  // Count NEW assignments only (for sending)
+  const totalNewAssignments = useMemo(() => {
+    return Array.from(newAssignments.values()).reduce((acc, items) => acc + items.length, 0);
+  }, [newAssignments]);
+
+  // Count existing assignments
+  const totalExistingAssignments = useMemo(() => {
+    return Array.from(existingAssignments.values()).reduce((acc, items) => acc + items.length, 0);
+  }, [existingAssignments]);
 
   // Check if any inspections are currently selected
   const hasSelectedInspections = selectedInspectionIds.length > 0;
 
-  // Check all assigned inspections have scheduled times
-  const allAssignmentsHaveTimes = useMemo(() => {
-    if (totalAssignments === 0) return false;
-    for (const [_, items] of assignments) {
+  // Check all NEW assigned inspections have scheduled times
+  const allNewAssignmentsHaveTimes = useMemo(() => {
+    if (totalNewAssignments === 0) return false;
+    for (const [_, items] of newAssignments) {
       for (const item of items) {
         if (!scheduledTimes.has(item.id)) return false;
       }
     }
     return true;
-  }, [assignments, scheduledTimes, totalAssignments]);
+  }, [newAssignments, scheduledTimes, totalNewAssignments]);
 
   // Count for drag preview (selected items or 1 if dragging without selection)
   const dragCount = useMemo(() => {
@@ -217,13 +275,18 @@ export default function PlanlaegSyn() {
     
     if (inspectionsToAssign.length === 0) return;
     
-    setAssignments((prev) => {
+    setNewAssignments((prev) => {
       const next = new Map(prev);
       const existing = next.get(inspectorId) || [];
       
-      // Add new inspections (avoid duplicates)
-      const existingIds = new Set(existing.map((i) => i.id));
-      const newItems = inspectionsToAssign.filter((i) => !existingIds.has(i.id));
+      // Add new inspections (avoid duplicates with both existing and new)
+      const existingNewIds = new Set(existing.map((i) => i.id));
+      const existingScheduledIds = new Set(
+        (existingAssignments.get(inspectorId) || []).map((i) => i.id)
+      );
+      const newItems = inspectionsToAssign.filter(
+        (i) => !existingNewIds.has(i.id) && !existingScheduledIds.has(i.id)
+      );
       
       // Also remove from other inspectors (each inspection can only be assigned to one)
       next.forEach((items, key) => {
@@ -250,8 +313,16 @@ export default function PlanlaegSyn() {
     }
   };
 
+  // Only allow removing NEW assignments, not existing ones
   const handleRemoveAssignment = (inspectorId: string, inspectionId: number) => {
-    setAssignments((prev) => {
+    // Check if it's an existing assignment (cannot remove)
+    const existingItems = existingAssignments.get(inspectorId) || [];
+    if (existingItems.some((i) => i.id === inspectionId)) {
+      toast.info("Eksisterende inspektioner kan ikke fjernes");
+      return;
+    }
+    
+    setNewAssignments((prev) => {
       const next = new Map(prev);
       const existing = next.get(inspectorId) || [];
       next.set(inspectorId, existing.filter((i) => i.id !== inspectionId));
@@ -281,11 +352,11 @@ export default function PlanlaegSyn() {
     setActiveDragId(null);
   };
 
-  // Handle sending to WorkFeed
+  // Handle sending to WorkFeed - ONLY send NEW assignments
   const handleSendToWorkfeed = async () => {
-    // Validate all assignments have times
+    // Validate all NEW assignments have times
     const missingTimes: string[] = [];
-    assignments.forEach((items) => {
+    newAssignments.forEach((items) => {
       items.forEach((item) => {
         if (!scheduledTimes.has(item.id)) {
           missingTimes.push(item.adresse || `ID ${item.id}`);
@@ -294,7 +365,7 @@ export default function PlanlaegSyn() {
     });
 
     if (missingTimes.length > 0) {
-      toast.error("Alle inspektioner skal have et tidspunkt");
+      toast.error("Alle nye inspektioner skal have et tidspunkt");
       return;
     }
 
@@ -303,7 +374,12 @@ export default function PlanlaegSyn() {
       return;
     }
 
-    // Build payload
+    if (totalNewAssignments === 0) {
+      toast.info("Ingen nye inspektioner at sende");
+      return;
+    }
+
+    // Build payload with ONLY new assignments
     const payload = {
       assignments: [] as {
         monday_item_id: number;
@@ -314,7 +390,7 @@ export default function PlanlaegSyn() {
       }[],
     };
 
-    assignments.forEach((items, inspectorId) => {
+    newAssignments.forEach((items, inspectorId) => {
       items.forEach((item) => {
         const times = scheduledTimes.get(item.id)!;
         payload.assignments.push({
@@ -344,16 +420,17 @@ export default function PlanlaegSyn() {
       if (!data?.success && data?.failed > 0) {
         toast.error(`${data.failed} inspektion${data.failed !== 1 ? "er" : ""} fejlede`);
       } else {
-        toast.success(`${data.sent} inspektion${data.sent !== 1 ? "er" : ""} sendt til WorkFeed`);
+        toast.success(`${data.sent} ny${data.sent !== 1 ? "e" : ""} inspektion${data.sent !== 1 ? "er" : ""} sendt til WorkFeed`);
       }
 
-      // Clear state and refresh
-      setAssignments(new Map());
+      // Clear new assignments state and refresh
+      setNewAssignments(new Map());
       setScheduledTimes(new Map());
       setSelectedInspectionIds([]);
       
-      // Refetch inspections to remove sent items
+      // Refetch both inspections and existing scheduled items
       queryClient.invalidateQueries({ queryKey: ["planlaeg-inspections"] });
+      queryClient.invalidateQueries({ queryKey: ["existing-scheduled-inspections"] });
     } catch (err) {
       console.error("Send to WorkFeed error:", err);
       toast.error("Fejl ved afsendelse til WorkFeed");
@@ -399,7 +476,8 @@ export default function PlanlaegSyn() {
             isLoading={isLoadingInspectors}
             selectedId={selectedInspectorId}
             onSelect={handleInspectorSelect}
-            assignments={assignments}
+            assignments={combinedAssignments}
+            existingAssignments={existingAssignments}
             onRemoveAssignment={handleRemoveAssignment}
             hasSelectedInspections={hasSelectedInspections}
             scheduledTimes={scheduledTimes}
@@ -413,13 +491,23 @@ export default function PlanlaegSyn() {
           {activeDragId !== null && <DragPreview count={dragCount} />}
         </DragOverlay>
 
-        {/* Footer with assignment summary */}
-        {totalAssignments > 0 && (
+        {/* Footer with assignment summary - show when there are new assignments or any combined */}
+        {(totalNewAssignments > 0 || totalExistingAssignments > 0) && (
           <div className="sticky bottom-0 bg-background border-t py-4 mt-4 -mx-6 px-6 lg:-mx-8 lg:px-8">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">
-                {totalAssignments} inspektion{totalAssignments !== 1 ? "er" : ""} tildelt
-                {!allAssignmentsHaveTimes && (
+                {totalExistingAssignments > 0 && (
+                  <span>{totalExistingAssignments} eksisterende</span>
+                )}
+                {totalExistingAssignments > 0 && totalNewAssignments > 0 && (
+                  <span> + </span>
+                )}
+                {totalNewAssignments > 0 && (
+                  <span className="text-primary font-medium">
+                    {totalNewAssignments} ny{totalNewAssignments !== 1 ? "e" : ""}
+                  </span>
+                )}
+                {totalNewAssignments > 0 && !allNewAssignmentsHaveTimes && (
                   <span className="text-destructive ml-2">
                     (mangler tidspunkter)
                   </span>
@@ -427,7 +515,7 @@ export default function PlanlaegSyn() {
               </span>
               <Button 
                 onClick={handleSendToWorkfeed}
-                disabled={isSending || !allAssignmentsHaveTimes}
+                disabled={isSending || !allNewAssignmentsHaveTimes || totalNewAssignments === 0}
               >
                 {isSending ? (
                   <>
@@ -435,7 +523,7 @@ export default function PlanlaegSyn() {
                     Sender...
                   </>
                 ) : (
-                  "Send til WorkFeed"
+                  `Send ${totalNewAssignments} ny${totalNewAssignments !== 1 ? "e" : ""} til WorkFeed`
                 )}
               </Button>
             </div>

@@ -23,7 +23,8 @@ interface InspectorsPanelProps {
   isLoading: boolean;
   selectedId: string | null;
   onSelect: (id: string) => void;
-  assignments: Map<string, MondayItem[]>;
+  assignments: Map<string, MondayItem[]>; // Combined assignments (existing + new)
+  existingAssignments: Map<string, MondayItem[]>; // Only existing (already scheduled) assignments
   onRemoveAssignment: (inspectorId: string, inspectionId: number) => void;
   hasSelectedInspections: boolean;
   scheduledTimes: Map<number, { start: string; end: string }>;
@@ -75,6 +76,7 @@ interface DroppableInspectorProps {
   isSelected: boolean;
   onSelect: (id: string) => void;
   assignedItems: MondayItem[];
+  existingItemIds: Set<number>; // IDs of already-scheduled items (cannot be removed)
   onRemoveAssignment: (inspectorId: string, inspectionId: number) => void;
   hasSelectedInspections: boolean;
   scheduledTimes: Map<number, { start: string; end: string }>;
@@ -88,6 +90,7 @@ function DroppableInspector({
   isSelected,
   onSelect,
   assignedItems,
+  existingItemIds,
   onRemoveAssignment,
   hasSelectedInspections,
   scheduledTimes,
@@ -224,11 +227,15 @@ function DroppableInspector({
                 const abbr = getTypeAbbreviation(item.synstype);
                 const scheduledTime = scheduledTimes.get(item.id);
                 const routeStop = routeData?.stops.find((s) => s.monday_item_id === item.id);
+                const isExisting = existingItemIds.has(item.id);
                 
                 return (
                   <div
                     key={item.id}
-                    className="flex items-center gap-2 text-xs bg-muted/50 rounded px-2 py-1.5"
+                    className={cn(
+                      "flex items-center gap-2 text-xs rounded px-2 py-1.5",
+                      isExisting ? "bg-muted/30" : "bg-primary/5 border border-primary/20"
+                    )}
                   >
                     {/* Sequence number when route available */}
                     {routeStop && (
@@ -236,7 +243,10 @@ function DroppableInspector({
                         {routeStop.sequence}
                       </span>
                     )}
-                    <span className="flex-1 truncate text-foreground">
+                    <span className={cn(
+                      "flex-1 truncate",
+                      isExisting ? "text-muted-foreground" : "text-foreground"
+                    )}>
                       {item.adresse || "Ukendt adresse"}
                     </span>
                     <Badge className={cn("text-[10px] px-1.5 py-0", getTypeColor(abbr))}>
@@ -263,15 +273,28 @@ function DroppableInspector({
                         </TooltipContent>
                       </Tooltip>
                     )}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onRemoveAssignment(inspector.inspector_uuid, item.id);
-                      }}
-                      className="text-muted-foreground hover:text-destructive transition-colors p-0.5 rounded hover:bg-destructive/10"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
+                    {/* Badge for existing vs new */}
+                    {isExisting ? (
+                      <Badge variant="outline" className="text-[10px] px-1 py-0 text-muted-foreground border-muted-foreground/30">
+                        Eksist.
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-[10px] px-1 py-0 text-primary border-primary/30">
+                        Ny
+                      </Badge>
+                    )}
+                    {/* Only show remove button for new items */}
+                    {!isExisting && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRemoveAssignment(inspector.inspector_uuid, item.id);
+                        }}
+                        className="text-muted-foreground hover:text-destructive transition-colors p-0.5 rounded hover:bg-destructive/10"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                 );
               });
@@ -298,6 +321,7 @@ export function InspectorsPanel({
   selectedId,
   onSelect,
   assignments,
+  existingAssignments,
   onRemoveAssignment,
   hasSelectedInspections,
   scheduledTimes,
@@ -343,21 +367,29 @@ export function InspectorsPanel({
             </div>
           ) : (
             <div className="space-y-2">
-              {filteredInspectors.map((inspector) => (
-                <DroppableInspector
-                  key={inspector.availability_id}
-                  inspector={inspector}
-                  isSelected={selectedId === inspector.inspector_uuid}
-                  onSelect={onSelect}
-                  assignedItems={assignments.get(inspector.inspector_uuid) || []}
-                  onRemoveAssignment={onRemoveAssignment}
-                  hasSelectedInspections={hasSelectedInspections}
-                  scheduledTimes={scheduledTimes}
-                  onUpdateScheduledTimes={onUpdateScheduledTimes}
-                  routeData={getInspectorRoute?.(inspector.inspector_uuid)}
-                  isRouteLoading={isRouteLoading}
-                />
-              ))}
+              {filteredInspectors.map((inspector) => {
+                // Build set of existing item IDs for this inspector
+                const existingItemIds = new Set(
+                  (existingAssignments.get(inspector.inspector_uuid) || []).map((i) => i.id)
+                );
+                
+                return (
+                  <DroppableInspector
+                    key={inspector.availability_id}
+                    inspector={inspector}
+                    isSelected={selectedId === inspector.inspector_uuid}
+                    onSelect={onSelect}
+                    assignedItems={assignments.get(inspector.inspector_uuid) || []}
+                    existingItemIds={existingItemIds}
+                    onRemoveAssignment={onRemoveAssignment}
+                    hasSelectedInspections={hasSelectedInspections}
+                    scheduledTimes={scheduledTimes}
+                    onUpdateScheduledTimes={onUpdateScheduledTimes}
+                    routeData={getInspectorRoute?.(inspector.inspector_uuid)}
+                    isRouteLoading={isRouteLoading}
+                  />
+                );
+              })}
             </div>
           )}
         </ScrollArea>
