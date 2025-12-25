@@ -20,6 +20,7 @@ interface TravelTimeResult {
   to_id: string;
   key: string;
   minutes: number;
+  distance_km: number | null;
   cached: boolean;
 }
 
@@ -38,7 +39,7 @@ async function fetchTravelTime(
   from: Coordinate,
   to: Coordinate,
   mapboxToken: string
-): Promise<number | null> {
+): Promise<{ minutes: number; distance_km: number } | null> {
   const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${from.lng},${from.lat};${to.lng},${to.lat}?access_token=${mapboxToken}`;
   
   try {
@@ -53,7 +54,9 @@ async function fetchTravelTime(
     if (data.routes && data.routes.length > 0) {
       // Duration is in seconds, convert to minutes
       const durationMinutes = Math.round(data.routes[0].duration / 60);
-      return durationMinutes;
+      // Distance is in meters, convert to km (rounded to 2 decimals)
+      const distanceKm = Math.round((data.routes[0].distance / 1000) * 100) / 100;
+      return { minutes: durationMinutes, distance_km: distanceKm };
     }
     
     console.warn("No routes found in Mapbox response");
@@ -122,16 +125,16 @@ Deno.serve(async (req) => {
     const allKeys = pairs.map(p => p.key);
     const { data: cachedEntries, error: cacheError } = await supabase
       .from("mapbox_travel_cache")
-      .select("key, minutes")
+      .select("key, minutes, distance_km")
       .in("key", allKeys);
 
     if (cacheError) {
       console.error("Error querying cache:", cacheError);
     }
 
-    const cachedMap = new Map<string, number>();
+    const cachedMap = new Map<string, { minutes: number; distance_km: number | null }>();
     (cachedEntries || []).forEach(entry => {
-      cachedMap.set(entry.key, entry.minutes);
+      cachedMap.set(entry.key, { minutes: entry.minutes, distance_km: entry.distance_km });
     });
 
     console.log(`📊 Cache status: ${cachedMap.size} HITS, ${pairs.length - cachedMap.size} MISSES (need to fetch from Mapbox)`);
@@ -142,11 +145,13 @@ Deno.serve(async (req) => {
 
     for (const pair of pairs) {
       if (cachedMap.has(pair.key)) {
+        const cached = cachedMap.get(pair.key)!;
         results.push({
           from_id: pair.from.id,
           to_id: pair.to.id,
           key: pair.key,
-          minutes: cachedMap.get(pair.key)!,
+          minutes: cached.minutes,
+          distance_km: cached.distance_km,
           cached: true,
         });
       } else {
@@ -155,7 +160,7 @@ Deno.serve(async (req) => {
     }
 
     // Fetch uncached pairs (with rate limiting)
-    const newEntries: Array<{ key: string; minutes: number }> = [];
+    const newEntries: Array<{ key: string; minutes: number; distance_km: number }> = [];
     let fetchedCount = 0;
     let failedCount = 0;
 
@@ -165,22 +170,23 @@ Deno.serve(async (req) => {
       const batch = toFetch.slice(i, i + batchSize);
       
       const batchPromises = batch.map(async (pair) => {
-        const minutes = await fetchTravelTime(pair.from, pair.to, mapboxToken);
-        return { pair, minutes };
+        const result = await fetchTravelTime(pair.from, pair.to, mapboxToken);
+        return { pair, result };
       });
 
       const batchResults = await Promise.all(batchPromises);
 
-      for (const { pair, minutes } of batchResults) {
-        if (minutes !== null) {
+      for (const { pair, result } of batchResults) {
+        if (result !== null) {
           results.push({
             from_id: pair.from.id,
             to_id: pair.to.id,
             key: pair.key,
-            minutes,
+            minutes: result.minutes,
+            distance_km: result.distance_km,
             cached: false,
           });
-          newEntries.push({ key: pair.key, minutes });
+          newEntries.push({ key: pair.key, minutes: result.minutes, distance_km: result.distance_km });
           fetchedCount++;
         } else {
           failedCount++;
@@ -201,6 +207,7 @@ Deno.serve(async (req) => {
           newEntries.map(e => ({
             key: e.key,
             minutes: e.minutes,
+            distance_km: e.distance_km,
             updated_at: new Date().toISOString(),
           })),
           { onConflict: "key" }
