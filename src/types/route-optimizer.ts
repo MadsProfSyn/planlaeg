@@ -1,6 +1,7 @@
 export interface RouteOptimizerAssignment {
   inspector_id: string;
   inspection_ids: string[];
+  existing_ids?: string[]; // IDs of already-scheduled inspections (times are fixed)
 }
 
 export interface RouteOptimizerRequest {

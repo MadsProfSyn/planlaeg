@@ -63,14 +63,16 @@ interface MondayItemLike {
 
 interface UseRouteOptimizerOptions {
   date: string;
-  assignments: Map<string, MondayItemLike[]>;
+  newAssignments: Map<string, MondayItemLike[]>;
+  existingAssignments: Map<string, MondayItemLike[]>;
   enabled?: boolean;
   debounceMs?: number;
 }
 
 export function useRouteOptimizer({
   date,
-  assignments,
+  newAssignments,
+  existingAssignments,
   enabled = true,
   debounceMs = 500,
 }: UseRouteOptimizerOptions) {
@@ -90,17 +92,27 @@ export function useRouteOptimizer({
   const abortControllerRef = useRef<AbortController | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Transform assignments Map to API format - simple direct mapping
+  // Transform combined assignments (existing + new) to API format
   const transformAssignments = useCallback(
-    (assignmentsMap: Map<string, MondayItemLike[]>): RouteOptimizerAssignment[] => {
+    (
+      newMap: Map<string, MondayItemLike[]>,
+      existingMap: Map<string, MondayItemLike[]>
+    ): RouteOptimizerAssignment[] => {
       const result: RouteOptimizerAssignment[] = [];
       
-      assignmentsMap.forEach((items, inspectorId) => {
-        if (items.length > 0) {
+      // Get all unique inspector IDs from both maps
+      const allInspectorIds = new Set([...newMap.keys(), ...existingMap.keys()]);
+      
+      allInspectorIds.forEach((inspectorId) => {
+        const newItems = newMap.get(inspectorId) || [];
+        const existingItems = existingMap.get(inspectorId) || [];
+        const allItems = [...existingItems, ...newItems];
+        
+        if (allItems.length > 0) {
           result.push({
             inspector_id: inspectorId,
-            // Send monday_items_selected.id directly as integers
-            inspection_ids: items.map((item) => String(item.id)),
+            inspection_ids: allItems.map((item) => String(item.id)),
+            existing_ids: existingItems.map((item) => String(item.id)),
           });
         }
       });
@@ -110,9 +122,12 @@ export function useRouteOptimizer({
     []
   );
 
+  // Check if there are any assignments (new or existing)
+  const hasAnyAssignments = newAssignments.size > 0 || existingAssignments.size > 0;
+
   // Preview routes (no DB save)
   const fetchPreview = useCallback(async () => {
-    if (!enabled || assignments.size === 0) {
+    if (!enabled || !hasAnyAssignments) {
       setPreview({ routes: [], metrics: null, vrpRunId: null });
       return;
     }
@@ -127,7 +142,7 @@ export function useRouteOptimizer({
     setError(null);
 
     try {
-      const transformedAssignments = transformAssignments(assignments);
+      const transformedAssignments = transformAssignments(newAssignments, existingAssignments);
       
       if (transformedAssignments.length === 0) {
         setPreview({ routes: [], metrics: null, vrpRunId: null });
@@ -135,10 +150,11 @@ export function useRouteOptimizer({
         return;
       }
       
-      // Pre-cache travel times before calling Railway API
-      const allItemIds = Array.from(assignments.values())
-        .flat()
-        .map(item => item.id);
+      // Pre-cache travel times before calling Railway API (combine both existing and new)
+      const allItemIds = [
+        ...Array.from(newAssignments.values()).flat(),
+        ...Array.from(existingAssignments.values()).flat(),
+      ].map(item => item.id);
       await preCacheTravelTimes(allItemIds);
       
       const payload = {
@@ -182,7 +198,7 @@ export function useRouteOptimizer({
     } finally {
       setIsPreviewLoading(false);
     }
-  }, [date, assignments, enabled, transformAssignments]);
+  }, [date, newAssignments, existingAssignments, hasAnyAssignments, enabled, transformAssignments]);
 
   // Debounced preview trigger
   useEffect(() => {
@@ -221,7 +237,7 @@ export function useRouteOptimizer({
     vrpRunId?: string;
     error?: string;
   }> => {
-    if (assignments.size === 0) {
+    if (!hasAnyAssignments) {
       return { success: false, error: "No assignments to optimize" };
     }
 
@@ -229,7 +245,7 @@ export function useRouteOptimizer({
     setError(null);
 
     try {
-      const transformedAssignments = transformAssignments(assignments);
+      const transformedAssignments = transformAssignments(newAssignments, existingAssignments);
       
       if (transformedAssignments.length === 0) {
         return { success: false, error: "No assignments to optimize" };
@@ -276,7 +292,7 @@ export function useRouteOptimizer({
     } finally {
       setIsOptimizing(false);
     }
-  }, [date, assignments, transformAssignments]);
+  }, [date, newAssignments, existingAssignments, hasAnyAssignments, transformAssignments]);
 
   // Get route for a specific inspector
   const getInspectorRoute = useCallback(
