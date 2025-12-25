@@ -75,12 +75,12 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const mapboxToken = Deno.env.get("MAPBOX_PUBLIC_TOKEN");
+    const mapboxToken = Deno.env.get("MAPBOX_TOKEN");
     if (!mapboxToken) {
-      console.error("❌ MAPBOX_PUBLIC_TOKEN not configured!");
-      throw new Error("MAPBOX_PUBLIC_TOKEN not configured");
+      console.error("❌ MAPBOX_TOKEN not configured!");
+      throw new Error("MAPBOX_TOKEN not configured");
     }
-    console.log("✅ MAPBOX_PUBLIC_TOKEN is configured");
+    console.log("✅ MAPBOX_TOKEN is configured");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
