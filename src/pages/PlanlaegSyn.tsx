@@ -109,16 +109,26 @@ export default function PlanlaegSyn() {
       
       const validShiftIds = new Set(validShifts?.map(s => s.wf_shift_id).filter(Boolean) || []);
       
-      // Step 3: Filter to only include inspections whose shifts still exist
+      // Step 3: Filter items - only flag as orphaned if sent > 24 hours ago
+      // This gives the daily supabase_shifts sync time to run
       const validItems: typeof mondayItems = [];
       const orphanedIds: number[] = [];
+      const now = new Date();
+      const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
       
       for (const item of mondayItems) {
+        const scheduledAt = item.scheduled_at ? new Date(item.scheduled_at) : null;
+        
         if (item.wf_shift_id && validShiftIds.has(item.wf_shift_id)) {
+          // Shift exists in supabase_shifts - confirmed valid
+          validItems.push(item);
+        } else if (scheduledAt && scheduledAt > twentyFourHoursAgo) {
+          // Recently sent (< 24h) - trust it even if not in supabase_shifts yet
           validItems.push(item);
         } else {
+          // Old item (> 24h) not in supabase_shifts - likely deleted from WorkFeed
           orphanedIds.push(item.id);
-          console.log(`[PlanlaegSyn] Detected orphaned shift: monday_item ${item.id}, wf_shift_id ${item.wf_shift_id}`);
+          console.log(`[PlanlaegSyn] Detected orphaned shift: monday_item ${item.id}, wf_shift_id ${item.wf_shift_id}, scheduled_at ${item.scheduled_at}`);
         }
       }
       
