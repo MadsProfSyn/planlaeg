@@ -606,16 +606,19 @@ export type Database = {
       }
       mapbox_travel_cache: {
         Row: {
+          distance_km: number | null
           key: string
           minutes: number
           updated_at: string
         }
         Insert: {
+          distance_km?: number | null
           key: string
           minutes: number
           updated_at?: string
         }
         Update: {
+          distance_km?: number | null
           key?: string
           minutes?: number
           updated_at?: string
