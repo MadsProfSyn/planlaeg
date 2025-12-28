@@ -50,12 +50,12 @@ serve(async (req) => {
 
     const { startDate, endDate } = await req.json();
 
-    // Default to today + 45 days ahead
+    // Default to today + 90 days ahead (extended from 45 for better future coverage)
     const today = new Date();
     const todayStr = today.toISOString().split("T")[0];
-    const fortyFiveDaysLater = new Date();
-    fortyFiveDaysLater.setDate(fortyFiveDaysLater.getDate() + 45);
-    const defaultEndDate = fortyFiveDaysLater.toISOString().split("T")[0];
+    const ninetyDaysLater = new Date();
+    ninetyDaysLater.setDate(ninetyDaysLater.getDate() + 90);
+    const defaultEndDate = ninetyDaysLater.toISOString().split("T")[0];
 
     const fromDate = startDate || todayStr;
     const toDate = endDate || defaultEndDate;
