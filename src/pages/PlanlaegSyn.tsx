@@ -16,7 +16,7 @@ import { PlanlaegSynFiltersBar } from "@/components/planlaeg-syn/PlanlaegSynFilt
 import { InspectionsPanel } from "@/components/planlaeg-syn/InspectionsPanel";
 import { InspectorsPanel } from "@/components/planlaeg-syn/InspectorsPanel";
 import { Button } from "@/components/ui/button";
-import { Loader2, Route } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useRouteOptimizer } from "@/hooks/useRouteOptimizer";
 
@@ -58,6 +58,9 @@ export default function PlanlaegSyn() {
   
   // Sending state
   const [isSending, setIsSending] = useState(false);
+  
+  // Syncing shifts state
+  const [isSyncing, setIsSyncing] = useState(false);
   
   // Handler for updating scheduled times
   const handleUpdateScheduledTimes = (newTimes: Map<number, { start: string; end: string }>) => {
@@ -409,6 +412,37 @@ export default function PlanlaegSyn() {
     setActiveDragId(null);
   };
 
+  // Handle manual sync of shifts from WorkFeed
+  const handleSyncShifts = async () => {
+    if (!selectedDate) {
+      toast.error("Vælg en dato først");
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("sync-workfeed-shifts", {
+        body: { startDate: selectedDate, endDate: selectedDate },
+      });
+
+      if (error) {
+        console.error("Sync error:", error);
+        toast.error("Fejl ved synkronisering");
+        return;
+      }
+
+      toast.success(`Synkroniseret ${data.synced} vagter fra WorkFeed`);
+      
+      // Refresh the existing scheduled inspections
+      queryClient.invalidateQueries({ queryKey: ["existing-scheduled-inspections", selectedDate] });
+    } catch (err) {
+      console.error("Sync error:", err);
+      toast.error("Fejl ved synkronisering");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   // Handle sending to WorkFeed - ONLY send NEW assignments
   const handleSendToWorkfeed = async () => {
     // Validate all NEW assignments have times
@@ -478,6 +512,45 @@ export default function PlanlaegSyn() {
         toast.error(`${data.failed} inspektion${data.failed !== 1 ? "er" : ""} fejlede`);
       } else {
         toast.success(`${data.sent} ny${data.sent !== 1 ? "e" : ""} inspektion${data.sent !== 1 ? "er" : ""} sendt til WorkFeed`);
+        
+        // Insert shifts locally into supabase_shifts for immediate visibility
+        // This ensures the inspector_capacity_view has the data right away
+        if (data.results && Array.isArray(data.results)) {
+          const shiftsToInsert = data.results
+            .filter((r: any) => r.success && r.wf_shift_id)
+            .map((r: any) => {
+              const assignment = payload.assignments.find(a => a.monday_item_id === r.monday_item_id);
+              const inspector = inspectors.find(i => i.inspector_uuid === assignment?.inspector_id);
+              
+              return {
+                wf_shift_id: r.wf_shift_id,
+                wf_employee_id: r.wf_employee_id || "",
+                inspector_id: assignment?.inspector_id || "",
+                inspector_name: inspector?.navn || "",
+                department: inspector?.afdeling || "Unknown",
+                type: "Syn", // Default type for manually sent shifts
+                status: "RELEASED",
+                date_local: selectedDate,
+                start_time_local: assignment?.start_time || null,
+                end_time_local: assignment?.end_time || null,
+                wf_role_id: r.wf_role_id || null,
+                inspection_queue_id: null,
+                sync_status: "synced",
+              };
+            });
+
+          if (shiftsToInsert.length > 0) {
+            const { error: insertError } = await supabase
+              .from("supabase_shifts")
+              .insert(shiftsToInsert);
+
+            if (insertError) {
+              console.warn("Failed to insert shifts locally (will sync later):", insertError);
+            } else {
+              console.log(`Inserted ${shiftsToInsert.length} shifts locally for immediate visibility`);
+            }
+          }
+        }
       }
 
       // Clear new assignments state and refresh
@@ -503,16 +576,35 @@ export default function PlanlaegSyn() {
         <p className="text-muted-foreground">Tildel synsopgaver til tilgængelige konsulenter</p>
       </div>
 
-      <PlanlaegSynFiltersBar
-        selectedDate={selectedDate}
-        onDateChange={setSelectedDate}
-        selectedLandsdel={selectedLandsdel}
-        onLandsdelChange={setSelectedLandsdel}
-        selectedAfdeling={selectedAfdeling}
-        onAfdelingChange={setSelectedAfdeling}
-        landsdele={landsdele}
-        afdelinger={afdelinger}
-      />
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <PlanlaegSynFiltersBar
+          selectedDate={selectedDate}
+          onDateChange={setSelectedDate}
+          selectedLandsdel={selectedLandsdel}
+          onLandsdelChange={setSelectedLandsdel}
+          selectedAfdeling={selectedAfdeling}
+          onAfdelingChange={setSelectedAfdeling}
+          landsdele={landsdele}
+          afdelinger={afdelinger}
+        />
+        
+        {selectedDate && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSyncShifts}
+            disabled={isSyncing}
+            title="Synkroniser vagter fra WorkFeed for denne dato"
+          >
+            {isSyncing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+            <span className="ml-2 hidden sm:inline">Synk vagter</span>
+          </Button>
+        )}
+      </div>
 
       <DndContext
         sensors={sensors}
