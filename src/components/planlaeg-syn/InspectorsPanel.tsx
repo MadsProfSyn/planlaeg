@@ -140,14 +140,14 @@ function DroppableInspector({
         <div
           onClick={() => onSelect(inspector.inspector_uuid)}
           className={cn(
-            "p-3 rounded-lg border cursor-pointer transition-all",
+            "p-3 rounded-lg border cursor-pointer transition-all overflow-hidden",
             "hover:bg-muted/50",
             isSelected && "ring-2 ring-primary bg-primary/5",
             hasSelectedInspections && "ring-1 ring-primary/30 border-primary/50",
             isOver && "ring-2 ring-primary border-dashed bg-primary/10"
           )}
         >
-          <div className="flex items-start justify-between gap-2 flex-wrap">
+          <div className="flex items-start justify-between gap-2 flex-wrap min-w-0">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <p className="font-medium text-sm truncate">
@@ -184,14 +184,12 @@ function DroppableInspector({
                 ))}
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-1.5 justify-end">
+            <div className="flex flex-wrap items-center gap-1.5 justify-end min-w-0 max-w-full">
               {/* Route summary when available */}
               {routeData && assignedItems.length > 0 && (
-                <div className="flex items-center gap-1 text-[11px] text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
+                <div className="flex items-center gap-1 text-[11px] text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded min-w-0 overflow-hidden">
                   <Route className="h-3 w-3 flex-shrink-0" />
-                  <span>{routeData.total_km.toFixed(1)} km</span>
-                  <span className="text-muted-foreground/60">•</span>
-                  <span>{routeData.total_travel_minutes} min</span>
+                  <span className="truncate">{routeData.total_km.toFixed(1)} km • {routeData.total_travel_minutes} min</span>
                 </div>
               )}
               {/* Loading indicator */}
