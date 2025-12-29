@@ -258,7 +258,7 @@ function DroppableInspector({
                   <div
                     key={item.id}
                     className={cn(
-                      "flex items-center gap-2 text-xs rounded px-2 py-1.5",
+                      "flex items-center gap-2 text-xs rounded px-2 py-1.5 min-w-0",
                       isExisting ? "bg-muted/30" : "bg-primary/5 border border-primary/20"
                     )}
                   >
@@ -268,56 +268,60 @@ function DroppableInspector({
                         {routeStop.sequence}
                       </span>
                     )}
-                    <span className={cn(
-                      "flex-1 truncate",
-                      isExisting ? "text-muted-foreground" : "text-foreground"
-                    )}>
-                      {item.adresse || "Ukendt adresse"}
-                    </span>
-                    <Badge className={cn("text-[10px] px-1.5 py-0", getTypeColor(abbr))}>
-                      {abbr}
-                    </Badge>
-                    <span className="text-muted-foreground whitespace-nowrap">
-                      {item.antal_vaerelser ?? "?"} vær.
-                    </span>
-                    {scheduledTime && (
-                      <span className="text-muted-foreground font-mono text-[10px] whitespace-nowrap">
-                        {scheduledTime.start}-{scheduledTime.end}
-                      </span>
-                    )}
-                    {/* Travel time from previous */}
-                    {routeStop && routeStop.travel_from_previous_mins > 0 && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className="text-muted-foreground/70 text-[10px] whitespace-nowrap">
-                            +{routeStop.travel_from_previous_mins}m
+                    
+                    {/* Main content: Time • Type • Address - all inline with truncation */}
+                    <div className="flex items-center gap-1 min-w-0 flex-1">
+                      {scheduledTime && (
+                        <>
+                          <span className="flex-shrink-0 font-mono text-[10px] text-muted-foreground">
+                            {scheduledTime.start}-{scheduledTime.end}
                           </span>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Køretid fra forrige: {routeStop.travel_from_previous_mins} min</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
-                    {/* Badge for existing vs new */}
-                    {isExisting ? (
-                      <Badge variant="outline" className="text-[10px] px-1 py-0 text-muted-foreground border-muted-foreground/30">
-                        Eksist.
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-[10px] px-1 py-0 text-primary border-primary/30">
-                        Ny
-                      </Badge>
-                    )}
-                    {/* Only show remove button for new items */}
+                          <span className="text-muted-foreground/50">•</span>
+                        </>
+                      )}
+                      <span className={cn("flex-shrink-0 font-medium", getTypeColor(abbr).split(' ')[1] || 'text-muted-foreground')}>
+                        {abbr}
+                      </span>
+                      <span className="text-muted-foreground/50">•</span>
+                      <span className={cn(
+                        "truncate min-w-0",
+                        isExisting ? "text-muted-foreground" : "text-foreground"
+                      )}>
+                        {item.adresse || "Ukendt adresse"}
+                      </span>
+                    </div>
+                    
+                    {/* Compact badges: room count + travel + status */}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <span className="text-muted-foreground text-[10px]">
+                        {item.antal_vaerelser ?? "?"}v
+                      </span>
+                      {routeStop && routeStop.travel_from_previous_mins > 0 && (
+                        <span className="text-muted-foreground/60 text-[10px]">
+                          +{routeStop.travel_from_previous_mins}m
+                        </span>
+                      )}
+                      {isExisting ? (
+                        <Badge variant="outline" className="text-[10px] px-1 py-0 text-muted-foreground border-muted-foreground/30">
+                          E
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px] px-1 py-0 text-primary border-primary/30">
+                          N
+                        </Badge>
+                      )}
+                    </div>
+                    
+                    {/* Remove button for new items only */}
                     {!isExisting && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           onRemoveAssignment(inspector.inspector_uuid, item.id);
                         }}
-                        className="text-muted-foreground hover:text-destructive transition-colors p-0.5 rounded hover:bg-destructive/10"
+                        className="flex-shrink-0 text-muted-foreground hover:text-destructive transition-colors p-0.5 rounded hover:bg-destructive/10"
                       >
-                        <X className="h-3.5 w-3.5" />
+                        <X className="h-3 w-3" />
                       </button>
                     )}
                   </div>
