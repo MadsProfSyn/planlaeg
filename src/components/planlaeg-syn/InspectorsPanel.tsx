@@ -133,7 +133,7 @@ function DroppableInspector({
   
   return (
     <>
-      <div ref={setNodeRef} className="space-y-0">
+      <div ref={setNodeRef} className="space-y-0 min-w-0 overflow-hidden">
         <div
           onClick={() => onSelect(inspector.inspector_uuid)}
           className={cn(
