@@ -256,7 +256,7 @@ function DroppableInspector({
                         {abbr}
                       </span>
                       <span className="text-muted-foreground/50">•</span>
-                      <span className="truncate min-w-0 text-muted-foreground">
+                      <span className="truncate min-w-0 text-muted-foreground max-w-[200px]">
                         {shift.address || "Ukendt adresse"}
                       </span>
                     </div>
@@ -323,7 +323,7 @@ function DroppableInspector({
                       </span>
                       <span className="text-muted-foreground/50">•</span>
                       <span className={cn(
-                        "truncate min-w-0",
+                        "truncate min-w-0 max-w-[200px]",
                         isExisting ? "text-muted-foreground" : "text-foreground"
                       )}>
                         {item.adresse || "Ukendt adresse"}
