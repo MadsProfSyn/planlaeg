@@ -147,7 +147,7 @@ function DroppableInspector({
             isOver && "ring-2 ring-primary border-dashed bg-primary/10"
           )}
         >
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex items-start justify-between gap-2 flex-wrap">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <p className="font-medium text-sm truncate">
@@ -184,11 +184,11 @@ function DroppableInspector({
                 ))}
               </div>
             </div>
-            <div className="flex-shrink-0 flex items-center gap-2">
+            <div className="flex-shrink-0 flex flex-wrap items-center gap-1.5 justify-end">
               {/* Route summary when available */}
               {routeData && assignedItems.length > 0 && (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded">
-                  <Route className="h-3 w-3" />
+                <div className="flex items-center gap-1 text-[11px] text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded whitespace-nowrap">
+                  <Route className="h-3 w-3 flex-shrink-0" />
                   <span>{routeData.total_km.toFixed(1)} km</span>
                   <span className="text-muted-foreground/60">•</span>
                   <span>{routeData.total_travel_minutes} min</span>
@@ -202,14 +202,14 @@ function DroppableInspector({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-6 text-xs gap-1"
+                  className="h-6 text-xs gap-1 whitespace-nowrap"
                   onClick={(e) => {
                     e.stopPropagation();
                     setTimeDialogOpen(true);
                   }}
                 >
                   <Clock className="h-3 w-3" />
-                  {hasScheduledTimes ? "Rediger" : "Vælg tidspunkt"}
+                  <span className="hidden sm:inline">{hasScheduledTimes ? "Rediger" : "Tidspunkt"}</span>
                 </Button>
               )}
             </div>
