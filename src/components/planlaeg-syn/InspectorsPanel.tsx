@@ -11,9 +11,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useDroppable } from "@dnd-kit/core";
-import { Info, X, Plus, Clock, Search, Route, Loader2 } from "lucide-react";
+import { Info, X, Plus, Clock, Search, Route, Loader2, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScheduleTimesDialog } from "./ScheduleTimesDialog";
+import { BookedShiftsDialog } from "@/components/availability/BookedShiftsDialog";
 import type { Inspector } from "@/pages/PlanlaegSyn";
 import type { MondayItem } from "@/lib/supabase";
 import type { InspectorRoute } from "@/types/route-optimizer";
@@ -31,6 +32,7 @@ interface InspectorsPanelProps {
   onUpdateScheduledTimes: (times: Map<number, { start: string; end: string }>) => void;
   getInspectorRoute?: (inspectorId: string) => InspectorRoute | undefined;
   isRouteLoading?: boolean;
+  selectedDate: string;
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -83,6 +85,7 @@ interface DroppableInspectorProps {
   onUpdateScheduledTimes: (times: Map<number, { start: string; end: string }>) => void;
   routeData?: InspectorRoute;
   isRouteLoading?: boolean;
+  selectedDate: string;
 }
 
 function DroppableInspector({
@@ -97,8 +100,10 @@ function DroppableInspector({
   onUpdateScheduledTimes,
   routeData,
   isRouteLoading,
+  selectedDate,
 }: DroppableInspectorProps) {
   const [timeDialogOpen, setTimeDialogOpen] = useState(false);
+  const [shiftsDialogOpen, setShiftsDialogOpen] = useState(false);
   
   const { setNodeRef, isOver } = useDroppable({
     id: `inspector-${inspector.inspector_uuid}`,
@@ -155,6 +160,26 @@ function DroppableInspector({
                     </TooltipTrigger>
                     <TooltipContent>
                       <p>Kun tilgængelig {formatTimeRange(inspector.start_tid, inspector.slut_tid)}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+                {/* Booked shifts badge */}
+                {(inspector.scheduled_shifts ?? 0) > 0 && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShiftsDialogOpen(true);
+                        }}
+                        className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
+                      >
+                        <Calendar className="h-3 w-3" />
+                        <span className="text-xs font-medium">{inspector.scheduled_shifts}</span>
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Klik for at se {inspector.scheduled_shifts} bookede syn</p>
                     </TooltipContent>
                   </Tooltip>
                 )}
@@ -311,6 +336,14 @@ function DroppableInspector({
         existingTimes={scheduledTimes}
         onSave={onUpdateScheduledTimes}
       />
+
+      <BookedShiftsDialog
+        open={shiftsDialogOpen}
+        onOpenChange={setShiftsDialogOpen}
+        inspectorName={inspector.navn}
+        date={selectedDate}
+        shifts={inspector.shift_details || []}
+      />
     </>
   );
 }
@@ -328,6 +361,7 @@ export function InspectorsPanel({
   onUpdateScheduledTimes,
   getInspectorRoute,
   isRouteLoading,
+  selectedDate,
 }: InspectorsPanelProps) {
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -387,6 +421,7 @@ export function InspectorsPanel({
                     onUpdateScheduledTimes={onUpdateScheduledTimes}
                     routeData={getInspectorRoute?.(inspector.inspector_uuid)}
                     isRouteLoading={isRouteLoading}
+                    selectedDate={selectedDate}
                   />
                 );
               })}
