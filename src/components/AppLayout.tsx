@@ -34,7 +34,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     <SidebarProvider>
       <div className="min-h-screen flex w-full">
         <AppSidebar />
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <header className="flex h-16 items-center justify-between gap-4 border-b bg-background px-4">
             <SidebarTrigger />
             
