@@ -272,18 +272,18 @@ function DroppableInspector({
                       <span className="flex-shrink-0 w-5 h-5 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 text-[10px] font-medium flex items-center justify-center">
                         {sequenceNum++}
                       </span>
-                      <span className="flex-1 truncate text-green-800 dark:text-green-300">
-                        {item.address}
-                      </span>
-                      <Badge className={cn("text-[10px] px-1.5 py-0", getTypeColor(abbr))}>
+                      <Badge className={cn("text-[10px] px-1.5 py-0 flex-shrink-0", getTypeColor(abbr))}>
                         {abbr}
                       </Badge>
                       {item.start_time && item.end_time && (
-                        <span className="text-green-700 dark:text-green-400 font-mono text-[10px] whitespace-nowrap">
+                        <span className="text-green-700 dark:text-green-400 font-mono text-[10px] whitespace-nowrap flex-shrink-0">
                           {item.start_time.substring(0, 5)}-{item.end_time.substring(0, 5)}
                         </span>
                       )}
-                      <Badge variant="outline" className="text-[10px] px-1 py-0 text-green-700 dark:text-green-400 border-green-300 dark:border-green-700 bg-green-100/50 dark:bg-green-900/30">
+                      <span className="flex-1 min-w-0 truncate text-green-800 dark:text-green-300">
+                        {item.address}
+                      </span>
+                      <Badge variant="outline" className="text-[10px] px-1 py-0 flex-shrink-0 text-green-700 dark:text-green-400 border-green-300 dark:border-green-700 bg-green-100/50 dark:bg-green-900/30">
                         Booket
                       </Badge>
                     </div>
