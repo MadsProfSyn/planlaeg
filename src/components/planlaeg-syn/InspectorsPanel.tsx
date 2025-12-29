@@ -14,11 +14,9 @@ import { useDroppable } from "@dnd-kit/core";
 import { Info, X, Plus, Clock, Search, Route, Loader2, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScheduleTimesDialog } from "./ScheduleTimesDialog";
-import { BookedShiftsDialog } from "@/components/availability/BookedShiftsDialog";
 import type { Inspector } from "@/pages/PlanlaegSyn";
 import type { MondayItem } from "@/lib/supabase";
 import type { InspectorRoute } from "@/types/route-optimizer";
-
 interface InspectorsPanelProps {
   inspectors: Inspector[];
   isLoading: boolean;
@@ -103,7 +101,6 @@ function DroppableInspector({
   selectedDate,
 }: DroppableInspectorProps) {
   const [timeDialogOpen, setTimeDialogOpen] = useState(false);
-  const [shiftsDialogOpen, setShiftsDialogOpen] = useState(false);
   
   const { setNodeRef, isOver } = useDroppable({
     id: `inspector-${inspector.inspector_uuid}`,
@@ -163,23 +160,17 @@ function DroppableInspector({
                     </TooltipContent>
                   </Tooltip>
                 )}
-                {/* Booked shifts badge */}
+                {/* Booked shifts count badge (info only) */}
                 {(inspector.scheduled_shifts ?? 0) > 0 && (
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShiftsDialogOpen(true);
-                        }}
-                        className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
-                      >
+                      <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
                         <Calendar className="h-3 w-3" />
                         <span className="text-xs font-medium">{inspector.scheduled_shifts}</span>
-                      </button>
+                      </span>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>Klik for at se {inspector.scheduled_shifts} bookede syn</p>
+                      <p>{inspector.scheduled_shifts} bookede syn vises nedenfor</p>
                     </TooltipContent>
                   </Tooltip>
                 )}
@@ -236,9 +227,57 @@ function DroppableInspector({
           </div>
         </div>
 
-        {/* Assigned inspections as sub-items - sorted by route sequence */}
-        {assignedItems.length > 0 && (
+        {/* Booked shifts + Assigned inspections as sub-items */}
+        {(assignedItems.length > 0 || (inspector.shift_details && inspector.shift_details.length > 0)) && (
           <div className="ml-4 mt-1 space-y-1 border-l-2 border-primary/30 pl-3 pb-2">
+            {/* Booked shifts from WorkFeed - shown first */}
+            {inspector.shift_details && inspector.shift_details.length > 0 && (
+              inspector.shift_details.map((shift, index) => {
+                const abbr = shift.type || "?";
+                const startTime = shift.start_time?.substring(0, 5) || "";
+                const endTime = shift.end_time?.substring(0, 5) || "";
+                
+                return (
+                  <div
+                    key={`booked-${index}`}
+                    className="flex items-center gap-2 text-xs rounded px-2 py-1.5 min-w-0 bg-muted/30"
+                  >
+                    {/* Main content: Time • Type • Address - all inline with truncation */}
+                    <div className="flex items-center gap-1 min-w-0 flex-1">
+                      {startTime && endTime && (
+                        <>
+                          <span className="flex-shrink-0 font-mono text-[10px] text-muted-foreground">
+                            {startTime}-{endTime}
+                          </span>
+                          <span className="text-muted-foreground/50">•</span>
+                        </>
+                      )}
+                      <span className={cn("flex-shrink-0 font-medium", getTypeColor(abbr).split(' ')[1] || 'text-muted-foreground')}>
+                        {abbr}
+                      </span>
+                      <span className="text-muted-foreground/50">•</span>
+                      <span className="truncate min-w-0 text-muted-foreground">
+                        {shift.address || "Ukendt adresse"}
+                      </span>
+                    </div>
+                    
+                    {/* Duration + Booked badge */}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {shift.duration_minutes && (
+                        <span className="text-muted-foreground text-[10px]">
+                          {shift.duration_minutes}m
+                        </span>
+                      )}
+                      <Badge variant="outline" className="text-[10px] px-1 py-0 text-blue-600 border-blue-300 dark:text-blue-400 dark:border-blue-600">
+                        B
+                      </Badge>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+
+            {/* Assigned inspections - sorted by route sequence */}
             {(() => {
               // Sort items by route sequence if available (using monday_item_id)
               const sortedItems = [...assignedItems].sort((a, b) => {
@@ -341,13 +380,6 @@ function DroppableInspector({
         onSave={onUpdateScheduledTimes}
       />
 
-      <BookedShiftsDialog
-        open={shiftsDialogOpen}
-        onOpenChange={setShiftsDialogOpen}
-        inspectorName={inspector.navn}
-        date={selectedDate}
-        shifts={inspector.shift_details || []}
-      />
     </>
   );
 }
