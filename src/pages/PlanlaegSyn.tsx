@@ -31,6 +31,15 @@ export interface Inspector {
   start_tid: string | null;
   slut_tid: string | null;
   tidspunkt_label: string;
+  // Booked shifts data from fetch-available-inspectors
+  scheduled_shifts?: number;
+  shift_details?: Array<{
+    type: string;
+    start_time: string;
+    end_time: string;
+    duration_minutes: number;
+    address?: string;
+  }>;
 }
 
 // Drag preview component
@@ -633,6 +642,7 @@ export default function PlanlaegSyn() {
             onUpdateScheduledTimes={handleUpdateScheduledTimes}
             getInspectorRoute={getInspectorRoute}
             isRouteLoading={isRouteLoading}
+            selectedDate={selectedDate || ""}
           />
         </div>
         
