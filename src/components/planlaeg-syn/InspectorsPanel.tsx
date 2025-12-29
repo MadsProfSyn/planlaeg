@@ -11,10 +11,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useDroppable } from "@dnd-kit/core";
-import { Info, X, Plus, Clock, Search, Route, Loader2, Calendar } from "lucide-react";
+import { Info, X, Plus, Clock, Search, Route, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScheduleTimesDialog } from "./ScheduleTimesDialog";
-import { BookedShiftsDialog } from "@/components/availability/BookedShiftsDialog";
 import type { Inspector } from "@/pages/PlanlaegSyn";
 import type { MondayItem } from "@/lib/supabase";
 import type { InspectorRoute } from "@/types/route-optimizer";
@@ -103,7 +102,6 @@ function DroppableInspector({
   selectedDate,
 }: DroppableInspectorProps) {
   const [timeDialogOpen, setTimeDialogOpen] = useState(false);
-  const [shiftsDialogOpen, setShiftsDialogOpen] = useState(false);
   
   const { setNodeRef, isOver } = useDroppable({
     id: `inspector-${inspector.inspector_uuid}`,
@@ -163,26 +161,6 @@ function DroppableInspector({
                     </TooltipContent>
                   </Tooltip>
                 )}
-                {/* Booked shifts badge */}
-                {(inspector.scheduled_shifts ?? 0) > 0 && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShiftsDialogOpen(true);
-                        }}
-                        className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition-colors"
-                      >
-                        <Calendar className="h-3 w-3" />
-                        <span className="text-xs font-medium">{inspector.scheduled_shifts}</span>
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Klik for at se {inspector.scheduled_shifts} bookede syn</p>
-                    </TooltipContent>
-                  </Tooltip>
-                )}
                 {(hasSelectedInspections || isOver) && (
                   <Plus className="h-4 w-4 text-primary flex-shrink-0" />
                 )}
@@ -236,70 +214,131 @@ function DroppableInspector({
           </div>
         </div>
 
-        {/* Assigned inspections as sub-items - sorted by route sequence */}
-        {assignedItems.length > 0 && (
-          <div className="ml-4 mt-1 space-y-1 border-l-2 border-primary/30 pl-3 pb-2">
+        {/* Timeline: Booked shifts + Assigned inspections merged chronologically */}
+        {((inspector.shift_details?.length ?? 0) > 0 || assignedItems.length > 0) && (
+          <div className="ml-4 mt-1 space-y-1 border-l-2 border-muted-foreground/30 pl-3 pb-2">
             {(() => {
-              // Sort items by route sequence if available (using monday_item_id)
-              const sortedItems = [...assignedItems].sort((a, b) => {
-                if (!routeData) return 0;
-                const seqA = routeData.stops.find((s) => s.monday_item_id === a.id)?.sequence ?? 999;
-                const seqB = routeData.stops.find((s) => s.monday_item_id === b.id)?.sequence ?? 999;
-                return seqA - seqB;
-              });
+              // Convert booked shifts to timeline items
+              const bookedItems = (inspector.shift_details || []).map((shift, idx) => ({
+                id: `booked-${idx}`,
+                type: 'booked' as const,
+                address: shift.address || "Ukendt adresse",
+                synstype: shift.type,
+                start_time: shift.start_time,
+                end_time: shift.end_time,
+                duration_minutes: shift.duration_minutes,
+              }));
 
-              return sortedItems.map((item) => {
-                const abbr = getTypeAbbreviation(item.synstype);
+              // Convert assigned items to timeline format
+              const assignmentItems = assignedItems.map((item) => {
                 const scheduledTime = scheduledTimes.get(item.id);
                 const routeStop = routeData?.stops.find((s) => s.monday_item_id === item.id);
                 const isExisting = existingItemIds.has(item.id);
+                return {
+                  id: `assignment-${item.id}`,
+                  itemId: item.id,
+                  type: isExisting ? 'existing' as const : 'new' as const,
+                  address: item.adresse || "Ukendt adresse",
+                  synstype: item.synstype,
+                  start_time: scheduledTime?.start,
+                  end_time: scheduledTime?.end,
+                  rooms: item.antal_vaerelser,
+                  routeStop,
+                  isExisting,
+                };
+              });
+
+              // Merge and sort by start time (booked first if no time, then by time)
+              const allItems = [...bookedItems, ...assignmentItems].sort((a, b) => {
+                const timeA = a.start_time || '99:99';
+                const timeB = b.start_time || '99:99';
+                return timeA.localeCompare(timeB);
+              });
+
+              let sequenceNum = 1;
+
+              return allItems.map((item) => {
+                const abbr = getTypeAbbreviation(item.synstype);
                 
+                if (item.type === 'booked') {
+                  // Booked shift row
+                  return (
+                    <div
+                      key={item.id}
+                      className="flex items-center gap-2 text-xs rounded px-2 py-1.5 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/50"
+                    >
+                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 text-[10px] font-medium flex items-center justify-center">
+                        {sequenceNum++}
+                      </span>
+                      <span className="flex-1 truncate text-green-800 dark:text-green-300">
+                        {item.address}
+                      </span>
+                      <Badge className={cn("text-[10px] px-1.5 py-0", getTypeColor(abbr))}>
+                        {abbr}
+                      </Badge>
+                      {item.start_time && item.end_time && (
+                        <span className="text-green-700 dark:text-green-400 font-mono text-[10px] whitespace-nowrap">
+                          {item.start_time.substring(0, 5)}-{item.end_time.substring(0, 5)}
+                        </span>
+                      )}
+                      <Badge variant="outline" className="text-[10px] px-1 py-0 text-green-700 dark:text-green-400 border-green-300 dark:border-green-700 bg-green-100/50 dark:bg-green-900/30">
+                        Booket
+                      </Badge>
+                    </div>
+                  );
+                }
+
+                // Assignment row (existing or new)
+                const assignmentItem = item as typeof assignmentItems[0];
                 return (
                   <div
                     key={item.id}
                     className={cn(
                       "flex items-center gap-2 text-xs rounded px-2 py-1.5",
-                      isExisting ? "bg-muted/30" : "bg-primary/5 border border-primary/20"
+                      assignmentItem.isExisting ? "bg-muted/30" : "bg-primary/5 border border-primary/20"
                     )}
                   >
-                    {/* Sequence number when route available */}
-                    {routeStop && (
-                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/10 text-primary text-[10px] font-medium flex items-center justify-center">
-                        {routeStop.sequence}
-                      </span>
-                    )}
+                    {/* Sequence number */}
+                    <span className={cn(
+                      "flex-shrink-0 w-5 h-5 rounded-full text-[10px] font-medium flex items-center justify-center",
+                      assignmentItem.isExisting 
+                        ? "bg-muted text-muted-foreground" 
+                        : "bg-primary/10 text-primary"
+                    )}>
+                      {sequenceNum++}
+                    </span>
                     <span className={cn(
                       "flex-1 truncate",
-                      isExisting ? "text-muted-foreground" : "text-foreground"
+                      assignmentItem.isExisting ? "text-muted-foreground" : "text-foreground"
                     )}>
-                      {item.adresse || "Ukendt adresse"}
+                      {item.address}
                     </span>
                     <Badge className={cn("text-[10px] px-1.5 py-0", getTypeColor(abbr))}>
                       {abbr}
                     </Badge>
                     <span className="text-muted-foreground whitespace-nowrap">
-                      {item.antal_vaerelser ?? "?"} vær.
+                      {assignmentItem.rooms ?? "?"} vær.
                     </span>
-                    {scheduledTime && (
+                    {item.start_time && item.end_time && (
                       <span className="text-muted-foreground font-mono text-[10px] whitespace-nowrap">
-                        {scheduledTime.start}-{scheduledTime.end}
+                        {item.start_time}-{item.end_time}
                       </span>
                     )}
                     {/* Travel time from previous */}
-                    {routeStop && routeStop.travel_from_previous_mins > 0 && (
+                    {assignmentItem.routeStop && assignmentItem.routeStop.travel_from_previous_mins > 0 && (
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <span className="text-muted-foreground/70 text-[10px] whitespace-nowrap">
-                            +{routeStop.travel_from_previous_mins}m
+                            +{assignmentItem.routeStop.travel_from_previous_mins}m
                           </span>
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p>Køretid fra forrige: {routeStop.travel_from_previous_mins} min</p>
+                          <p>Køretid fra forrige: {assignmentItem.routeStop.travel_from_previous_mins} min</p>
                         </TooltipContent>
                       </Tooltip>
                     )}
                     {/* Badge for existing vs new */}
-                    {isExisting ? (
+                    {assignmentItem.isExisting ? (
                       <Badge variant="outline" className="text-[10px] px-1 py-0 text-muted-foreground border-muted-foreground/30">
                         Eksist.
                       </Badge>
@@ -309,11 +348,11 @@ function DroppableInspector({
                       </Badge>
                     )}
                     {/* Only show remove button for new items */}
-                    {!isExisting && (
+                    {!assignmentItem.isExisting && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          onRemoveAssignment(inspector.inspector_uuid, item.id);
+                          onRemoveAssignment(inspector.inspector_uuid, assignmentItem.itemId);
                         }}
                         className="text-muted-foreground hover:text-destructive transition-colors p-0.5 rounded hover:bg-destructive/10"
                       >
@@ -335,14 +374,6 @@ function DroppableInspector({
         inspections={assignedItems}
         existingTimes={scheduledTimes}
         onSave={onUpdateScheduledTimes}
-      />
-
-      <BookedShiftsDialog
-        open={shiftsDialogOpen}
-        onOpenChange={setShiftsDialogOpen}
-        inspectorName={inspector.navn}
-        date={selectedDate}
-        shifts={inspector.shift_details || []}
       />
     </>
   );
