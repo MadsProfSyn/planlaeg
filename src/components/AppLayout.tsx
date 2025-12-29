@@ -32,12 +32,12 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full">
+      <div className="min-h-screen flex w-full overflow-hidden">
         <AppSidebar />
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-0">
           <header className="flex h-16 items-center justify-between gap-4 border-b bg-background px-4">
             <SidebarTrigger />
-            
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-10 w-10 rounded-full">
@@ -51,17 +51,9 @@ export function AppLayout({ children }: AppLayoutProps) {
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>
                   <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">
-                      {profile?.full_name || "Bruger"}
-                    </p>
-                    <p className="text-xs leading-none text-muted-foreground">
-                      {profile?.email}
-                    </p>
-                    {hasRole('admin') && (
-                      <p className="text-xs leading-none text-primary font-medium mt-1">
-                        Admin
-                      </p>
-                    )}
+                    <p className="text-sm font-medium leading-none">{profile?.full_name || "Bruger"}</p>
+                    <p className="text-xs leading-none text-muted-foreground">{profile?.email}</p>
+                    {hasRole("admin") && <p className="text-xs leading-none text-primary font-medium mt-1">Admin</p>}
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
@@ -72,9 +64,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               </DropdownMenuContent>
             </DropdownMenu>
           </header>
-          <main className="flex-1 overflow-auto">
-            {children}
-          </main>
+          <main className="flex-1 overflow-auto min-w-0">{children}</main>
         </div>
       </div>
     </SidebarProvider>
