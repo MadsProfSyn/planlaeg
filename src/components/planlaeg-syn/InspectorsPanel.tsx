@@ -229,7 +229,7 @@ function DroppableInspector({
 
         {/* Booked shifts + Assigned inspections as sub-items */}
         {(assignedItems.length > 0 || (inspector.shift_details && inspector.shift_details.length > 0)) && (
-          <div className="ml-4 mt-1 space-y-1 border-l-2 border-primary/30 pl-3 pb-2">
+          <div className="ml-4 mt-1 space-y-1 border-l-2 border-primary/30 pl-3 pb-2 overflow-hidden min-w-0">
             {/* Booked shifts from WorkFeed - shown first */}
             {inspector.shift_details && inspector.shift_details.length > 0 && (
               inspector.shift_details.map((shift, index) => {
@@ -240,7 +240,7 @@ function DroppableInspector({
                 return (
                   <div
                     key={`booked-${index}`}
-                    className="flex items-center gap-2 text-xs rounded px-2 py-1.5 min-w-0 bg-muted/30"
+                    className="flex items-center gap-2 text-xs rounded px-2 py-1.5 min-w-0 max-w-full bg-muted/30"
                   >
                     {/* Main content: Time • Type • Address - all inline with truncation */}
                     <div className="flex items-center gap-1 min-w-0 flex-1">
