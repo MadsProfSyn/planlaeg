@@ -32,7 +32,7 @@ const navigationItems = [
     adminOnly: true,
   },
   {
-    title: "Planlæg syn (Drag&Drop)",
+    title: "Planlæg syn (Manuelt)",
     url: "/planlaeg-syn",
     icon: CalendarPlus,
     adminOnly: true,
