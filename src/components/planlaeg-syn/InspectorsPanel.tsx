@@ -184,10 +184,10 @@ function DroppableInspector({
                 ))}
               </div>
             </div>
-            <div className="flex-shrink-0 flex flex-wrap items-center gap-1.5 justify-end">
+            <div className="flex flex-wrap items-center gap-1.5 justify-end">
               {/* Route summary when available */}
               {routeData && assignedItems.length > 0 && (
-                <div className="flex items-center gap-1 text-[11px] text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded whitespace-nowrap">
+                <div className="flex items-center gap-1 text-[11px] text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
                   <Route className="h-3 w-3 flex-shrink-0" />
                   <span>{routeData.total_km.toFixed(1)} km</span>
                   <span className="text-muted-foreground/60">•</span>
@@ -202,14 +202,14 @@ function DroppableInspector({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-6 text-xs gap-1 whitespace-nowrap"
+                  className="h-6 w-6 p-0"
                   onClick={(e) => {
                     e.stopPropagation();
                     setTimeDialogOpen(true);
                   }}
+                  title={hasScheduledTimes ? "Rediger tidspunkt" : "Vælg tidspunkt"}
                 >
                   <Clock className="h-3 w-3" />
-                  <span className="hidden sm:inline">{hasScheduledTimes ? "Rediger" : "Tidspunkt"}</span>
                 </Button>
               )}
             </div>
