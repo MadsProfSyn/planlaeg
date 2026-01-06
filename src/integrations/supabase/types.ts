@@ -632,6 +632,8 @@ export type Database = {
           board_id: number | null
           dato_tid: string | null
           geocode_status: string | null
+          has_cylinderskift: boolean | null
+          has_dymo: boolean | null
           id: number
           inserted_at: string | null
           item_id: number | null
@@ -661,6 +663,8 @@ export type Database = {
           board_id?: number | null
           dato_tid?: string | null
           geocode_status?: string | null
+          has_cylinderskift?: boolean | null
+          has_dymo?: boolean | null
           id?: number
           inserted_at?: string | null
           item_id?: number | null
@@ -690,6 +694,8 @@ export type Database = {
           board_id?: number | null
           dato_tid?: string | null
           geocode_status?: string | null
+          has_cylinderskift?: boolean | null
+          has_dymo?: boolean | null
           id?: number
           inserted_at?: string | null
           item_id?: number | null

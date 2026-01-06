@@ -94,77 +94,26 @@ export default function PlanlaegSyn() {
   // Drag state
   const [activeDragId, setActiveDragId] = useState<number | null>(null);
 
-  // Fetch existing scheduled inspections per inspector for the selected date
-  // Cross-references against supabase_shifts to detect and reset orphaned records
+  // Fetch existing scheduled inspections that are NOT yet in WorkFeed
+  // Items with wf_shift_id are already synced to supabase_shifts and show as "B" items
   const { data: existingScheduledData = [] } = useQuery({
     queryKey: ["existing-scheduled-inspections", selectedDate],
     queryFn: async () => {
       if (!selectedDate) return [];
       
-      // Step 1: Get all monday items marked as scheduled for this date
-      const { data: mondayItems, error: mondayError } = await supabase
+      // Fetch monday items that are scheduled but NOT yet in WorkFeed
+      const { data: mondayItems, error } = await supabase
         .from("monday_items_selected")
         .select("*")
         .eq("scheduled_date", selectedDate)
         .in("schedule_status", ["sent_to_workfeed", "scheduled_in_monday"])
         .not("scheduled_inspector_id", "is", null)
-        .not("wf_shift_id", "is", null);
+        .is("wf_shift_id", null); // Only items NOT yet in WorkFeed
       
-      if (mondayError) throw mondayError;
-      if (!mondayItems?.length) return [];
+      if (error) throw error;
       
-      // Step 2: Get all valid shift IDs from supabase_shifts for this date
-      const { data: validShifts, error: shiftsError } = await supabase
-        .from("supabase_shifts")
-        .select("wf_shift_id")
-        .eq("date_local", selectedDate);
-      
-      if (shiftsError) throw shiftsError;
-      
-      const validShiftIds = new Set(validShifts?.map(s => s.wf_shift_id).filter(Boolean) || []);
-      
-      // Step 3: Filter items - only flag as orphaned if sent > 24 hours ago
-      // This gives the daily supabase_shifts sync time to run
-      const validItems: typeof mondayItems = [];
-      const orphanedIds: number[] = [];
-      const now = new Date();
-      const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-      
-      for (const item of mondayItems) {
-        const scheduledAt = item.scheduled_at ? new Date(item.scheduled_at) : null;
-        
-        if (item.wf_shift_id && validShiftIds.has(item.wf_shift_id)) {
-          // Shift exists in supabase_shifts - confirmed valid
-          validItems.push(item);
-        } else if (scheduledAt && scheduledAt > twentyFourHoursAgo) {
-          // Recently sent (< 24h) - trust it even if not in supabase_shifts yet
-          validItems.push(item);
-        } else {
-          // Old item (> 24h) not in supabase_shifts - likely deleted from WorkFeed
-          orphanedIds.push(item.id);
-          console.log(`[PlanlaegSyn] Detected orphaned shift: monday_item ${item.id}, wf_shift_id ${item.wf_shift_id}, scheduled_at ${item.scheduled_at}`);
-        }
-      }
-      
-      // Step 4: Auto-reset orphaned records so they reappear in the left panel
-      if (orphanedIds.length > 0) {
-        console.log(`[PlanlaegSyn] Resetting ${orphanedIds.length} orphaned items to unscheduled`);
-        await supabase
-          .from("monday_items_selected")
-          .update({
-            schedule_status: "unscheduled",
-            wf_shift_id: null,
-            scheduled_inspector_id: null,
-            scheduled_inspector_name: null,
-            scheduled_date: null,
-            scheduled_start_time: null,
-            scheduled_end_time: null,
-          })
-          .in("id", orphanedIds);
-      }
-      
-      // Return valid items sorted by start time
-      return validItems.sort((a, b) => 
+      // Return items sorted by start time
+      return (mondayItems || []).sort((a, b) => 
         (a.scheduled_start_time || "").localeCompare(b.scheduled_start_time || "")
       );
     },
