@@ -61,10 +61,21 @@ interface MondayItemLike {
   id: number;
 }
 
+interface ShiftDetail {
+  type: string;
+  start_time: string;
+  end_time: string;
+  duration_minutes: number;
+  address?: string;
+  lat?: number;
+  lng?: number;
+}
+
 interface UseRouteOptimizerOptions {
   date: string;
   newAssignments: Map<string, MondayItemLike[]>;
   existingAssignments: Map<string, MondayItemLike[]>;
+  inspectorShiftDetails: Map<string, ShiftDetail[]>;
   enabled?: boolean;
   debounceMs?: number;
 }
@@ -73,6 +84,7 @@ export function useRouteOptimizer({
   date,
   newAssignments,
   existingAssignments,
+  inspectorShiftDetails,
   enabled = true,
   debounceMs = 500,
 }: UseRouteOptimizerOptions) {
@@ -92,27 +104,47 @@ export function useRouteOptimizer({
   const abortControllerRef = useRef<AbortController | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Transform combined assignments (existing + new) to API format
+  // Transform combined assignments (existing + new) to API format, including fixed_stops
   const transformAssignments = useCallback(
     (
       newMap: Map<string, MondayItemLike[]>,
-      existingMap: Map<string, MondayItemLike[]>
+      existingMap: Map<string, MondayItemLike[]>,
+      shiftDetailsMap: Map<string, ShiftDetail[]>
     ): RouteOptimizerAssignment[] => {
       const result: RouteOptimizerAssignment[] = [];
       
-      // Get all unique inspector IDs from both maps
-      const allInspectorIds = new Set([...newMap.keys(), ...existingMap.keys()]);
+      // Get all unique inspector IDs from all maps
+      const allInspectorIds = new Set([
+        ...newMap.keys(), 
+        ...existingMap.keys(),
+        ...shiftDetailsMap.keys()
+      ]);
       
       allInspectorIds.forEach((inspectorId) => {
         const newItems = newMap.get(inspectorId) || [];
         const existingItems = existingMap.get(inspectorId) || [];
+        const shiftDetails = shiftDetailsMap.get(inspectorId) || [];
         const allItems = [...existingItems, ...newItems];
         
-        if (allItems.length > 0) {
+        // Build fixed_stops from shift_details (only geocoded ones)
+        const fixedStops = shiftDetails
+          .filter(s => s.lat && s.lng)
+          .map(s => ({
+            lat: s.lat!,
+            lng: s.lng!,
+            start_time: s.start_time?.substring(0, 5) || '',
+            end_time: s.end_time?.substring(0, 5) || '',
+            address: s.address || '',
+            type: s.type || 'B'
+          }));
+        
+        // Include inspector if they have items OR fixed_stops
+        if (allItems.length > 0 || fixedStops.length > 0) {
           result.push({
             inspector_id: inspectorId,
             inspection_ids: allItems.map((item) => String(item.id)),
             existing_ids: existingItems.map((item) => String(item.id)),
+            fixed_stops: fixedStops.length > 0 ? fixedStops : undefined
           });
         }
       });
@@ -142,7 +174,7 @@ export function useRouteOptimizer({
     setError(null);
 
     try {
-      const transformedAssignments = transformAssignments(newAssignments, existingAssignments);
+      const transformedAssignments = transformAssignments(newAssignments, existingAssignments, inspectorShiftDetails);
       
       if (transformedAssignments.length === 0) {
         setPreview({ routes: [], metrics: null, vrpRunId: null });
@@ -245,7 +277,7 @@ export function useRouteOptimizer({
     setError(null);
 
     try {
-      const transformedAssignments = transformAssignments(newAssignments, existingAssignments);
+      const transformedAssignments = transformAssignments(newAssignments, existingAssignments, inspectorShiftDetails);
       
       if (transformedAssignments.length === 0) {
         return { success: false, error: "No assignments to optimize" };

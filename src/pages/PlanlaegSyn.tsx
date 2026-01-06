@@ -39,6 +39,8 @@ export interface Inspector {
     end_time: string;
     duration_minutes: number;
     address?: string;
+    lat?: number;
+    lng?: number;
   }>;
 }
 
@@ -183,20 +185,6 @@ export default function PlanlaegSyn() {
     return map;
   }, [existingScheduledData]);
 
-  // Route optimizer hook - triggers preview on assignment changes
-  const {
-    preview: routePreview,
-    isPreviewLoading: isRouteLoading,
-    error: routeError,
-    getInspectorRoute,
-  } = useRouteOptimizer({
-    date: selectedDate || "",
-    newAssignments,
-    existingAssignments,
-    enabled: !!selectedDate && (newAssignments.size > 0 || existingAssignments.size > 0),
-    debounceMs: 500,
-  });
-
   // Fetch landsdele (regions) for inspections filter
   const { data: landsdele = [] } = useQuery({
     queryKey: ["regions"],
@@ -268,6 +256,41 @@ export default function PlanlaegSyn() {
   const inspections = inspectionsData?.data || [];
   const inspectors: Inspector[] = inspectorsData?.data || [];
 
+  // Build inspectorShiftDetails map from inspectors data (for route optimizer fixed_stops)
+  const inspectorShiftDetails = useMemo(() => {
+    const map = new Map<string, Array<{
+      type: string;
+      start_time: string;
+      end_time: string;
+      duration_minutes: number;
+      address?: string;
+      lat?: number;
+      lng?: number;
+    }>>();
+    
+    (inspectors || []).forEach((inspector) => {
+      if (inspector.shift_details && inspector.shift_details.length > 0) {
+        map.set(inspector.inspector_uuid, inspector.shift_details);
+      }
+    });
+    
+    return map;
+  }, [inspectors]);
+
+  // Route optimizer hook - triggers preview on assignment changes
+  const {
+    preview: routePreview,
+    isPreviewLoading: isRouteLoading,
+    error: routeError,
+    getInspectorRoute,
+  } = useRouteOptimizer({
+    date: selectedDate || "",
+    newAssignments,
+    existingAssignments,
+    inspectorShiftDetails,
+    enabled: !!selectedDate && (newAssignments.size > 0 || existingAssignments.size > 0),
+    debounceMs: 500,
+  });
   // Combine existing + new assignments for display (but keep them separate for sending)
   const combinedAssignments = useMemo(() => {
     const combined = new Map<string, MondayItem[]>();
