@@ -138,8 +138,9 @@ export function useRouteOptimizer({
             type: s.type || 'B'
           }));
         
-        // Include inspector if they have items OR fixed_stops
-        if (allItems.length > 0 || fixedStops.length > 0) {
+        // Only include inspector if they have items to optimize
+        // (fixed_stops alone are not enough - Railway requires inspection_ids)
+        if (allItems.length > 0) {
           result.push({
             inspector_id: inspectorId,
             inspection_ids: allItems.map((item) => String(item.id)),
