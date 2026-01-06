@@ -1,7 +1,17 @@
+export interface FixedStop {
+  lat: number;
+  lng: number;
+  start_time: string;  // HH:MM format
+  end_time: string;    // HH:MM format
+  address?: string;
+  type?: string;
+}
+
 export interface RouteOptimizerAssignment {
   inspector_id: string;
   inspection_ids: string[];
   existing_ids?: string[]; // IDs of already-scheduled inspections (times are fixed)
+  fixed_stops?: FixedStop[]; // Booked shifts with coordinates (for travel time calculation)
 }
 
 export interface RouteOptimizerRequest {
