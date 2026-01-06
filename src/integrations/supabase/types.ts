@@ -1078,6 +1078,8 @@ export type Database = {
           inspector_id: string
           inspector_name: string
           last_sync_attempt: string | null
+          lat: number | null
+          lng: number | null
           start_time_local: string | null
           start_utc: string | null
           status: string
@@ -1103,6 +1105,8 @@ export type Database = {
           inspector_id: string
           inspector_name: string
           last_sync_attempt?: string | null
+          lat?: number | null
+          lng?: number | null
           start_time_local?: string | null
           start_utc?: string | null
           status?: string
@@ -1128,6 +1132,8 @@ export type Database = {
           inspector_id?: string
           inspector_name?: string
           last_sync_attempt?: string | null
+          lat?: number | null
+          lng?: number | null
           start_time_local?: string | null
           start_utc?: string | null
           status?: string
