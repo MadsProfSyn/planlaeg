@@ -569,21 +569,40 @@ export default function PlanlaegSyn() {
           afdelinger={afdelinger}
         />
         
-        {selectedDate && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleSyncShifts}
-            disabled={isSyncing}
-            title="Synkroniser vagter fra WorkFeed for denne dato"
-          >
-            {isSyncing ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4" />
+      {selectedDate && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSyncShifts}
+              disabled={isSyncing}
+              title="Synkroniser vagter fra WorkFeed for denne dato"
+            >
+              {isSyncing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              <span className="ml-2 hidden sm:inline">Synk vagter</span>
+            </Button>
+            
+            {totalNewAssignments > 0 && (
+              <Button
+                size="sm"
+                onClick={handleSendToWorkfeed}
+                disabled={isSending || !allNewAssignmentsHaveTimes}
+              >
+                {isSending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Sender...
+                  </>
+                ) : (
+                  `Send ${totalNewAssignments} ny${totalNewAssignments !== 1 ? "e" : ""} til WorkFeed`
+                )}
+              </Button>
             )}
-            <span className="ml-2 hidden sm:inline">Synk vagter</span>
-          </Button>
+          </div>
         )}
       </div>
 
@@ -622,44 +641,6 @@ export default function PlanlaegSyn() {
           {activeDragId !== null && <DragPreview count={dragCount} />}
         </DragOverlay>
 
-        {/* Footer with assignment summary - show when there are new assignments or any combined */}
-        {(totalNewAssignments > 0 || totalExistingAssignments > 0) && (
-          <div className="sticky bottom-0 bg-background border-t py-4 mt-4 -mx-6 px-6 lg:-mx-8 lg:px-8">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">
-                {totalExistingAssignments > 0 && (
-                  <span>{totalExistingAssignments} eksisterende</span>
-                )}
-                {totalExistingAssignments > 0 && totalNewAssignments > 0 && (
-                  <span> + </span>
-                )}
-                {totalNewAssignments > 0 && (
-                  <span className="text-primary font-medium">
-                    {totalNewAssignments} ny{totalNewAssignments !== 1 ? "e" : ""}
-                  </span>
-                )}
-                {totalNewAssignments > 0 && !allNewAssignmentsHaveTimes && (
-                  <span className="text-destructive ml-2">
-                    (mangler tidspunkter)
-                  </span>
-                )}
-              </span>
-              <Button 
-                onClick={handleSendToWorkfeed}
-                disabled={isSending || !allNewAssignmentsHaveTimes || totalNewAssignments === 0}
-              >
-                {isSending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Sender...
-                  </>
-                ) : (
-                  `Send ${totalNewAssignments} ny${totalNewAssignments !== 1 ? "e" : ""} til WorkFeed`
-                )}
-              </Button>
-            </div>
-          </div>
-        )}
       </DndContext>
     </div>
   );
