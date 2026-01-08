@@ -37,6 +37,60 @@ function extractAddress(comment) {
   return null;
 }
 
+// Normalize address for cache lookup
+function normalizeAddress(address: string): string {
+  return `${address.toLowerCase().trim()}, danmark`;
+}
+
+// Geocode an address using Mapbox with caching
+const MAPBOX_TOKEN = Deno.env.get("MAPBOX_TOKEN");
+
+async function geocodeAddress(
+  supabase: ReturnType<typeof createClient>,
+  address: string
+): Promise<{ lat: number; lng: number } | null> {
+  if (!address || !MAPBOX_TOKEN) return null;
+
+  const normalizedAddress = normalizeAddress(address);
+
+  // Check cache first
+  const { data: cached } = await supabase
+    .from("mapbox_coords_cache")
+    .select("lat, lon")
+    .eq("normalized_address", normalizedAddress)
+    .maybeSingle();
+
+  if (cached?.lat && cached?.lon) {
+    return { lat: cached.lat, lng: cached.lon };
+  }
+
+  // Not cached - call Mapbox
+  try {
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(normalizedAddress)}.json?access_token=${MAPBOX_TOKEN}&country=DK&limit=1`;
+
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data.features && data.features.length > 0) {
+      const [lng, lat] = data.features[0].center;
+
+      // Cache the result
+      await supabase.from("mapbox_coords_cache").upsert({
+        normalized_address: normalizedAddress,
+        lat: lat,
+        lon: lng,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "normalized_address" });
+
+      return { lat, lng };
+    }
+  } catch (error) {
+    console.error(`Geocoding error for "${address}":`, error);
+  }
+
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -150,6 +204,7 @@ serve(async (req) => {
     let unmapped = 0;
     let errors = 0;
     let addressesExtracted = 0;
+    let geocoded = 0;
 
     // Process each shift from WorkFeed
     for (const shift of workfeedData) {
@@ -197,6 +252,17 @@ serve(async (req) => {
           addressesExtracted++;
         }
 
+        // Geocode the address
+        let coords: { lat: number; lng: number } | null = null;
+        if (address) {
+          coords = await geocodeAddress(supabaseClient, address);
+          if (coords) {
+            geocoded++;
+          }
+          // Rate limiting: 100ms delay between geocoding calls
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
         // Prepare shift data
         const shiftData = {
           wf_shift_id: shift.id,
@@ -214,6 +280,8 @@ serve(async (req) => {
           duration_minutes: duration,
           wf_role_id: shift.roleID || null,
           address: address,
+          lat: coords?.lat || null,
+          lng: coords?.lng || null,
         };
 
         // Insert the shift
@@ -240,12 +308,13 @@ serve(async (req) => {
       unmapped,
       errors,
       addressesExtracted,
+      geocoded,
       total: workfeedData.length || 0,
       dateRange: {
         from: fromDate,
         to: toDate,
       },
-      summary: `Synced ${synced} shifts (${addressesExtracted} with addresses), ${unmapped} unmapped, ${errors} errors`,
+      summary: `Synced ${synced} shifts (${addressesExtracted} with addresses, ${geocoded} geocoded), ${unmapped} unmapped, ${errors} errors`,
     };
 
     console.log("Sync completed:", response);
