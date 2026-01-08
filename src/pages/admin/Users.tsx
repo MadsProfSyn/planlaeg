@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import { adminStrings } from '@/lib/i18n/admin';
 import { UserRoleBadge } from '@/components/admin/UserRoleBadge';
 import {
@@ -24,7 +25,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Search, UserPlus, UserMinus } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Search, UserPlus, UserMinus, Plus, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { da } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -44,6 +53,11 @@ export default function Users() {
     type: 'promote' | 'demote';
     email: string;
   } | null>(null);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [createEmail, setCreateEmail] = useState('');
+  const [createPassword, setCreatePassword] = useState('');
+  const [createFullName, setCreateFullName] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -133,13 +147,60 @@ export default function Users() {
     }
   };
 
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsCreating(true);
+
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: createEmail,
+        password: createPassword,
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+          data: {
+            full_name: createFullName || ''
+          }
+        }
+      });
+
+      if (error) throw error;
+
+      await queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+
+      toast({
+        title: adminStrings.common.success,
+        description: `Bruger ${createEmail} er oprettet`
+      });
+
+      // Reset form and close dialog
+      setCreateEmail('');
+      setCreatePassword('');
+      setCreateFullName('');
+      setShowCreateDialog(false);
+    } catch (error: any) {
+      toast({
+        title: adminStrings.common.error,
+        description: error.message,
+        variant: 'destructive'
+      });
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="page-title">{adminStrings.users.title}</h1>
-        <p className="text-caption mt-2">
-          Administrer brugere og deres roller
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="page-title">{adminStrings.users.title}</h1>
+          <p className="text-caption mt-2">
+            Administrer brugere og deres roller
+          </p>
+        </div>
+        <Button onClick={() => setShowCreateDialog(true)} className="gap-2">
+          <Plus className="h-4 w-4" />
+          Opret bruger
+        </Button>
       </div>
 
       {/* Search */}
@@ -281,6 +342,66 @@ export default function Users() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Create User Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Opret ny bruger</DialogTitle>
+            <DialogDescription>
+              Opret en ny brugerkonto manuelt. Brugeren vil modtage en bekræftelsesmail.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateUser} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="create-name">Fulde navn</Label>
+              <Input
+                id="create-name"
+                type="text"
+                placeholder="Navn"
+                value={createFullName}
+                onChange={(e) => setCreateFullName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="create-email">Email *</Label>
+              <Input
+                id="create-email"
+                type="email"
+                placeholder="bruger@email.dk"
+                value={createEmail}
+                onChange={(e) => setCreateEmail(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="create-password">Kodeord *</Label>
+              <Input
+                id="create-password"
+                type="password"
+                placeholder="Minimum 6 tegn"
+                value={createPassword}
+                onChange={(e) => setCreatePassword(e.target.value)}
+                required
+                minLength={6}
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowCreateDialog(false)}
+              >
+                Annuller
+              </Button>
+              <Button type="submit" disabled={isCreating}>
+                {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Opret bruger
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
