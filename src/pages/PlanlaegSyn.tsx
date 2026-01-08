@@ -1,10 +1,10 @@
 import { useState, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { 
-  DndContext, 
-  DragOverlay, 
-  closestCenter, 
-  DragStartEvent, 
+import {
+  DndContext,
+  DragOverlay,
+  closestCenter,
+  DragStartEvent,
   DragEndEvent,
   PointerSensor,
   useSensor,
@@ -60,19 +60,19 @@ export default function PlanlaegSyn() {
   const [selectedAfdeling, setSelectedAfdeling] = useState<string>("all");
   const [selectedInspectionIds, setSelectedInspectionIds] = useState<number[]>([]);
   const [selectedInspectorId, setSelectedInspectorId] = useState<string | null>(null);
-  
+
   // NEW assignments state (drag-dropped by user)
   const [newAssignments, setNewAssignments] = useState<Map<string, MondayItem[]>>(new Map());
-  
+
   // Scheduled times state: inspectionId -> { start, end }
   const [scheduledTimes, setScheduledTimes] = useState<Map<number, { start: string; end: string }>>(new Map());
-  
+
   // Sending state
   const [isSending, setIsSending] = useState(false);
-  
+
   // Syncing shifts state
   const [isSyncing, setIsSyncing] = useState(false);
-  
+
   // Handler for updating scheduled times
   const handleUpdateScheduledTimes = (newTimes: Map<number, { start: string; end: string }>) => {
     setScheduledTimes((prev) => {
@@ -81,14 +81,14 @@ export default function PlanlaegSyn() {
       return next;
     });
   };
-  
+
   // Configure sensors with distance constraint to prevent clicks from triggering drag
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
         distance: 8, // Must drag 8px before drag activates
       },
-    })
+    }),
   );
 
   // Drag state
@@ -100,7 +100,7 @@ export default function PlanlaegSyn() {
     queryKey: ["existing-scheduled-inspections", selectedDate],
     queryFn: async () => {
       if (!selectedDate) return [];
-      
+
       // Fetch monday items that are scheduled but NOT yet in WorkFeed
       const { data: mondayItems, error } = await supabase
         .from("monday_items_selected")
@@ -109,12 +109,12 @@ export default function PlanlaegSyn() {
         .in("schedule_status", ["sent_to_workfeed", "scheduled_in_monday"])
         .not("scheduled_inspector_id", "is", null)
         .is("wf_shift_id", null); // Only items NOT yet in WorkFeed
-      
+
       if (error) throw error;
-      
+
       // Return items sorted by start time
-      return (mondayItems || []).sort((a, b) => 
-        (a.scheduled_start_time || "").localeCompare(b.scheduled_start_time || "")
+      return (mondayItems || []).sort((a, b) =>
+        (a.scheduled_start_time || "").localeCompare(b.scheduled_start_time || ""),
       );
     },
     enabled: !!selectedDate,
@@ -154,18 +154,18 @@ export default function PlanlaegSyn() {
     queryKey: ["planlaeg-inspections", selectedDate, selectedLandsdel],
     queryFn: async () => {
       const filters: { dateFrom?: string; dateTo?: string; regions?: string[] } = {};
-      
+
       // Only apply date filter if a date is selected
       if (selectedDate) {
         filters.dateFrom = selectedDate;
         filters.dateTo = selectedDate;
       }
-      
+
       // Filter by landsdel directly (Sjælland, Fyn, Jylland)
       if (selectedLandsdel !== "all") {
         filters.regions = [selectedLandsdel];
       }
-      
+
       return getMondayItems(1, 500, filters);
     },
   });
@@ -175,7 +175,7 @@ export default function PlanlaegSyn() {
     queryKey: ["planlaeg-inspectors", selectedDate, selectedAfdeling],
     queryFn: async () => {
       if (!selectedDate) return { data: [] };
-      
+
       const params: any = {
         from: selectedDate,
         to: selectedDate,
@@ -186,16 +186,16 @@ export default function PlanlaegSyn() {
         pageSize: 500,
         no_pagination: true,
       };
-      
+
       // Filter by afdeling directly (Storkøbenhavn, Odense, Århus, Aalborg)
       if (selectedAfdeling !== "all") {
         params.afdeling = [selectedAfdeling];
       }
-      
+
       const { data, error } = await supabase.functions.invoke("fetch-available-inspectors", {
         body: params,
       });
-      
+
       if (error) throw error;
       return data;
     },
@@ -207,22 +207,25 @@ export default function PlanlaegSyn() {
 
   // Build inspectorShiftDetails map from inspectors data (for route optimizer fixed_stops)
   const inspectorShiftDetails = useMemo(() => {
-    const map = new Map<string, Array<{
-      type: string;
-      start_time: string;
-      end_time: string;
-      duration_minutes: number;
-      address?: string;
-      lat?: number;
-      lng?: number;
-    }>>();
-    
+    const map = new Map<
+      string,
+      Array<{
+        type: string;
+        start_time: string;
+        end_time: string;
+        duration_minutes: number;
+        address?: string;
+        lat?: number;
+        lng?: number;
+      }>
+    >();
+
     (inspectors || []).forEach((inspector) => {
       if (inspector.shift_details && inspector.shift_details.length > 0) {
         map.set(inspector.inspector_uuid, inspector.shift_details);
       }
     });
-    
+
     return map;
   }, [inspectors]);
 
@@ -243,18 +246,18 @@ export default function PlanlaegSyn() {
   // Combine existing + new assignments for display (but keep them separate for sending)
   const combinedAssignments = useMemo(() => {
     const combined = new Map<string, MondayItem[]>();
-    
+
     // Add existing assignments first
     existingAssignments.forEach((items, inspectorId) => {
       combined.set(inspectorId, [...items]);
     });
-    
+
     // Add new assignments (append to existing for same inspector)
     newAssignments.forEach((items, inspectorId) => {
       const existing = combined.get(inspectorId) || [];
       combined.set(inspectorId, [...existing, ...items]);
     });
-    
+
     return combined;
   }, [existingAssignments, newAssignments]);
 
@@ -310,36 +313,33 @@ export default function PlanlaegSyn() {
   };
 
   const assignInspectionsToInspector = (inspectorId: string, inspectionIdsToAssign: number[]) => {
-    const inspectionsToAssign = inspections.filter(
-      (insp) => inspectionIdsToAssign.includes(insp.id)
-    );
-    
+    const inspectionsToAssign = inspections.filter((insp) => inspectionIdsToAssign.includes(insp.id));
+
     if (inspectionsToAssign.length === 0) return;
-    
+
     setNewAssignments((prev) => {
       const next = new Map(prev);
       const existing = next.get(inspectorId) || [];
-      
+
       // Add new inspections (avoid duplicates with both existing and new)
       const existingNewIds = new Set(existing.map((i) => i.id));
-      const existingScheduledIds = new Set(
-        (existingAssignments.get(inspectorId) || []).map((i) => i.id)
-      );
-      const newItems = inspectionsToAssign.filter(
-        (i) => !existingNewIds.has(i.id) && !existingScheduledIds.has(i.id)
-      );
-      
+      const existingScheduledIds = new Set((existingAssignments.get(inspectorId) || []).map((i) => i.id));
+      const newItems = inspectionsToAssign.filter((i) => !existingNewIds.has(i.id) && !existingScheduledIds.has(i.id));
+
       // Also remove from other inspectors (each inspection can only be assigned to one)
       next.forEach((items, key) => {
         if (key !== inspectorId) {
-          next.set(key, items.filter((item) => !inspectionIdsToAssign.includes(item.id)));
+          next.set(
+            key,
+            items.filter((item) => !inspectionIdsToAssign.includes(item.id)),
+          );
         }
       });
-      
+
       next.set(inspectorId, [...existing, ...newItems]);
       return next;
     });
-    
+
     // Clear selection after assignment
     setSelectedInspectionIds([]);
   };
@@ -362,11 +362,14 @@ export default function PlanlaegSyn() {
       toast.info("Eksisterende inspektioner kan ikke fjernes");
       return;
     }
-    
+
     setNewAssignments((prev) => {
       const next = new Map(prev);
       const existing = next.get(inspectorId) || [];
-      next.set(inspectorId, existing.filter((i) => i.id !== inspectionId));
+      next.set(
+        inspectorId,
+        existing.filter((i) => i.id !== inspectionId),
+      );
       return next;
     });
   };
@@ -375,7 +378,7 @@ export default function PlanlaegSyn() {
   const handleDragStart = (event: DragStartEvent) => {
     const inspectionId = Number(event.active.id.toString().replace("inspection-", ""));
     setActiveDragId(inspectionId);
-    
+
     // If dragged item is not selected, select only it
     if (!selectedInspectionIds.includes(inspectionId)) {
       setSelectedInspectionIds([inspectionId]);
@@ -384,12 +387,12 @@ export default function PlanlaegSyn() {
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { over } = event;
-    
+
     if (over && over.id.toString().startsWith("inspector-")) {
       const inspectorId = over.id.toString().replace("inspector-", "");
       assignInspectionsToInspector(inspectorId, selectedInspectionIds);
     }
-    
+
     setActiveDragId(null);
   };
 
@@ -413,7 +416,7 @@ export default function PlanlaegSyn() {
       }
 
       toast.success(`Synkroniseret ${data.synced} vagter fra WorkFeed`);
-      
+
       // Refresh the existing scheduled inspections
       queryClient.invalidateQueries({ queryKey: ["existing-scheduled-inspections", selectedDate] });
     } catch (err) {
@@ -478,10 +481,7 @@ export default function PlanlaegSyn() {
     setIsSending(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke(
-        "send-manual-shifts-to-workfeed",
-        { body: payload }
-      );
+      const { data, error } = await supabase.functions.invoke("send-manual-shifts-to-workfeed", { body: payload });
 
       if (error) {
         console.error("Edge function error:", error);
@@ -492,17 +492,19 @@ export default function PlanlaegSyn() {
       if (!data?.success && data?.failed > 0) {
         toast.error(`${data.failed} inspektion${data.failed !== 1 ? "er" : ""} fejlede`);
       } else {
-        toast.success(`${data.sent} ny${data.sent !== 1 ? "e" : ""} inspektion${data.sent !== 1 ? "er" : ""} sendt til WorkFeed`);
-        
+        toast.success(
+          `${data.sent} ny${data.sent !== 1 ? "e" : ""} inspektion${data.sent !== 1 ? "er" : ""} sendt til WorkFeed`,
+        );
+
         // Insert shifts locally into supabase_shifts for immediate visibility
         // This ensures the inspector_capacity_view has the data right away
         if (data.results && Array.isArray(data.results)) {
           const shiftsToInsert = data.results
             .filter((r: any) => r.success && r.wf_shift_id)
             .map((r: any) => {
-              const assignment = payload.assignments.find(a => a.monday_item_id === r.monday_item_id);
-              const inspector = inspectors.find(i => i.inspector_uuid === assignment?.inspector_id);
-              
+              const assignment = payload.assignments.find((a) => a.monday_item_id === r.monday_item_id);
+              const inspector = inspectors.find((i) => i.inspector_uuid === assignment?.inspector_id);
+
               return {
                 wf_shift_id: r.wf_shift_id,
                 wf_employee_id: r.wf_employee_id || "",
@@ -521,9 +523,7 @@ export default function PlanlaegSyn() {
             });
 
           if (shiftsToInsert.length > 0) {
-            const { error: insertError } = await supabase
-              .from("supabase_shifts")
-              .insert(shiftsToInsert);
+            const { error: insertError } = await supabase.from("supabase_shifts").insert(shiftsToInsert);
 
             if (insertError) {
               console.warn("Failed to insert shifts locally (will sync later):", insertError);
@@ -538,7 +538,7 @@ export default function PlanlaegSyn() {
       setNewAssignments(new Map());
       setScheduledTimes(new Map());
       setSelectedInspectionIds([]);
-      
+
       // Refetch both inspections and existing scheduled items
       queryClient.invalidateQueries({ queryKey: ["planlaeg-inspections"] });
       queryClient.invalidateQueries({ queryKey: ["existing-scheduled-inspections"] });
@@ -568,8 +568,8 @@ export default function PlanlaegSyn() {
           landsdele={landsdele}
           afdelinger={afdelinger}
         />
-        
-      {selectedDate && (
+
+        {selectedDate && (
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
@@ -578,20 +578,12 @@ export default function PlanlaegSyn() {
               disabled={isSyncing}
               title="Synkroniser vagter fra WorkFeed for denne dato"
             >
-              {isSyncing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-              <span className="ml-2 hidden sm:inline">Synk vagter</span>
+              {isSyncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              <span className="ml-2 hidden sm:inline">Sync vagter</span>
             </Button>
-            
+
             {totalNewAssignments > 0 && (
-              <Button
-                size="sm"
-                onClick={handleSendToWorkfeed}
-                disabled={isSending || !allNewAssignmentsHaveTimes}
-              >
+              <Button size="sm" onClick={handleSendToWorkfeed} disabled={isSending || !allNewAssignmentsHaveTimes}>
                 {isSending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -636,11 +628,8 @@ export default function PlanlaegSyn() {
             selectedDate={selectedDate || ""}
           />
         </div>
-        
-        <DragOverlay>
-          {activeDragId !== null && <DragPreview count={dragCount} />}
-        </DragOverlay>
 
+        <DragOverlay>{activeDragId !== null && <DragPreview count={dragCount} />}</DragOverlay>
       </DndContext>
     </div>
   );
