@@ -70,8 +70,8 @@ export async function getMondayItems(
     .from("monday_items_selected")
     .select("*", { count: "exact" })
     .abortSignal(signal || new AbortController().signal)
-    // Filter out items already sent to WorkFeed
-    .or("schedule_status.is.null,schedule_status.neq.sent_to_workfeed");
+    // Only include items NOT yet sent to WorkFeed
+    .is("wf_shift_id", null);
 
   // Apply filters
   if (filters.regions && filters.regions.length > 0) {
