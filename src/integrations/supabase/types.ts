@@ -84,6 +84,71 @@ export type Database = {
           },
         ]
       }
+      daily_route_totals: {
+        Row: {
+          calculated_at: string | null
+          created_at: string | null
+          id: string
+          includes_return_home: boolean | null
+          inspection_count: number
+          inspections_km: number | null
+          inspector_id: string
+          inspector_name: string
+          last_stop_address: string | null
+          last_stop_lat: number | null
+          last_stop_lng: number | null
+          return_home_km: number | null
+          route_date: string
+          total_route_km: number
+          total_travel_minutes: number
+          updated_at: string | null
+        }
+        Insert: {
+          calculated_at?: string | null
+          created_at?: string | null
+          id?: string
+          includes_return_home?: boolean | null
+          inspection_count?: number
+          inspections_km?: number | null
+          inspector_id: string
+          inspector_name: string
+          last_stop_address?: string | null
+          last_stop_lat?: number | null
+          last_stop_lng?: number | null
+          return_home_km?: number | null
+          route_date: string
+          total_route_km?: number
+          total_travel_minutes?: number
+          updated_at?: string | null
+        }
+        Update: {
+          calculated_at?: string | null
+          created_at?: string | null
+          id?: string
+          includes_return_home?: boolean | null
+          inspection_count?: number
+          inspections_km?: number | null
+          inspector_id?: string
+          inspector_name?: string
+          last_stop_address?: string | null
+          last_stop_lat?: number | null
+          last_stop_lng?: number | null
+          return_home_km?: number | null
+          route_date?: string
+          total_route_km?: number
+          total_travel_minutes?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_route_totals_inspector_id_fkey"
+            columns: ["inspector_id"]
+            isOneToOne: false
+            referencedRelation: "inspectors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       departments: {
         Row: {
           created_at: string | null
@@ -646,6 +711,9 @@ export type Database = {
           note: string | null
           raw: Json | null
           region: string | null
+          route_km: number | null
+          route_sequence: number | null
+          route_travel_minutes: number | null
           schedule_status: string | null
           scheduled_at: string | null
           scheduled_by: string | null
@@ -677,6 +745,9 @@ export type Database = {
           note?: string | null
           raw?: Json | null
           region?: string | null
+          route_km?: number | null
+          route_sequence?: number | null
+          route_travel_minutes?: number | null
           schedule_status?: string | null
           scheduled_at?: string | null
           scheduled_by?: string | null
@@ -708,6 +779,9 @@ export type Database = {
           note?: string | null
           raw?: Json | null
           region?: string | null
+          route_km?: number | null
+          route_sequence?: number | null
+          route_travel_minutes?: number | null
           schedule_status?: string | null
           scheduled_at?: string | null
           scheduled_by?: string | null
@@ -1086,6 +1160,9 @@ export type Database = {
           last_sync_attempt: string | null
           lat: number | null
           lng: number | null
+          route_km: number | null
+          route_sequence: number | null
+          route_travel_minutes: number | null
           start_time_local: string | null
           start_utc: string | null
           status: string
@@ -1113,6 +1190,9 @@ export type Database = {
           last_sync_attempt?: string | null
           lat?: number | null
           lng?: number | null
+          route_km?: number | null
+          route_sequence?: number | null
+          route_travel_minutes?: number | null
           start_time_local?: string | null
           start_utc?: string | null
           status?: string
@@ -1140,6 +1220,9 @@ export type Database = {
           last_sync_attempt?: string | null
           lat?: number | null
           lng?: number | null
+          route_km?: number | null
+          route_sequence?: number | null
+          route_travel_minutes?: number | null
           start_time_local?: string | null
           start_utc?: string | null
           status?: string
