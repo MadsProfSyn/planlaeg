@@ -539,9 +539,23 @@ export default function PlanlaegSyn() {
       setScheduledTimes(new Map());
       setSelectedInspectionIds([]);
 
-      // Refetch both inspections and existing scheduled items
-      queryClient.invalidateQueries({ queryKey: ["planlaeg-inspections"] });
-      queryClient.invalidateQueries({ queryKey: ["existing-scheduled-inspections"] });
+      // Refetch all relevant queries to update UI immediately
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["planlaeg-inspections"] }),
+        queryClient.invalidateQueries({ queryKey: ["existing-scheduled-inspections"] }),
+        queryClient.invalidateQueries({ queryKey: ["planlaeg-inspectors"] }),
+      ]);
+
+      // Sync shifts to ensure the new shifts appear as "B" items on the inspector panel
+      try {
+        await supabase.functions.invoke("sync-workfeed-shifts", {
+          body: { startDate: selectedDate, endDate: selectedDate },
+        });
+        // Re-invalidate inspectors after sync to get fresh shift_details
+        await queryClient.invalidateQueries({ queryKey: ["planlaeg-inspectors"] });
+      } catch (syncError) {
+        console.warn("Auto-sync after send failed (will sync on next cron):", syncError);
+      }
     } catch (err) {
       console.error("Send to WorkFeed error:", err);
       toast.error("Fejl ved afsendelse til WorkFeed");
