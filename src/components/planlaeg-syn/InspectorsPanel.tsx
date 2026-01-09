@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { useDroppable } from "@dnd-kit/core";
 import { Info, X, Plus, Clock, Search, Route, Loader2, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScheduleTimesDialog } from "./ScheduleTimesDialog";
+import { InlineTimeEditor } from "./InlineTimeEditor";
 import type { Inspector } from "@/pages/PlanlaegSyn";
 import type { MondayItem } from "@/lib/supabase";
 import type { InspectorRoute } from "@/types/route-optimizer";
@@ -287,11 +288,18 @@ function DroppableInspector({
                 return seqA - seqB;
               });
 
-              return sortedItems.map((item) => {
+                return sortedItems.map((item) => {
                 const abbr = getTypeAbbreviation(item.synstype);
                 const scheduledTime = scheduledTimes.get(item.id);
                 const routeStop = routeData?.stops.find((s) => s.monday_item_id === item.id);
                 const isExisting = existingItemIds.has(item.id);
+                
+                // Handler for inline time changes
+                const handleInlineTimeChange = (inspectionId: number, times: { start: string; end: string }) => {
+                  const newTimes = new Map<number, { start: string; end: string }>();
+                  newTimes.set(inspectionId, times);
+                  onUpdateScheduledTimes(newTimes);
+                };
                 
                 return (
                   <div
@@ -308,16 +316,25 @@ function DroppableInspector({
                       </span>
                     )}
                     
-                    {/* Main content: Time • Type • Address - all inline with truncation */}
+                    {/* Inline time editor - clickable to edit */}
+                    {!isExisting && (
+                      <InlineTimeEditor
+                        inspection={item}
+                        scheduledTime={scheduledTime}
+                        onTimeChange={handleInlineTimeChange}
+                        compact
+                      />
+                    )}
+                    
+                    {/* For existing items, show static time */}
+                    {isExisting && scheduledTime && (
+                      <span className="flex-shrink-0 font-mono text-[10px] text-muted-foreground px-1">
+                        {scheduledTime.start}-{scheduledTime.end}
+                      </span>
+                    )}
+                    
+                    {/* Main content: Type • Address */}
                     <div className="flex items-center gap-1 min-w-0 flex-1">
-                      {scheduledTime && (
-                        <>
-                          <span className="flex-shrink-0 font-mono text-[10px] text-muted-foreground">
-                            {scheduledTime.start}-{scheduledTime.end}
-                          </span>
-                          <span className="text-muted-foreground/50">•</span>
-                        </>
-                      )}
                       <span className={cn("flex-shrink-0 font-medium", getTypeColor(abbr).split(' ')[1] || 'text-muted-foreground')}>
                         {abbr}
                       </span>
