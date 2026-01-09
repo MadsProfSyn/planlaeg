@@ -395,6 +395,7 @@ function DroppableInspector({
         inspections={assignedItems}
         existingTimes={scheduledTimes}
         onSave={onUpdateScheduledTimes}
+        routeData={routeData?.stops}
       />
 
     </>
