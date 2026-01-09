@@ -11,7 +11,14 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Route } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Route, UtensilsCrossed, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { calculateInspectionDuration } from "@/lib/inspection-duration";
 import type { MondayItem } from "@/lib/supabase";
@@ -25,6 +32,13 @@ interface ScheduleTimesDialogProps {
   existingTimes: Map<number, { start: string; end: string }>;
   onSave: (times: Map<number, { start: string; end: string }>) => void;
   routeData?: RouteStop[];
+}
+
+interface LunchBreak {
+  id: string;
+  afterInspectionId: number;
+  startTime: string;
+  durationMinutes: number;
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -85,6 +99,7 @@ export function ScheduleTimesDialog({
   // Local state for editing times
   const [localTimes, setLocalTimes] = useState<Map<number, { start: string; end: string }>>(new Map());
   const [cascadeEnabled, setCascadeEnabled] = useState(true);
+  const [lunchBreaks, setLunchBreaks] = useState<LunchBreak[]>([]);
   const didInitRef = useRef(false);
 
   // Merge inspection data with route data to get duration and travel times
@@ -135,11 +150,108 @@ export function ScheduleTimesDialog({
       didInitRef.current = true;
     }
 
-    // Reset init flag when dialog closes
+    // Reset init flag and lunch breaks when dialog closes
     if (!open) {
       didInitRef.current = false;
+      setLunchBreaks([]);
     }
   }, [open, inspectionTimeData, existingTimes]);
+
+  // Recalculate times accounting for lunch breaks
+  const recalculateTimesWithLunch = (currentLunchBreaks: LunchBreak[]) => {
+    setLocalTimes((prev) => {
+      const next = new Map(prev);
+
+      if (inspectionTimeData.length === 0) return prev;
+
+      // Keep first inspection's time unchanged
+      const firstInspection = inspectionTimeData[0];
+      const firstTimes = prev.get(firstInspection.inspection.id);
+      let currentEndMinutes = timeToMinutes(firstTimes?.end || "09:00");
+
+      // Recalculate from second inspection onwards
+      for (let i = 1; i < inspectionTimeData.length; i++) {
+        const data = inspectionTimeData[i];
+        const prevData = inspectionTimeData[i - 1];
+
+        // Check if there's a lunch break after previous inspection
+        const lunchAfterPrev = currentLunchBreaks.find(
+          (l) => l.afterInspectionId === prevData.inspection.id
+        );
+
+        let newStartMinutes: number;
+
+        if (lunchAfterPrev) {
+          // Start after lunch ends + travel time
+          const lunchEnd = timeToMinutes(lunchAfterPrev.startTime) + lunchAfterPrev.durationMinutes;
+          newStartMinutes = roundToNearest5(lunchEnd + data.travelFromPreviousMins);
+        } else {
+          // Normal: previous end + travel time
+          const prevEnd = timeToMinutes(next.get(prevData.inspection.id)?.end || "09:00");
+          newStartMinutes = roundToNearest5(prevEnd + data.travelFromPreviousMins);
+        }
+
+        const newEndMinutes = newStartMinutes + data.durationMinutes;
+
+        next.set(data.inspection.id, {
+          start: minutesToTime(newStartMinutes),
+          end: minutesToTime(newEndMinutes),
+        });
+
+        currentEndMinutes = newEndMinutes;
+      }
+
+      return next;
+    });
+  };
+
+  const handleAddLunchBreak = (afterInspectionId: number) => {
+    const inspectionIndex = inspectionTimeData.findIndex(
+      (d) => d.inspection.id === afterInspectionId
+    );
+    if (inspectionIndex === -1) return;
+
+    // Get end time of that inspection
+    const currentTimes = localTimes.get(afterInspectionId);
+    const endTime = currentTimes?.end || "12:00";
+
+    const newLunch: LunchBreak = {
+      id: `lunch-${Date.now()}`,
+      afterInspectionId,
+      startTime: endTime,
+      durationMinutes: 30,
+    };
+
+    const newLunchBreaks = [
+      ...lunchBreaks.filter((l) => l.afterInspectionId !== afterInspectionId),
+      newLunch,
+    ];
+
+    setLunchBreaks(newLunchBreaks);
+    recalculateTimesWithLunch(newLunchBreaks);
+  };
+
+  const handleLunchStartChange = (lunchId: string, newStartTime: string) => {
+    const newLunchBreaks = lunchBreaks.map((l) =>
+      l.id === lunchId ? { ...l, startTime: newStartTime } : l
+    );
+    setLunchBreaks(newLunchBreaks);
+    recalculateTimesWithLunch(newLunchBreaks);
+  };
+
+  const handleLunchDurationChange = (lunchId: string, newDuration: number) => {
+    const newLunchBreaks = lunchBreaks.map((l) =>
+      l.id === lunchId ? { ...l, durationMinutes: newDuration } : l
+    );
+    setLunchBreaks(newLunchBreaks);
+    recalculateTimesWithLunch(newLunchBreaks);
+  };
+
+  const handleRemoveLunchBreak = (lunchId: string) => {
+    const newLunchBreaks = lunchBreaks.filter((l) => l.id !== lunchId);
+    setLunchBreaks(newLunchBreaks);
+    recalculateTimesWithLunch(newLunchBreaks);
+  };
 
   const handleStartTimeChange = (inspectionId: number, newStartTime: string) => {
     setLocalTimes((prev) => {
@@ -167,11 +279,22 @@ export function ScheduleTimesDialog({
 
         for (let i = editedIndex + 1; i < inspectionTimeData.length; i++) {
           const data = inspectionTimeData[i];
+          const prevData = inspectionTimeData[i - 1];
 
-          // New start = previous end + travel time (rounded to 5 min)
-          const newStart = roundToNearest5(currentEndMinutes + data.travelFromPreviousMins);
+          // Check for lunch break after previous inspection
+          const lunchAfterPrev = lunchBreaks.find(
+            (l) => l.afterInspectionId === prevData.inspection.id
+          );
+
+          let newStart: number;
+          if (lunchAfterPrev) {
+            const lunchEnd = timeToMinutes(lunchAfterPrev.startTime) + lunchAfterPrev.durationMinutes;
+            newStart = roundToNearest5(lunchEnd + data.travelFromPreviousMins);
+          } else {
+            newStart = roundToNearest5(currentEndMinutes + data.travelFromPreviousMins);
+          }
+
           const newEnd = newStart + data.durationMinutes;
-
           next.set(data.inspection.id, {
             start: minutesToTime(newStart),
             end: minutesToTime(newEnd),
@@ -198,6 +321,7 @@ export function ScheduleTimesDialog({
   };
 
   const handleSave = () => {
+    // Only save inspection times, not lunch breaks
     onSave(localTimes);
     onOpenChange(false);
   };
@@ -218,6 +342,8 @@ export function ScheduleTimesDialog({
             {inspectionTimeData.map((data, index) => {
               const abbr = getTypeAbbreviation(data.inspection.synstype);
               const times = localTimes.get(data.inspection.id) || { start: "08:00", end: "09:00" };
+              const isLast = index === inspectionTimeData.length - 1;
+              const lunchBreak = lunchBreaks.find((l) => l.afterInspectionId === data.inspection.id);
 
               return (
                 <div key={data.inspection.id}>
@@ -292,6 +418,71 @@ export function ScheduleTimesDialog({
                       </div>
                     </div>
                   </div>
+
+                  {/* Lunch break section - after each inspection except last */}
+                  {!isLast && (
+                    <>
+                      {lunchBreak ? (
+                        <div className="flex items-center gap-3 py-2 px-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-md my-2 mx-1">
+                          <UtensilsCrossed className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                          <span className="font-medium text-amber-800 dark:text-amber-300 text-sm">
+                            Frokostpause
+                          </span>
+
+                          <input
+                            type="time"
+                            value={lunchBreak.startTime}
+                            onChange={(e) => handleLunchStartChange(lunchBreak.id, e.target.value)}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-24 h-8 px-2 text-sm rounded-md border border-input bg-background"
+                          />
+
+                          <span className="text-sm text-muted-foreground">-</span>
+
+                          <span className="text-sm text-muted-foreground w-14">
+                            {minutesToTime(timeToMinutes(lunchBreak.startTime) + lunchBreak.durationMinutes)}
+                          </span>
+
+                          <Select
+                            value={String(lunchBreak.durationMinutes)}
+                            onValueChange={(v) => handleLunchDurationChange(lunchBreak.id, Number(v))}
+                          >
+                            <SelectTrigger className="w-20 h-8">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="15">15 min</SelectItem>
+                              <SelectItem value="30">30 min</SelectItem>
+                              <SelectItem value="45">45 min</SelectItem>
+                              <SelectItem value="60">60 min</SelectItem>
+                            </SelectContent>
+                          </Select>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 ml-auto"
+                            onClick={() => handleRemoveLunchBreak(lunchBreak.id)}
+                          >
+                            <X className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex justify-center my-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs text-muted-foreground hover:text-foreground h-7 px-2"
+                            onClick={() => handleAddLunchBreak(data.inspection.id)}
+                          >
+                            <Plus className="h-3 w-3 mr-1" />
+                            Tilføj frokostpause
+                          </Button>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               );
             })}
