@@ -29,6 +29,7 @@ interface InspectorsPanelProps {
   hasSelectedInspections: boolean;
   scheduledTimes: Map<number, { start: string; end: string }>;
   onUpdateScheduledTimes: (times: Map<number, { start: string; end: string }>) => void;
+  onAutoScheduledTimes: (times: Map<number, { start: string; end: string }>) => void;
   getInspectorRoute?: (inspectorId: string) => InspectorRoute | undefined;
   isRouteLoading?: boolean;
   selectedDate: string;
@@ -82,6 +83,7 @@ interface DroppableInspectorProps {
   hasSelectedInspections: boolean;
   scheduledTimes: Map<number, { start: string; end: string }>;
   onUpdateScheduledTimes: (times: Map<number, { start: string; end: string }>) => void;
+  onAutoScheduledTimes: (times: Map<number, { start: string; end: string }>) => void;
   routeData?: InspectorRoute;
   isRouteLoading?: boolean;
   selectedDate: string;
@@ -97,6 +99,7 @@ function DroppableInspector({
   hasSelectedInspections,
   scheduledTimes,
   onUpdateScheduledTimes,
+  onAutoScheduledTimes,
   routeData,
   isRouteLoading,
   selectedDate,
@@ -113,7 +116,7 @@ function DroppableInspector({
   // Check if any assigned items have scheduled times
   const hasScheduledTimes = assignedItems.some((item) => scheduledTimes.has(item.id));
 
-  // Auto-apply route optimizer times when route data arrives
+  // Auto-apply route optimizer times when route data arrives (uses auto handler to skip manual edits)
   useEffect(() => {
     if (routeData && routeData.stops.length > 0) {
       const newTimes = new Map<number, { start: string; end: string }>();
@@ -127,10 +130,10 @@ function DroppableInspector({
         }
       });
       if (newTimes.size > 0) {
-        onUpdateScheduledTimes(newTimes);
+        onAutoScheduledTimes(newTimes);
       }
     }
-  }, [routeData, onUpdateScheduledTimes]);
+  }, [routeData, onAutoScheduledTimes]);
   
   return (
     <>
@@ -413,6 +416,7 @@ export function InspectorsPanel({
   hasSelectedInspections,
   scheduledTimes,
   onUpdateScheduledTimes,
+  onAutoScheduledTimes,
   getInspectorRoute,
   isRouteLoading,
   selectedDate,
@@ -473,6 +477,7 @@ export function InspectorsPanel({
                     hasSelectedInspections={hasSelectedInspections}
                     scheduledTimes={scheduledTimes}
                     onUpdateScheduledTimes={onUpdateScheduledTimes}
+                    onAutoScheduledTimes={onAutoScheduledTimes}
                     routeData={getInspectorRoute?.(inspector.inspector_uuid)}
                     isRouteLoading={isRouteLoading}
                     selectedDate={selectedDate}
