@@ -115,7 +115,11 @@ export function ScheduleTimesDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+      <DialogContent 
+        className="max-w-2xl max-h-[80vh] flex flex-col"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Planlæg tidspunkter for {inspectorName}</DialogTitle>
         </DialogHeader>
@@ -155,22 +159,38 @@ export function ScheduleTimesDialog({
 
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <div className="flex flex-col items-center">
-                      <span className="text-[10px] text-muted-foreground mb-0.5">Start</span>
-                      <Input
+                      <label 
+                        htmlFor={`start-${inspection.id}`}
+                        className="text-[10px] text-muted-foreground mb-0.5"
+                      >
+                        Start
+                      </label>
+                      <input
+                        id={`start-${inspection.id}`}
                         type="time"
                         value={times.start}
                         onChange={(e) => handleStartTimeChange(inspection.id, e.target.value, inspection)}
-                        className="w-24 h-8 text-sm"
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-28 h-9 px-3 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                       />
                     </div>
                     <span className="text-muted-foreground mt-4">→</span>
                     <div className="flex flex-col items-center">
-                      <span className="text-[10px] text-muted-foreground mb-0.5">Slut</span>
-                      <Input
+                      <label 
+                        htmlFor={`end-${inspection.id}`}
+                        className="text-[10px] text-muted-foreground mb-0.5"
+                      >
+                        Slut
+                      </label>
+                      <input
+                        id={`end-${inspection.id}`}
                         type="time"
                         value={times.end}
                         onChange={(e) => handleEndTimeChange(inspection.id, e.target.value)}
-                        className="w-24 h-8 text-sm"
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-28 h-9 px-3 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                       />
                     </div>
                   </div>
