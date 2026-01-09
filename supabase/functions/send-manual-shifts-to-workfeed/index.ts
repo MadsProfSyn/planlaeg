@@ -63,6 +63,73 @@ function normalizeTime(time: string): string {
   const seconds = parts[2]?.padStart(2, "0") || "00";
   return `${hours}:${minutes}:${seconds}`;
 }
+/**
+ * Convert local Danish time (Europe/Copenhagen) to UTC for Monday.com
+ * Denmark is UTC+1 in winter, UTC+2 in summer (DST)
+ */
+function localTimeToUTC(date: string, time: string): { date: string; time: string } {
+  const [year, month, day] = date.split("-").map(Number);
+  const timeParts = time.split(":");
+  const hours = parseInt(timeParts[0], 10);
+  const minutes = parseInt(timeParts[1], 10);
+  
+  // Create a date object for the given local time to check DST
+  const testDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  
+  // Use Intl to determine the timezone offset for Copenhagen on this date
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Europe/Copenhagen",
+    timeZoneName: "shortOffset",
+  });
+  const parts = formatter.formatToParts(testDate);
+  const offsetPart = parts.find((p) => p.type === "timeZoneName")?.value || "GMT+1";
+  
+  // Parse offset (e.g., "GMT+1" or "GMT+2")
+  const offsetMatch = offsetPart.match(/GMT([+-])(\d+)/);
+  let offsetHours = 1; // Default to +1 (winter time)
+  if (offsetMatch) {
+    const sign = offsetMatch[1] === "+" ? 1 : -1;
+    offsetHours = sign * parseInt(offsetMatch[2], 10);
+  }
+  
+  // Calculate UTC time by subtracting the offset
+  let utcHours = hours - offsetHours;
+  let utcDay = day;
+  let utcMonth = month;
+  let utcYear = year;
+  
+  // Handle day wraparound for early morning times
+  if (utcHours < 0) {
+    utcHours += 24;
+    utcDay -= 1;
+    if (utcDay < 1) {
+      utcMonth -= 1;
+      if (utcMonth < 1) {
+        utcMonth = 12;
+        utcYear -= 1;
+      }
+      const daysInPrevMonth = new Date(utcYear, utcMonth, 0).getDate();
+      utcDay = daysInPrevMonth;
+    }
+  } else if (utcHours >= 24) {
+    utcHours -= 24;
+    utcDay += 1;
+    const daysInMonth = new Date(utcYear, utcMonth, 0).getDate();
+    if (utcDay > daysInMonth) {
+      utcDay = 1;
+      utcMonth += 1;
+      if (utcMonth > 12) {
+        utcMonth = 1;
+        utcYear += 1;
+      }
+    }
+  }
+  
+  const utcDateStr = `${utcYear}-${String(utcMonth).padStart(2, "0")}-${String(utcDay).padStart(2, "0")}`;
+  const utcTimeStr = `${String(utcHours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:00`;
+  
+  return { date: utcDateStr, time: utcTimeStr };
+}
 
 /**
  * Update Monday.com item with scheduling info
@@ -80,9 +147,14 @@ async function updateMondayItem(
   try {
     const normalizedTime = normalizeTime(startTime);
     
+    // Convert local Copenhagen time to UTC for Monday.com
+    const utc = localTimeToUTC(date, normalizedTime);
+    
+    console.log(`[monday-sync] Time conversion: local ${date} ${normalizedTime} → UTC ${utc.date} ${utc.time}`);
+    
     const columnValues = {
       text_mkyw2jhq: inspectorName,
-      date5: { date, time: normalizedTime },
+      date5: { date: utc.date, time: utc.time },
       boolean: { checked: "true" },
     };
 
@@ -98,7 +170,7 @@ async function updateMondayItem(
       }
     `;
 
-    console.log(`[monday-sync] Updating item ${itemId} with:`, { inspectorName, date, normalizedTime });
+    console.log(`[monday-sync] Updating item ${itemId} with:`, { inspectorName, date, localTime: normalizedTime, utcDate: utc.date, utcTime: utc.time });
 
     const response = await fetch(MONDAY_API_URL, {
       method: "POST",
@@ -129,7 +201,6 @@ async function updateMondayItem(
     return { success: false, error: error.message };
   }
 }
-
 /**
  * Get cached roles from WorkFeed API
  */
