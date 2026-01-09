@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   DndContext,
@@ -66,6 +66,9 @@ export default function PlanlaegSyn() {
 
   // Scheduled times state: inspectionId -> { start, end }
   const [scheduledTimes, setScheduledTimes] = useState<Map<number, { start: string; end: string }>>(new Map());
+  
+  // Track which inspection IDs have been manually edited (to protect from VRP auto-overwrite)
+  const [manualTimeOverrides, setManualTimeOverrides] = useState<Set<number>>(new Set());
 
   // Sending state
   const [isSending, setIsSending] = useState(false);
@@ -73,14 +76,34 @@ export default function PlanlaegSyn() {
   // Syncing shifts state
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // Handler for updating scheduled times
-  const handleUpdateScheduledTimes = (newTimes: Map<number, { start: string; end: string }>) => {
+  // Handler for user-initiated time edits (from ScheduleTimesDialog) - marks items as manually edited
+  const handleUserScheduledTimes = useCallback((newTimes: Map<number, { start: string; end: string }>) => {
     setScheduledTimes((prev) => {
       const next = new Map(prev);
       newTimes.forEach((value, key) => next.set(key, value));
       return next;
     });
-  };
+    // Mark all edited IDs as manual overrides
+    setManualTimeOverrides((prev) => {
+      const next = new Set(prev);
+      newTimes.forEach((_, key) => next.add(key));
+      return next;
+    });
+  }, []);
+  
+  // Handler for auto-applied times (from VRP) - skips items that have been manually edited
+  const handleAutoScheduledTimes = useCallback((newTimes: Map<number, { start: string; end: string }>) => {
+    setScheduledTimes((prev) => {
+      const next = new Map(prev);
+      newTimes.forEach((value, key) => {
+        // Only apply if not manually overridden
+        if (!manualTimeOverrides.has(key)) {
+          next.set(key, value);
+        }
+      });
+      return next;
+    });
+  }, [manualTimeOverrides]);
 
   // Configure sensors with distance constraint to prevent clicks from triggering drag
   const sensors = useSensors(
@@ -636,7 +659,8 @@ export default function PlanlaegSyn() {
             onRemoveAssignment={handleRemoveAssignment}
             hasSelectedInspections={hasSelectedInspections}
             scheduledTimes={scheduledTimes}
-            onUpdateScheduledTimes={handleUpdateScheduledTimes}
+            onUpdateScheduledTimes={handleUserScheduledTimes}
+            onAutoScheduledTimes={handleAutoScheduledTimes}
             getInspectorRoute={getInspectorRoute}
             isRouteLoading={isRouteLoading}
             selectedDate={selectedDate || ""}

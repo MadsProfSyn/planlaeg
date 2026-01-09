@@ -329,7 +329,7 @@ export function ScheduleTimesDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-2xl max-h-[80vh] flex flex-col"
+        className="max-w-3xl max-h-[85vh] flex flex-col"
         onOpenAutoFocus={(e) => e.preventDefault()}
         onPointerDownOutside={(e) => e.preventDefault()}
       >
@@ -355,31 +355,35 @@ export function ScheduleTimesDialog({
                     </div>
                   )}
 
-                  <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
-                    {/* Sequence number */}
-                    {data.sequence < 999 && (
-                      <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-medium flex items-center justify-center">
-                        {data.sequence}
-                      </span>
-                    )}
+                  <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg border bg-muted/30">
+                    {/* Left side: sequence + address + meta */}
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      {/* Sequence number */}
+                      {data.sequence < 999 && (
+                        <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-medium flex items-center justify-center">
+                          {data.sequence}
+                        </span>
+                      )}
 
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">
-                        {data.inspection.adresse || "Ukendt adresse"}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge className={cn("text-[10px] px-1.5 py-0", getTypeColor(abbr))}>
-                          {abbr}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          {data.inspection.antal_vaerelser ?? "?"} vær.
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          ({data.durationMinutes} min)
-                        </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate max-w-[300px]">
+                          {data.inspection.adresse || "Ukendt adresse"}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <Badge className={cn("text-[10px] px-1.5 py-0", getTypeColor(abbr))}>
+                            {abbr}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">
+                            {data.inspection.antal_vaerelser ?? "?"} vær.
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            ({data.durationMinutes} min)
+                          </span>
+                        </div>
                       </div>
                     </div>
 
+                    {/* Right side: time inputs */}
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <div className="flex flex-col items-center">
                         <label
@@ -395,7 +399,7 @@ export function ScheduleTimesDialog({
                           onChange={(e) => handleStartTimeChange(data.inspection.id, e.target.value)}
                           onMouseDown={(e) => e.stopPropagation()}
                           onClick={(e) => e.stopPropagation()}
-                          className="w-28 h-9 px-3 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                          className="w-24 h-9 px-2 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                         />
                       </div>
                       <span className="text-muted-foreground mt-4">→</span>
@@ -413,7 +417,7 @@ export function ScheduleTimesDialog({
                           onChange={(e) => handleEndTimeChange(data.inspection.id, e.target.value)}
                           onMouseDown={(e) => e.stopPropagation()}
                           onClick={(e) => e.stopPropagation()}
-                          className="w-28 h-9 px-3 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                          className="w-24 h-9 px-2 text-sm rounded-md border border-input bg-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                         />
                       </div>
                     </div>
