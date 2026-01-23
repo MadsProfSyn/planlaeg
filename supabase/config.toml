@@ -54,3 +54,9 @@ verify_jwt = false
 
 [functions.cache-travel-times]
 verify_jwt = false
+
+[functions.sync-workfeed-inspectors]
+verify_jwt = false
+
+[functions.sync-inspectors-cron]
+verify_jwt = false
