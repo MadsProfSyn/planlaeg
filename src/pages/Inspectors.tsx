@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search, Pencil, X, Trash2 } from "lucide-react";
+import { Search, Pencil, X, Trash2, RefreshCw, Users } from "lucide-react";
 import { DepartmentSingleSelect } from "@/components/filters/DepartmentSingleSelect";
 import { EditInspectorDialog } from "@/components/inspectors/EditInspectorDialog";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -82,6 +82,7 @@ export default function Inspectors() {
     department_name: string | null;
   } | null>(null);
   const [deletingInspector, setDeletingInspector] = useState<InspectorWithDetails | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -193,11 +194,44 @@ export default function Inspectors() {
 
   const hasFilters = searchQuery || departmentFilter;
 
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("sync-workfeed-inspectors");
+      if (error) throw error;
+      
+      toast({
+        title: "Synkronisering fuldført",
+        description: `${data.new_inspectors_created} oprettet, ${data.inspectors_deactivated || 0} deaktiveret`
+      });
+      
+      queryClient.invalidateQueries({ queryKey: ["inspectors"] });
+    } catch (error) {
+      toast({ title: "Fejl", description: "Synkronisering fejlede", variant: "destructive" });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const totalCount = inspectors?.length ?? 0;
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Synskonsulenter</CardTitle>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <CardTitle>Synskonsulenter</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1.5">
+                <Users className="h-4 w-4" />
+                {isLoading ? "Indlæser..." : `${totalCount} aktive synskonsulenter`}
+              </p>
+            </div>
+            <Button onClick={handleSync} disabled={isSyncing} variant="outline">
+              <RefreshCw className={`h-4 w-4 mr-2 ${isSyncing ? "animate-spin" : ""}`} />
+              {isSyncing ? "Synkroniserer..." : "Synkroniser fra WorkFeed"}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-col sm:flex-row gap-4">

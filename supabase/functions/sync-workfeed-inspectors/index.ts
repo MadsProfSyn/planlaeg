@@ -31,7 +31,9 @@ interface SyncResult {
   new_inspectors_created: number;
   skipped_no_department: number;
   skipped_archived: number;
+  inspectors_deactivated: number;
   created: Array<{ name: string; email: string | null; department: string }>;
+  deactivated: Array<{ name: string; email: string | null }>;
   errors: string[];
 }
 
@@ -49,7 +51,9 @@ serve(async (req) => {
     new_inspectors_created: 0,
     skipped_no_department: 0,
     skipped_archived: 0,
+    inspectors_deactivated: 0,
     created: [],
+    deactivated: [],
     errors: [],
   };
 
@@ -184,9 +188,42 @@ serve(async (req) => {
       }
     }
 
+    // Step 5: Deactivate inspectors no longer in WorkFeed
+    console.log('Checking for inspectors to deactivate...');
+    const activeWfIds = new Set(employees.map(emp => emp.id));
+    
+    const { data: activeInspectors, error: activeError } = await supabase
+      .from('inspectors')
+      .select('id, full_name, email, wf_employee_id')
+      .eq('is_active', true)
+      .not('wf_employee_id', 'is', null);
+
+    if (activeError) {
+      console.error('Error fetching active inspectors for deactivation check:', activeError);
+    } else {
+      for (const inspector of activeInspectors || []) {
+        if (!activeWfIds.has(inspector.wf_employee_id)) {
+          // Deactivate - no longer in WorkFeed
+          const { error: deactivateError } = await supabase
+            .from('inspectors')
+            .update({ is_active: false })
+            .eq('id', inspector.id);
+
+          if (deactivateError) {
+            result.errors.push(`Error deactivating ${inspector.full_name}: ${deactivateError.message}`);
+            console.error(`Error deactivating inspector ${inspector.full_name}:`, deactivateError);
+          } else {
+            result.inspectors_deactivated++;
+            result.deactivated.push({ name: inspector.full_name, email: inspector.email });
+            console.log(`Deactivated inspector: ${inspector.full_name} (no longer in WorkFeed)`);
+          }
+        }
+      }
+    }
+
     result.success = true;
     console.log('WorkFeed inspector sync completed successfully');
-    console.log(`Summary: ${result.new_inspectors_created} created, ${result.skipped_no_department} skipped (no dept), ${result.skipped_archived} skipped (archived)`);
+    console.log(`Summary: ${result.new_inspectors_created} created, ${result.inspectors_deactivated} deactivated, ${result.skipped_no_department} skipped (no dept)`);
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
