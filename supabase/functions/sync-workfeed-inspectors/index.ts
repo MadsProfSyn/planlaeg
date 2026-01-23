@@ -13,21 +13,24 @@ const WORKFEED_COMPANY_ID = Deno.env.get('WORKFEED_COMPANY_ID') || 'KASqUqisoJTr
 
 interface WorkFeedEmployee {
   id: string;
-  name: string;
+  firstname: string;
+  lastname: string;
   email?: string;
   phone?: string;
-  departmentId?: string;
-  departmentName?: string;
-  active?: boolean;
+  primaryDepartmentID?: string;
+  departmentIDs?: string[];
+  isDeleted?: boolean;
+  accessLevel?: string;
 }
 
 interface SyncResult {
   success: boolean;
   total_workfeed_employees: number;
+  active_workfeed_employees: number;
   existing_inspectors: number;
   new_inspectors_created: number;
   skipped_no_department: number;
-  skipped_inactive: number;
+  skipped_archived: number;
   created: Array<{ name: string; email: string | null; department: string }>;
   errors: string[];
 }
@@ -41,10 +44,11 @@ serve(async (req) => {
   const result: SyncResult = {
     success: false,
     total_workfeed_employees: 0,
+    active_workfeed_employees: 0,
     existing_inspectors: 0,
     new_inspectors_created: 0,
     skipped_no_department: 0,
-    skipped_inactive: 0,
+    skipped_archived: 0,
     created: [],
     errors: [],
   };
@@ -79,9 +83,20 @@ serve(async (req) => {
     }
 
     const workfeedData = await workfeedResponse.json();
-    const employees: WorkFeedEmployee[] = workfeedData.data || workfeedData || [];
-    result.total_workfeed_employees = employees.length;
-    console.log(`Found ${employees.length} employees in WorkFeed`);
+    const allEmployees: WorkFeedEmployee[] = workfeedData.data || workfeedData || [];
+    result.total_workfeed_employees = allEmployees.length;
+    console.log(`Found ${allEmployees.length} total employees in WorkFeed`);
+    
+    // Log first employee structure to understand the data
+    if (allEmployees.length > 0) {
+      console.log('Sample employee structure:', JSON.stringify(allEmployees[0], null, 2));
+    }
+    
+    // Filter to only active (non-deleted) employees
+    // WorkFeed uses 'isDeleted' field - filter those out
+    const employees = allEmployees.filter(emp => emp.isDeleted !== true);
+    result.active_workfeed_employees = employees.length;
+    console.log(`Found ${employees.length} active (non-deleted) employees in WorkFeed`);
 
     // Step 2: Fetch existing inspectors with wf_employee_id
     console.log('Fetching existing inspectors from Supabase...');
@@ -125,19 +140,14 @@ serve(async (req) => {
 
     for (const emp of newEmployees) {
       try {
-        // Skip inactive employees
-        if (emp.active === false) {
-          result.skipped_inactive++;
-          console.log(`Skipping inactive employee: ${emp.name}`);
-          continue;
-        }
-
-        // Get department mapping
-        const deptInfo = emp.departmentId ? deptMap.get(emp.departmentId) : null;
+        const fullName = `${emp.firstname} ${emp.lastname}`.trim();
+        
+        // Get department mapping using primaryDepartmentID
+        const deptInfo = emp.primaryDepartmentID ? deptMap.get(emp.primaryDepartmentID) : null;
         
         if (!deptInfo) {
           result.skipped_no_department++;
-          console.log(`Skipping employee without valid department: ${emp.name} (dept: ${emp.departmentId || 'none'})`);
+          console.log(`Skipping employee without valid department: ${fullName} (dept: ${emp.primaryDepartmentID || 'none'})`);
           continue;
         }
 
@@ -145,7 +155,7 @@ serve(async (req) => {
         const { error: insertError } = await supabase
           .from('inspectors')
           .insert({
-            full_name: emp.name,
+            full_name: fullName,
             email: emp.email || null,
             phone: emp.phone || null,
             wf_employee_id: emp.id,
@@ -154,28 +164,29 @@ serve(async (req) => {
           });
 
         if (insertError) {
-          result.errors.push(`Error inserting ${emp.name}: ${insertError.message}`);
-          console.error(`Error inserting inspector ${emp.name}:`, insertError);
+          result.errors.push(`Error inserting ${fullName}: ${insertError.message}`);
+          console.error(`Error inserting inspector ${fullName}:`, insertError);
           continue;
         }
 
         result.new_inspectors_created++;
         result.created.push({
-          name: emp.name,
+          name: fullName,
           email: emp.email || null,
           department: deptInfo.name,
         });
-        console.log(`Created inspector: ${emp.name} (${deptInfo.name})`);
+        console.log(`Created inspector: ${fullName} (${deptInfo.name})`);
       } catch (empError) {
+        const fullName = `${emp.firstname} ${emp.lastname}`.trim();
         const errorMsg = empError instanceof Error ? empError.message : String(empError);
-        result.errors.push(`Error processing ${emp.name}: ${errorMsg}`);
-        console.error(`Error processing employee ${emp.name}:`, empError);
+        result.errors.push(`Error processing ${fullName}: ${errorMsg}`);
+        console.error(`Error processing employee ${fullName}:`, empError);
       }
     }
 
     result.success = true;
     console.log('WorkFeed inspector sync completed successfully');
-    console.log(`Summary: ${result.new_inspectors_created} created, ${result.skipped_no_department} skipped (no dept), ${result.skipped_inactive} skipped (inactive)`);
+    console.log(`Summary: ${result.new_inspectors_created} created, ${result.skipped_no_department} skipped (no dept), ${result.skipped_archived} skipped (archived)`);
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
