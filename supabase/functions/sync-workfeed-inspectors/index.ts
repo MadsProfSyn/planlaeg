@@ -1,0 +1,193 @@
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+const WORKFEED_BASE_URL = Deno.env.get('WORKFEED_BASE_URL') || 'https://europe-west1-production-eu-327a3.cloudfunctions.net/api';
+const WORKFEED_API_KEY = Deno.env.get('WORKFEED_API_KEY') || '';
+const WORKFEED_COMPANY_ID = Deno.env.get('WORKFEED_COMPANY_ID') || 'KASqUqisoJTrzapASxwG';
+
+interface WorkFeedEmployee {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  departmentId?: string;
+  departmentName?: string;
+  active?: boolean;
+}
+
+interface SyncResult {
+  success: boolean;
+  total_workfeed_employees: number;
+  existing_inspectors: number;
+  new_inspectors_created: number;
+  skipped_no_department: number;
+  skipped_inactive: number;
+  created: Array<{ name: string; email: string | null; department: string }>;
+  errors: string[];
+}
+
+serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  const result: SyncResult = {
+    success: false,
+    total_workfeed_employees: 0,
+    existing_inspectors: 0,
+    new_inspectors_created: 0,
+    skipped_no_department: 0,
+    skipped_inactive: 0,
+    created: [],
+    errors: [],
+  };
+
+  try {
+    console.log('Starting WorkFeed inspector sync...');
+    
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Step 1: Fetch all employees from WorkFeed API
+    console.log('Fetching employees from WorkFeed...');
+    const workfeedUrl = `${WORKFEED_BASE_URL}/companies/${WORKFEED_COMPANY_ID}/employees`;
+    console.log(`Calling WorkFeed API: ${workfeedUrl}`);
+    
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (WORKFEED_API_KEY) {
+      headers['Authorization'] = WORKFEED_API_KEY;
+    }
+    
+    const workfeedResponse = await fetch(workfeedUrl, {
+      method: 'GET',
+      headers,
+    });
+
+    if (!workfeedResponse.ok) {
+      const errorText = await workfeedResponse.text();
+      throw new Error(`WorkFeed API error: ${workfeedResponse.status} - ${errorText}`);
+    }
+
+    const workfeedData = await workfeedResponse.json();
+    const employees: WorkFeedEmployee[] = workfeedData.data || workfeedData || [];
+    result.total_workfeed_employees = employees.length;
+    console.log(`Found ${employees.length} employees in WorkFeed`);
+
+    // Step 2: Fetch existing inspectors with wf_employee_id
+    console.log('Fetching existing inspectors from Supabase...');
+    const { data: existingInspectors, error: inspectorError } = await supabase
+      .from('inspectors')
+      .select('id, wf_employee_id')
+      .not('wf_employee_id', 'is', null);
+
+    if (inspectorError) {
+      throw new Error(`Error fetching inspectors: ${inspectorError.message}`);
+    }
+
+    const existingWfIds = new Set(
+      (existingInspectors || []).map(i => i.wf_employee_id)
+    );
+    result.existing_inspectors = existingWfIds.size;
+    console.log(`Found ${existingWfIds.size} existing inspectors with wf_employee_id`);
+
+    // Step 3: Fetch department mappings
+    console.log('Fetching department mappings...');
+    const { data: departments, error: deptError } = await supabase
+      .from('departments')
+      .select('id, name, wf_department_id');
+
+    if (deptError) {
+      throw new Error(`Error fetching departments: ${deptError.message}`);
+    }
+
+    // Create mapping from WorkFeed department ID to Supabase department ID
+    const deptMap = new Map<string, { id: string; name: string }>();
+    for (const dept of departments || []) {
+      if (dept.wf_department_id) {
+        deptMap.set(dept.wf_department_id, { id: dept.id, name: dept.name });
+      }
+    }
+    console.log(`Loaded ${deptMap.size} department mappings`);
+
+    // Step 4: Identify new employees and insert them
+    const newEmployees = employees.filter(emp => !existingWfIds.has(emp.id));
+    console.log(`Found ${newEmployees.length} new employees to create`);
+
+    for (const emp of newEmployees) {
+      try {
+        // Skip inactive employees
+        if (emp.active === false) {
+          result.skipped_inactive++;
+          console.log(`Skipping inactive employee: ${emp.name}`);
+          continue;
+        }
+
+        // Get department mapping
+        const deptInfo = emp.departmentId ? deptMap.get(emp.departmentId) : null;
+        
+        if (!deptInfo) {
+          result.skipped_no_department++;
+          console.log(`Skipping employee without valid department: ${emp.name} (dept: ${emp.departmentId || 'none'})`);
+          continue;
+        }
+
+        // Insert new inspector
+        const { error: insertError } = await supabase
+          .from('inspectors')
+          .insert({
+            full_name: emp.name,
+            email: emp.email || null,
+            phone: emp.phone || null,
+            wf_employee_id: emp.id,
+            department_id: deptInfo.id,
+            is_active: true,
+          });
+
+        if (insertError) {
+          result.errors.push(`Error inserting ${emp.name}: ${insertError.message}`);
+          console.error(`Error inserting inspector ${emp.name}:`, insertError);
+          continue;
+        }
+
+        result.new_inspectors_created++;
+        result.created.push({
+          name: emp.name,
+          email: emp.email || null,
+          department: deptInfo.name,
+        });
+        console.log(`Created inspector: ${emp.name} (${deptInfo.name})`);
+      } catch (empError) {
+        const errorMsg = empError instanceof Error ? empError.message : String(empError);
+        result.errors.push(`Error processing ${emp.name}: ${errorMsg}`);
+        console.error(`Error processing employee ${emp.name}:`, empError);
+      }
+    }
+
+    result.success = true;
+    console.log('WorkFeed inspector sync completed successfully');
+    console.log(`Summary: ${result.new_inspectors_created} created, ${result.skipped_no_department} skipped (no dept), ${result.skipped_inactive} skipped (inactive)`);
+
+    return new Response(JSON.stringify(result), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error('WorkFeed inspector sync failed:', errorMsg);
+    result.errors.push(errorMsg);
+    
+    return new Response(JSON.stringify(result), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+});
