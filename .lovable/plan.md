@@ -1,158 +1,143 @@
 
 
-## Automatic Inspector Sync from WorkFeed
+## Show Total Inspectors Count & Add Manual Sync Button
 
-This feature will automatically sync new employees from WorkFeed to the inspectors table daily, ensuring your inspector list stays up-to-date without manual intervention.
+This plan adds a total inspector count display to the Synskonsulenter page, adds a manual sync button to trigger WorkFeed synchronization, and updates the sync logic to also deactivate inspectors that have been deleted/archived in WorkFeed.
 
-### How It Works
+### Changes Overview
 
-1. **Daily Sync**: A cron job runs once daily (at 6:00 AM) to check for new employees in WorkFeed
-2. **Smart Detection**: The system compares WorkFeed employees against existing inspectors using `wf_employee_id`
-3. **Auto-Creation**: New employees found in WorkFeed are automatically added to the inspectors table
-4. **Department Mapping**: New inspectors are assigned to the correct department based on WorkFeed's department data
-5. **No Overwrites**: Existing inspector data (address, phone, skills, etc.) is preserved - only new employees are added
-
-### What Gets Created for New Inspectors
-
-| Field | Source |
-|-------|--------|
-| `full_name` | WorkFeed employee name |
-| `email` | WorkFeed employee email |
-| `wf_employee_id` | WorkFeed employee ID |
-| `department_id` | Mapped from WorkFeed department |
-| `is_active` | Set to `true` |
-| `phone` | From WorkFeed (if available) |
+1. **Update Inspectors Page UI** - Add total count display and manual sync button
+2. **Enhance Sync Edge Function** - Add logic to deactivate inspectors deleted in WorkFeed
 
 ---
 
-### Implementation Details
+### 1. Update Inspectors Page (`src/pages/Inspectors.tsx`)
 
-#### 1. New Edge Function: `sync-inspectors-cron`
-
-**Location:** `supabase/functions/sync-inspectors-cron/index.ts`
-
-This function will:
-- Call the main sync function `sync-workfeed-inspectors`
-- Run via pg_cron daily at 6:00 AM Copenhagen time
+Add a header section with:
+- **Total count display**: Shows "144 synskonsulenter" dynamically
+- **Manual sync button**: "Synkroniser fra WorkFeed" with loading state
 
 ```text
-┌─────────────────────┐
-│   pg_cron (daily)   │
-│   6:00 AM CET       │
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────────────┐
-│  sync-inspectors-cron       │
-│  (Edge Function wrapper)    │
-└─────────┬───────────────────┘
-          │
-          ▼
-┌─────────────────────────────┐
-│  sync-workfeed-inspectors   │
-│  (Main sync logic)          │
-└─────────┬───────────────────┘
-          │
-          ▼
-┌─────────────────────────────┐
-│  WorkFeed API               │
-│  GET /companies/{id}/       │
-│      employees              │
-└─────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  Synskonsulenter                                            │
+│  144 aktive synskonsulenter                                 │
+│                                                             │
+│  [🔄 Synkroniser fra WorkFeed]                              │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-#### 2. New Edge Function: `sync-workfeed-inspectors`
+**UI Changes:**
+- Add `Users` icon from lucide-react for count display
+- Add `RefreshCw` icon for sync button
+- Add loading spinner during sync
+- Show toast notifications for sync results (created, deactivated counts)
+- Add state for `isSyncing` to manage button loading state
+- The sync button will invoke `supabase.functions.invoke("sync-workfeed-inspectors")`
 
-**Location:** `supabase/functions/sync-workfeed-inspectors/index.ts`
+---
 
-Main sync logic:
-1. Fetch all employees from WorkFeed API (`/companies/{id}/employees`)
-2. Fetch existing inspectors from Supabase with their `wf_employee_id`
-3. Identify new employees (those not in Supabase)
-4. Map WorkFeed department IDs to Supabase department IDs
-5. Insert new inspectors with appropriate fields
-6. Return summary of what was synced
+### 2. Update Edge Function (`supabase/functions/sync-workfeed-inspectors/index.ts`)
 
-**Response format:**
-```json
-{
-  "success": true,
-  "total_workfeed_employees": 125,
-  "existing_inspectors": 118,
-  "new_inspectors_created": 7,
-  "skipped_no_department": 0,
-  "created": [
-    { "name": "New Person", "email": "new@example.com", "department": "Storkøbenhavn" }
-  ]
+Enhance the sync logic to handle deleted/archived employees:
+
+**Current behavior:**
+- Creates new inspectors from WorkFeed
+- Skips inactive/deleted employees
+
+**New behavior (additions):**
+- After processing new employees, check for inspectors in Supabase whose `wf_employee_id` is NOT in the active WorkFeed employee list
+- Set `is_active = false` for these inspectors (soft delete)
+- Report count of deactivated inspectors in the response
+
+**Updated SyncResult interface:**
+```typescript
+interface SyncResult {
+  // ... existing fields ...
+  inspectors_deactivated: number;
+  deactivated: Array<{ name: string; email: string | null }>;
 }
 ```
 
-#### 3. Update `supabase/config.toml`
-
-Add configuration for the two new functions:
-```toml
-[functions.sync-inspectors-cron]
-verify_jwt = false
-
-[functions.sync-workfeed-inspectors]
-verify_jwt = false
-```
-
-#### 4. Database: Add Cron Job
-
-Create a daily cron job to run the sync at 6:00 AM:
-```sql
-SELECT cron.schedule(
-  'sync-inspectors-daily',
-  '0 6 * * *',  -- Daily at 6:00 AM
-  $$
-  SELECT net.http_post(
-    url := 'https://wtkyxxfeubpadivllowr.supabase.co/functions/v1/sync-inspectors-cron',
-    headers := jsonb_build_object('Content-Type', 'application/json'),
-    timeout_milliseconds := 60000
-  );
-  $$
-);
+**New sync step (after creating new inspectors):**
+```text
+Step 5: Deactivate inspectors deleted from WorkFeed
+  - Get all active inspectors with wf_employee_id
+  - Compare against active WorkFeed employee IDs
+  - If inspector's wf_employee_id NOT in active list → set is_active = false
 ```
 
 ---
-
-### Files to Create
-
-| File | Purpose |
-|------|---------|
-| `supabase/functions/sync-workfeed-inspectors/index.ts` | Main sync logic - fetches from WorkFeed and creates new inspectors |
-| `supabase/functions/sync-inspectors-cron/index.ts` | Cron wrapper that calls the main sync function |
 
 ### Files to Modify
 
 | File | Changes |
 |------|---------|
-| `supabase/config.toml` | Add entries for both new functions |
-
-### Database Changes
-
-- Add new pg_cron job via SQL insert (not migration) to run daily at 6:00 AM
+| `src/pages/Inspectors.tsx` | Add total count display, sync button with loading state, sync function |
+| `supabase/functions/sync-workfeed-inspectors/index.ts` | Add deactivation logic for deleted/archived employees |
 
 ---
 
-### Manual Trigger Option
+### Technical Details
 
-The `sync-workfeed-inspectors` function can also be called manually via API for on-demand syncing:
+**Inspectors.tsx additions:**
+```typescript
+// New imports
+import { RefreshCw, Users } from "lucide-react";
 
-```bash
-POST /functions/v1/sync-workfeed-inspectors
+// New state
+const [isSyncing, setIsSyncing] = useState(false);
+
+// New function
+const handleSync = async () => {
+  setIsSyncing(true);
+  try {
+    const { data, error } = await supabase.functions.invoke("sync-workfeed-inspectors");
+    if (error) throw error;
+    
+    toast({
+      title: "Synkronisering fuldført",
+      description: `${data.new_inspectors_created} oprettet, ${data.inspectors_deactivated} deaktiveret`
+    });
+    
+    queryClient.invalidateQueries({ queryKey: ["inspectors"] });
+  } catch (error) {
+    toast({ title: "Fejl", description: "Synkronisering fejlede", variant: "destructive" });
+  } finally {
+    setIsSyncing(false);
+  }
+};
 ```
 
-This allows you to trigger a sync anytime without waiting for the daily cron job.
+**Edge function deactivation logic:**
+```typescript
+// Step 5: Deactivate inspectors no longer in WorkFeed
+const activeWfIds = new Set(employees.map(emp => emp.id));
+const { data: activeInspectors } = await supabase
+  .from('inspectors')
+  .select('id, full_name, email, wf_employee_id')
+  .eq('is_active', true)
+  .not('wf_employee_id', 'is', null);
+
+for (const inspector of activeInspectors || []) {
+  if (!activeWfIds.has(inspector.wf_employee_id)) {
+    // Deactivate - no longer in WorkFeed
+    await supabase
+      .from('inspectors')
+      .update({ is_active: false })
+      .eq('id', inspector.id);
+    
+    result.inspectors_deactivated++;
+    result.deactivated.push({ name: inspector.full_name, email: inspector.email });
+  }
+}
+```
 
 ---
 
-### Safety Features
+### Safety Notes
 
-1. **No overwrites**: Existing inspector data is never modified
-2. **Active by default**: New inspectors are created with `is_active = true`
-3. **Department validation**: Inspectors without a valid department mapping are skipped (logged for review)
-4. **Detailed logging**: All sync operations are logged for troubleshooting
-5. **Idempotent**: Running the sync multiple times won't create duplicates (checks by `wf_employee_id`)
+- **Daily cron still runs at 6:00 AM** - no changes to automatic scheduling
+- **Soft delete only** - inspectors are marked `is_active = false`, not permanently deleted
+- **Only affects inspectors with `wf_employee_id`** - manually created inspectors without a WorkFeed link are not affected
+- **Idempotent** - running sync multiple times is safe
 
