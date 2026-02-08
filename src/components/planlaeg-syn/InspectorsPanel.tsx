@@ -210,7 +210,7 @@ function DroppableInspector({
                 </div>
               )}
               {/* Loading indicator */}
-              {isRouteLoading && assignedItems.length > 0 && !routeData && (
+              {isRouteLoading && assignedItems.length > 0 && (
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
               )}
               {assignedItems.length > 0 && (
