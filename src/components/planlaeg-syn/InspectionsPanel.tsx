@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { format, parseISO } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -73,9 +74,22 @@ function DraggableInspection({ inspection, isSelected, onSelect }: DraggableInsp
             {inspection.antal_vaerelser ?? "?"} værelser
           </p>
         </div>
-        <Badge className={cn("flex-shrink-0", getTypeColor(abbr))}>
-          {abbr}
-        </Badge>
+        <div className="flex flex-col items-end gap-1">
+          <Badge className={cn("flex-shrink-0", getTypeColor(abbr))}>
+            {abbr}
+          </Badge>
+          {inspection.dato_tid && (
+            <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+              {(() => {
+                try {
+                  return format(parseISO(inspection.dato_tid), "dd/MM/yyyy");
+                } catch {
+                  return inspection.dato_tid;
+                }
+              })()}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
