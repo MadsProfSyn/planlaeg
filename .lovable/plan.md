@@ -1,35 +1,24 @@
 
 
-## Fix: Show Loading Spinner on Every Inspection Assignment
+## Sidebar Changes
 
-### Problem
+### 1. Hide ProfSyn AI and Planlagte syn from Navigation
 
-The loading spinner in the inspector card only appears for the first inspection placed. After the route optimizer returns data for that inspector, `routeData` is populated and the condition `!routeData` prevents the spinner from ever showing again.
+Add `hidden: true` to those two items in the `navigationItems` array and filter them out during rendering.
 
-### Root Cause
+### 2. Make Admin section a collapsible dropdown
 
-In `src/components/planlaeg-syn/InspectorsPanel.tsx`, the spinner rendering condition is:
+Use the Radix `Collapsible` component (already available) to wrap the Admin section. The "Admin" label becomes a clickable trigger with a chevron icon that toggles the admin menu items open/closed.
 
-```
-isRouteLoading && assignedItems.length > 0 && !routeData
-```
+### Files Modified
 
-After the first route preview, `routeData` is no longer undefined, so `!routeData` is always `false`.
+| File | Change |
+|------|--------|
+| `src/components/AppSidebar.tsx` | Add `hidden` flag to ProfSyn AI & Planlagte syn items; filter them out in render; wrap Admin section in `Collapsible` with clickable trigger |
 
-### Fix
+### Implementation Details
 
-**File:** `src/components/planlaeg-syn/InspectorsPanel.tsx`
+**Navigation items** - Add `hidden: true` to the ProfSyn AI and Planlagte syn entries. Filter with `if (item.hidden) return null` in the render loop.
 
-Remove the `!routeData` condition from the loading spinner check so it becomes:
-
-```
-isRouteLoading && assignedItems.length > 0
-```
-
-This ensures the spinner shows whenever a route preview is loading, regardless of whether previous route data exists.
-
-### Scope
-
-- **1 file changed, 1 line modified** - minimal, focused fix
-- No other files or logic affected
+**Admin collapsible** - Replace the static `SidebarGroupLabel` with a `Collapsible` wrapper. Use local state `adminOpen` (default `false`). The trigger shows "Admin" with a `ChevronDown`/`ChevronRight` icon. The admin menu items render inside `CollapsibleContent`. Auto-open if user is on an admin route.
 
