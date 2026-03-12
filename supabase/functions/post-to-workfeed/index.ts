@@ -258,10 +258,28 @@ Deno.serve(async (req) => {
 
     console.log(`[post-to-workfeed] ✅ Found role ID: ${roleID} for ${enrichedShift.type}`);
 
-    // 4. Convert local time to UTC (Copenhagen = UTC+1 in winter, UTC+2 in summer)
-    // We assume the times in DB are already in local Copenhagen time
-    const startUTC = new Date(`${enrichedShift.date_local}T${enrichedShift.start_time_local}+01:00`).toISOString();
-    const endUTC = new Date(`${enrichedShift.date_local}T${enrichedShift.end_time_local}+01:00`).toISOString();
+    // 4. Convert local time to UTC (DST-aware for Copenhagen)
+    function copenhagenToUTC(dateStr: string, timeStr: string): string {
+      const [year, month, day] = dateStr.split("-").map(Number);
+      const timeParts = timeStr.split(":");
+      const hours = parseInt(timeParts[0], 10);
+      const minutes = parseInt(timeParts[1], 10);
+      const testDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+      const formatter = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Europe/Copenhagen",
+        timeZoneName: "shortOffset",
+      });
+      const parts = formatter.formatToParts(testDate);
+      const offsetPart = parts.find((p) => p.type === "timeZoneName")?.value || "GMT+1";
+      const offsetMatch = offsetPart.match(/GMT([+-])(\d+)/);
+      let offsetHours = 1;
+      if (offsetMatch) {
+        offsetHours = (offsetMatch[1] === "+" ? 1 : -1) * parseInt(offsetMatch[2], 10);
+      }
+      return new Date(Date.UTC(year, month - 1, day, hours - offsetHours, minutes, 0)).toISOString();
+    }
+    const startUTC = copenhagenToUTC(enrichedShift.date_local, enrichedShift.start_time_local);
+    const endUTC = copenhagenToUTC(enrichedShift.date_local, enrichedShift.end_time_local);
 
     console.log(`[post-to-workfeed] Time conversion:`, {
       local_start: `${enrichedShift.date_local}T${enrichedShift.start_time_local}`,
