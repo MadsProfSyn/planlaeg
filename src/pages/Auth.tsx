@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Building2, Loader2 } from 'lucide-react';
 
 export default function Auth() {
-  const { user, loading, signIn, resetPassword } = useAuth();
+  const { user, loading, signIn, resetPassword, isPasswordRecovery } = useAuth();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
