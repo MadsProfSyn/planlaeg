@@ -73,6 +73,11 @@ export default function PlanlaegSyn() {
   // Sending state
   const [isSending, setIsSending] = useState(false);
 
+  // Pending sent assignments (optimistic - shown as "B" items while background send runs)
+  const [pendingSentAssignments, setPendingSentAssignments] = useState<Map<string, MondayItem[]>>(new Map());
+  // Store scheduled times for pending items (needed for error recovery)
+  const [pendingScheduledTimes, setPendingScheduledTimes] = useState<Map<number, { start: string; end: string }>>(new Map());
+
   // Syncing shifts state
   const [isSyncing, setIsSyncing] = useState(false);
 
