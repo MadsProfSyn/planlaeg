@@ -293,14 +293,31 @@ function buildWorkfeedComment(item: any): string {
 }
 
 /**
- * Convert local Copenhagen time to UTC ISO string
+ * Convert local Copenhagen time to UTC ISO string (DST-aware)
  */
 function convertToUTC(dateStr: string, timeStr: string): string {
-  // dateStr: "2026-01-03", timeStr: "09:00"
-  // Copenhagen is UTC+1 in winter, UTC+2 in summer (DST)
-  // For simplicity, using +01:00 (winter time) - can be improved with proper timezone library
-  const localDateTime = `${dateStr}T${timeStr}:00+01:00`;
-  return new Date(localDateTime).toISOString();
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const timeParts = timeStr.split(":");
+  const hours = parseInt(timeParts[0], 10);
+  const minutes = parseInt(timeParts[1], 10);
+
+  // Detect DST offset for Copenhagen on this date
+  const testDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Europe/Copenhagen",
+    timeZoneName: "shortOffset",
+  });
+  const parts = formatter.formatToParts(testDate);
+  const offsetPart = parts.find((p) => p.type === "timeZoneName")?.value || "GMT+1";
+  const offsetMatch = offsetPart.match(/GMT([+-])(\d+)/);
+  let offsetHours = 1;
+  if (offsetMatch) {
+    offsetHours = (offsetMatch[1] === "+" ? 1 : -1) * parseInt(offsetMatch[2], 10);
+  }
+
+  // Build UTC date by subtracting offset
+  const utcDate = new Date(Date.UTC(year, month - 1, day, hours - offsetHours, minutes, 0));
+  return utcDate.toISOString();
 }
 
 Deno.serve(async (req) => {
