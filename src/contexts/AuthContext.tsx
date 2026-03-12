@@ -205,11 +205,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       profile,
       roles,
       loading,
+      isPasswordRecovery,
       signUp,
       signIn,
       signOut,
       resetPassword,
-      hasRole
+      hasRole,
+      clearPasswordRecovery
     }}>
       {children}
     </AuthContext.Provider>
