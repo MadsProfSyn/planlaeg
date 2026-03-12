@@ -271,13 +271,19 @@ export default function PlanlaegSyn() {
     enabled: !!selectedDate && (newAssignments.size > 0 || existingAssignments.size > 0),
     debounceMs: 500,
   });
-  // Combine existing + new assignments for display (but keep them separate for sending)
+  // Combine existing + pending + new assignments for display (but keep them separate for sending)
   const combinedAssignments = useMemo(() => {
     const combined = new Map<string, MondayItem[]>();
 
     // Add existing assignments first
     existingAssignments.forEach((items, inspectorId) => {
       combined.set(inspectorId, [...items]);
+    });
+
+    // Add pending sent assignments (optimistic - treated like existing "B" items)
+    pendingSentAssignments.forEach((items, inspectorId) => {
+      const existing = combined.get(inspectorId) || [];
+      combined.set(inspectorId, [...existing, ...items]);
     });
 
     // Add new assignments (append to existing for same inspector)
@@ -287,7 +293,7 @@ export default function PlanlaegSyn() {
     });
 
     return combined;
-  }, [existingAssignments, newAssignments]);
+  }, [existingAssignments, pendingSentAssignments, newAssignments]);
 
   // Compute assigned inspection IDs - hide both existing and new assignments from left panel
   const assignedInspectionIds = useMemo(() => {
