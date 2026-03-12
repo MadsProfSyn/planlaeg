@@ -170,7 +170,7 @@ export default function PlanlaegSyn() {
 
   // Fetch afdelinger (departments) for inspectors filter
   const { data: afdelinger = [] } = useQuery({
-    queryKey: ["departments"],
+    queryKey: ["planlaeg-departments"],
     queryFn: async () => {
       const { data } = await supabase.functions.invoke("fetch-departments");
       return (data?.data || []).map((d: { value: string }) => d.value);
