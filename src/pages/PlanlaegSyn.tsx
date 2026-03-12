@@ -388,12 +388,19 @@ export default function PlanlaegSyn() {
     }
   };
 
-  // Only allow removing NEW assignments, not existing ones
+  // Only allow removing NEW assignments, not existing or pending ones
   const handleRemoveAssignment = (inspectorId: string, inspectionId: number) => {
     // Check if it's an existing assignment (cannot remove)
     const existingItems = existingAssignments.get(inspectorId) || [];
     if (existingItems.some((i) => i.id === inspectionId)) {
       toast.info("Eksisterende inspektioner kan ikke fjernes");
+      return;
+    }
+
+    // Check if it's a pending sent assignment (cannot remove)
+    const pendingItems = pendingSentAssignments.get(inspectorId) || [];
+    if (pendingItems.some((i) => i.id === inspectionId)) {
+      toast.info("Inspektionen sendes til WorkFeed...");
       return;
     }
 
