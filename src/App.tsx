@@ -20,6 +20,7 @@ import Account from "./pages/admin/Account";
 import MySyn from "./pages/admin/MySyn";
 import Users from "./pages/admin/Users";
 import NotFound from "./pages/NotFound";
+import ResetPassword from "./pages/ResetPassword";
 import { ErrorBoundary } from "@/components/utility/ErrorBoundary";
 
 const queryClient = new QueryClient();
