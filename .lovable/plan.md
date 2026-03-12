@@ -1,40 +1,35 @@
 
 
-## Fix: True Optimistic UI for "Send til WorkFeed"
+## Fix: Show Loading Spinner on Every Inspection Assignment
 
 ### Problem
 
-The previous fix only moved `sync-workfeed-shifts` to background. But the real bottleneck is `send-manual-shifts-to-workfeed` itself (line 508), which takes 30-60 seconds because it POSTs to WorkFeed API and chains to Monday sync. The UI stays locked with the spinner the entire time.
+The loading spinner in the inspector card only appears for the first inspection placed. After the route optimizer returns data for that inspector, `routeData` is populated and the condition `!routeData` prevents the spinner from ever showing again.
 
-### Approach
+### Root Cause
 
-Convert the entire send flow to optimistic: immediately move the assigned inspections from "new" to "pending/sent" visual state, unlock the UI, and run the edge function in the background.
+In `src/components/planlaeg-syn/InspectorsPanel.tsx`, the spinner rendering condition is:
 
-### Implementation
+```
+isRouteLoading && assignedItems.length > 0 && !routeData
+```
 
-**File:** `src/pages/PlanlaegSyn.tsx`
+After the first route preview, `routeData` is no longer undefined, so `!routeData` is always `false`.
 
-1. **Add a `pendingSentAssignments` state** — a `Map<string, MondayItem[]>` that holds items the user just sent, displayed identically to existing "B" items (non-removable).
+### Fix
 
-2. **Merge `pendingSentAssignments` into `existingAssignments`** in the `combinedAssignments` memo, so they immediately appear as booked items on the inspector cards.
+**File:** `src/components/planlaeg-syn/InspectorsPanel.tsx`
 
-3. **Restructure `handleSendToWorkfeed`:**
-   - Before calling the edge function: move items from `newAssignments` into `pendingSentAssignments`
-   - Clear `newAssignments`, `scheduledTimes`, `selectedInspectionIds`
-   - Set `isSending = false` — UI unlocks instantly
-   - Show a toast: "Sender X inspektioner til WorkFeed..."
-   - Fire `send-manual-shifts-to-workfeed` as a background (non-awaited) promise
-   - On success: clear `pendingSentAssignments`, insert shifts locally, invalidate queries, show success toast
-   - On failure: move items back from `pendingSentAssignments` to `newAssignments`, show error toast
+Remove the `!routeData` condition from the loading spinner check so it becomes:
 
-4. **Update `existingAssignments` memo** to include `pendingSentAssignments` so items render as "B"-style items immediately.
+```
+isRouteLoading && assignedItems.length > 0
+```
 
-5. **Update `handleRemoveAssignment`** to also block removal of pending items (same as existing).
+This ensures the spinner shows whenever a route preview is loading, regardless of whether previous route data exists.
 
-### What Changes
-- **1 file**: `src/pages/PlanlaegSyn.tsx`
-- No edge function changes
-- No route calculation changes
-- No changes to what data is sent to WorkFeed/Monday
-- UI unlocks instantly; items visually transition from "new" to "booked" immediately
+### Scope
+
+- **1 file changed, 1 line modified** - minimal, focused fix
+- No other files or logic affected
 

@@ -73,6 +73,11 @@ export default function PlanlaegSyn() {
   // Sending state
   const [isSending, setIsSending] = useState(false);
 
+  // Pending sent assignments (optimistic - shown as "B" items while background send runs)
+  const [pendingSentAssignments, setPendingSentAssignments] = useState<Map<string, MondayItem[]>>(new Map());
+  // Store scheduled times for pending items (needed for error recovery)
+  const [pendingScheduledTimes, setPendingScheduledTimes] = useState<Map<number, { start: string; end: string }>>(new Map());
+
   // Syncing shifts state
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -266,13 +271,19 @@ export default function PlanlaegSyn() {
     enabled: !!selectedDate && (newAssignments.size > 0 || existingAssignments.size > 0),
     debounceMs: 500,
   });
-  // Combine existing + new assignments for display (but keep them separate for sending)
+  // Combine existing + pending + new assignments for display (but keep them separate for sending)
   const combinedAssignments = useMemo(() => {
     const combined = new Map<string, MondayItem[]>();
 
     // Add existing assignments first
     existingAssignments.forEach((items, inspectorId) => {
       combined.set(inspectorId, [...items]);
+    });
+
+    // Add pending sent assignments (optimistic - treated like existing "B" items)
+    pendingSentAssignments.forEach((items, inspectorId) => {
+      const existing = combined.get(inspectorId) || [];
+      combined.set(inspectorId, [...existing, ...items]);
     });
 
     // Add new assignments (append to existing for same inspector)
@@ -282,7 +293,7 @@ export default function PlanlaegSyn() {
     });
 
     return combined;
-  }, [existingAssignments, newAssignments]);
+  }, [existingAssignments, pendingSentAssignments, newAssignments]);
 
   // Compute assigned inspection IDs - hide both existing and new assignments from left panel
   const assignedInspectionIds = useMemo(() => {
@@ -377,12 +388,19 @@ export default function PlanlaegSyn() {
     }
   };
 
-  // Only allow removing NEW assignments, not existing ones
+  // Only allow removing NEW assignments, not existing or pending ones
   const handleRemoveAssignment = (inspectorId: string, inspectionId: number) => {
     // Check if it's an existing assignment (cannot remove)
     const existingItems = existingAssignments.get(inspectorId) || [];
     if (existingItems.some((i) => i.id === inspectionId)) {
       toast.info("Eksisterende inspektioner kan ikke fjernes");
+      return;
+    }
+
+    // Check if it's a pending sent assignment (cannot remove)
+    const pendingItems = pendingSentAssignments.get(inspectorId) || [];
+    if (pendingItems.some((i) => i.id === inspectionId)) {
+      toast.info("Inspektionen sendes til WorkFeed...");
       return;
     }
 
@@ -451,8 +469,8 @@ export default function PlanlaegSyn() {
     }
   };
 
-  // Handle sending to WorkFeed - ONLY send NEW assignments
-  const handleSendToWorkfeed = async () => {
+  // Handle sending to WorkFeed - ONLY send NEW assignments (optimistic UI)
+  const handleSendToWorkfeed = () => {
     // Validate all NEW assignments have times
     const missingTimes: string[] = [];
     newAssignments.forEach((items) => {
@@ -502,87 +520,114 @@ export default function PlanlaegSyn() {
       });
     });
 
-    setIsSending(true);
+    // Capture current state for optimistic update and potential rollback
+    const sentAssignments = new Map(newAssignments);
+    const sentScheduledTimes = new Map<number, { start: string; end: string }>();
+    newAssignments.forEach((items) => {
+      items.forEach((item) => {
+        const times = scheduledTimes.get(item.id);
+        if (times) sentScheduledTimes.set(item.id, times);
+      });
+    });
+    const sendCount = totalNewAssignments;
+    const sendDate = selectedDate;
 
-    try {
-      const { data, error } = await supabase.functions.invoke("send-manual-shifts-to-workfeed", { body: payload });
+    // OPTIMISTIC: Move items to pending, clear new assignments, unlock UI immediately
+    setPendingSentAssignments(sentAssignments);
+    setPendingScheduledTimes(sentScheduledTimes);
+    setNewAssignments(new Map());
+    setScheduledTimes(new Map());
+    setSelectedInspectionIds([]);
+    setIsSending(false);
 
-      if (error) {
-        console.error("Edge function error:", error);
-        toast.error("Fejl ved afsendelse til WorkFeed");
-        return;
-      }
+    toast.info(`Sender ${sendCount} inspektion${sendCount !== 1 ? "er" : ""} til WorkFeed...`);
 
-      if (!data?.success && data?.failed > 0) {
-        toast.error(`${data.failed} inspektion${data.failed !== 1 ? "er" : ""} fejlede`);
-      } else {
-        toast.success(
-          `${data.sent} ny${data.sent !== 1 ? "e" : ""} inspektion${data.sent !== 1 ? "er" : ""} sendt til WorkFeed`,
-        );
+    // Fire edge function in background (non-blocking)
+    supabase.functions.invoke("send-manual-shifts-to-workfeed", { body: payload })
+      .then(async ({ data, error }) => {
+        if (error) {
+          console.error("Edge function error:", error);
+          throw new Error("Edge function error");
+        }
 
-        // Insert shifts locally into supabase_shifts for immediate visibility
-        // This ensures the inspector_capacity_view has the data right away
-        if (data.results && Array.isArray(data.results)) {
-          const shiftsToInsert = data.results
-            .filter((r: any) => r.success && r.wf_shift_id)
-            .map((r: any) => {
-              const assignment = payload.assignments.find((a) => a.monday_item_id === r.monday_item_id);
-              const inspector = inspectors.find((i) => i.inspector_uuid === assignment?.inspector_id);
+        if (!data?.success && data?.failed > 0) {
+          toast.error(`${data.failed} inspektion${data.failed !== 1 ? "er" : ""} fejlede`);
+        } else {
+          toast.success(
+            `${data.sent} ny${data.sent !== 1 ? "e" : ""} inspektion${data.sent !== 1 ? "er" : ""} sendt til WorkFeed`,
+          );
 
-              return {
-                wf_shift_id: r.wf_shift_id,
-                wf_employee_id: r.wf_employee_id || "",
-                inspector_id: assignment?.inspector_id || "",
-                inspector_name: inspector?.navn || "",
-                department: inspector?.afdeling || "Unknown",
-                type: "Syn", // Default type for manually sent shifts
-                status: "RELEASED",
-                date_local: selectedDate,
-                start_time_local: assignment?.start_time || null,
-                end_time_local: assignment?.end_time || null,
-                wf_role_id: r.wf_role_id || null,
-                inspection_queue_id: null,
-                sync_status: "synced",
-              };
-            });
+          // Insert shifts locally into supabase_shifts for immediate visibility
+          if (data.results && Array.isArray(data.results)) {
+            const shiftsToInsert = data.results
+              .filter((r: any) => r.success && r.wf_shift_id)
+              .map((r: any) => {
+                const assignment = payload.assignments.find((a) => a.monday_item_id === r.monday_item_id);
+                const inspector = inspectors.find((i) => i.inspector_uuid === assignment?.inspector_id);
 
-          if (shiftsToInsert.length > 0) {
-            const { error: insertError } = await supabase.from("supabase_shifts").insert(shiftsToInsert);
+                return {
+                  wf_shift_id: r.wf_shift_id,
+                  wf_employee_id: r.wf_employee_id || "",
+                  inspector_id: assignment?.inspector_id || "",
+                  inspector_name: inspector?.navn || "",
+                  department: inspector?.afdeling || "Unknown",
+                  type: "Syn",
+                  status: "RELEASED",
+                  date_local: sendDate,
+                  start_time_local: assignment?.start_time || null,
+                  end_time_local: assignment?.end_time || null,
+                  wf_role_id: r.wf_role_id || null,
+                  inspection_queue_id: null,
+                  sync_status: "synced",
+                };
+              });
 
-            if (insertError) {
-              console.warn("Failed to insert shifts locally (will sync later):", insertError);
-            } else {
-              console.log(`Inserted ${shiftsToInsert.length} shifts locally for immediate visibility`);
+            if (shiftsToInsert.length > 0) {
+              const { error: insertError } = await supabase.from("supabase_shifts").insert(shiftsToInsert);
+              if (insertError) {
+                console.warn("Failed to insert shifts locally (will sync later):", insertError);
+              }
             }
           }
         }
-      }
 
-      // Clear state immediately so UI unlocks
-      setNewAssignments(new Map());
-      setScheduledTimes(new Map());
-      setSelectedInspectionIds([]);
-      setIsSending(false);
-
-      // Refresh queries (fast, local data)
-      queryClient.invalidateQueries({ queryKey: ["planlaeg-inspections"] });
-      queryClient.invalidateQueries({ queryKey: ["existing-scheduled-inspections"] });
-      queryClient.invalidateQueries({ queryKey: ["planlaeg-inspectors"] });
-
-      // Background sync - fire and forget
-      supabase.functions.invoke("sync-workfeed-shifts", {
-        body: { startDate: selectedDate, endDate: selectedDate },
-      }).then(() => {
+        // Clear pending state and refresh queries
+        setPendingSentAssignments(new Map());
+        setPendingScheduledTimes(new Map());
+        queryClient.invalidateQueries({ queryKey: ["planlaeg-inspections"] });
+        queryClient.invalidateQueries({ queryKey: ["existing-scheduled-inspections"] });
         queryClient.invalidateQueries({ queryKey: ["planlaeg-inspectors"] });
-      }).catch((syncError) => {
-        console.warn("Background sync failed:", syncError);
-        toast.warning("Vagter sendt, men baggrundssynkronisering fejlede. Opdateres automatisk.");
+
+        // Background sync - fire and forget
+        supabase.functions.invoke("sync-workfeed-shifts", {
+          body: { startDate: sendDate, endDate: sendDate },
+        }).then(() => {
+          queryClient.invalidateQueries({ queryKey: ["planlaeg-inspectors"] });
+        }).catch((syncError) => {
+          console.warn("Background sync failed:", syncError);
+        });
+      })
+      .catch((err) => {
+        console.error("Send to WorkFeed error:", err);
+        toast.error("Fejl ved afsendelse til WorkFeed. Inspektioner er gendannet.");
+
+        // ROLLBACK: Move pending items back to new assignments
+        setNewAssignments((prev) => {
+          const next = new Map(prev);
+          sentAssignments.forEach((items, inspectorId) => {
+            const existing = next.get(inspectorId) || [];
+            next.set(inspectorId, [...existing, ...items]);
+          });
+          return next;
+        });
+        setScheduledTimes((prev) => {
+          const next = new Map(prev);
+          sentScheduledTimes.forEach((value, key) => next.set(key, value));
+          return next;
+        });
+        setPendingSentAssignments(new Map());
+        setPendingScheduledTimes(new Map());
       });
-    } catch (err) {
-      console.error("Send to WorkFeed error:", err);
-      toast.error("Fejl ved afsendelse til WorkFeed");
-      setIsSending(false);
-    }
   };
 
   return (
@@ -653,10 +698,23 @@ export default function PlanlaegSyn() {
             selectedId={selectedInspectorId}
             onSelect={handleInspectorSelect}
             assignments={combinedAssignments}
-            existingAssignments={existingAssignments}
+            existingAssignments={(() => {
+              // Merge existingAssignments + pendingSentAssignments for "non-removable" display
+              const merged = new Map(existingAssignments);
+              pendingSentAssignments.forEach((items, inspectorId) => {
+                const existing = merged.get(inspectorId) || [];
+                merged.set(inspectorId, [...existing, ...items]);
+              });
+              return merged;
+            })()}
             onRemoveAssignment={handleRemoveAssignment}
             hasSelectedInspections={hasSelectedInspections}
-            scheduledTimes={scheduledTimes}
+            scheduledTimes={(() => {
+              // Merge scheduledTimes + pendingScheduledTimes
+              const merged = new Map(scheduledTimes);
+              pendingScheduledTimes.forEach((value, key) => merged.set(key, value));
+              return merged;
+            })()}
             onUpdateScheduledTimes={handleUserScheduledTimes}
             onAutoScheduledTimes={handleAutoScheduledTimes}
             getInspectorRoute={getInspectorRoute}
