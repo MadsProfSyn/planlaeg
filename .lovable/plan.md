@@ -1,22 +1,35 @@
 
 
-## Problem
+## Fix: Show Loading Spinner on Every Inspection Assignment
 
-After clicking "Sync vagter", the `handleSyncShifts` function only invalidates the `existing-scheduled-inspections` query (line 444). However, the booked shifts (marked "B") shown under each inspector come from the `planlaeg-inspectors` query, which calls `fetch-available-inspectors`. This query is **not** invalidated after sync completes, so the UI keeps showing stale shift data until a full page refresh.
+### Problem
 
-## Fix
+The loading spinner in the inspector card only appears for the first inspection placed. After the route optimizer returns data for that inspector, `routeData` is populated and the condition `!routeData` prevents the spinner from ever showing again.
 
-**File:** `src/pages/PlanlaegSyn.tsx`
+### Root Cause
 
-In the `handleSyncShifts` function (~line 444), add invalidation of the `planlaeg-inspectors` query after the sync succeeds:
+In `src/components/planlaeg-syn/InspectorsPanel.tsx`, the spinner rendering condition is:
 
-```typescript
-// Current (line 444):
-queryClient.invalidateQueries({ queryKey: ["existing-scheduled-inspections", selectedDate] });
-
-// Add:
-queryClient.invalidateQueries({ queryKey: ["planlaeg-inspectors"] });
+```
+isRouteLoading && assignedItems.length > 0 && !routeData
 ```
 
-This is a single-line addition. No other files or logic changes needed.
+After the first route preview, `routeData` is no longer undefined, so `!routeData` is always `false`.
+
+### Fix
+
+**File:** `src/components/planlaeg-syn/InspectorsPanel.tsx`
+
+Remove the `!routeData` condition from the loading spinner check so it becomes:
+
+```
+isRouteLoading && assignedItems.length > 0
+```
+
+This ensures the spinner shows whenever a route preview is loading, regardless of whether previous route data exists.
+
+### Scope
+
+- **1 file changed, 1 line modified** - minimal, focused fix
+- No other files or logic affected
 
