@@ -1,35 +1,21 @@
 
 
-## Fix: Show Loading Spinner on Every Inspection Assignment
-
-### Problem
-
-The loading spinner in the inspector card only appears for the first inspection placed. After the route optimizer returns data for that inspector, `routeData` is populated and the condition `!routeData` prevents the spinner from ever showing again.
+## Bug: React Error #31 — "object with keys {id, name}"
 
 ### Root Cause
 
-In `src/components/planlaeg-syn/InspectorsPanel.tsx`, the spinner rendering condition is:
+**Query key collision** between two pages:
 
-```
-isRouteLoading && assignedItems.length > 0 && !routeData
-```
+- `src/pages/Inspectors.tsx` (line 90): `queryKey: ["departments"]` → fetches from `departments` table, returns `[{id, name, ...}]`
+- `src/pages/PlanlaegSyn.tsx` (line 173): `queryKey: ["departments"]` → fetches from edge function, maps to `string[]`
 
-After the first route preview, `routeData` is no longer undefined, so `!routeData` is always `false`.
+React Query caches the first result. If the user visits `/inspectors` before `/planlaeg-syn`, the cached `[{id, name}]` objects are used as `afdelinger` on PlanlaegSyn. The `PlanlaegSynFiltersBar` then renders `{afdeling}` (an object) as a React child inside `<SelectItem>`, causing React error #31.
 
 ### Fix
 
-**File:** `src/components/planlaeg-syn/InspectorsPanel.tsx`
+**File:** `src/pages/PlanlaegSyn.tsx`
 
-Remove the `!routeData` condition from the loading spinner check so it becomes:
+Rename the query key from `["departments"]` to `["planlaeg-departments"]` (line 173) to avoid the cache collision with the Inspectors page.
 
-```
-isRouteLoading && assignedItems.length > 0
-```
-
-This ensures the spinner shows whenever a route preview is loading, regardless of whether previous route data exists.
-
-### Scope
-
-- **1 file changed, 1 line modified** - minimal, focused fix
-- No other files or logic affected
+One-line change, no other files affected.
 
