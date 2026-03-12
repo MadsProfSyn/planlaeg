@@ -557,32 +557,29 @@ export default function PlanlaegSyn() {
         }
       }
 
-      // Clear new assignments state and refresh
+      // Clear state immediately so UI unlocks
       setNewAssignments(new Map());
       setScheduledTimes(new Map());
       setSelectedInspectionIds([]);
+      setIsSending(false);
 
-      // Refetch all relevant queries to update UI immediately
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["planlaeg-inspections"] }),
-        queryClient.invalidateQueries({ queryKey: ["existing-scheduled-inspections"] }),
-        queryClient.invalidateQueries({ queryKey: ["planlaeg-inspectors"] }),
-      ]);
+      // Refresh queries (fast, local data)
+      queryClient.invalidateQueries({ queryKey: ["planlaeg-inspections"] });
+      queryClient.invalidateQueries({ queryKey: ["existing-scheduled-inspections"] });
+      queryClient.invalidateQueries({ queryKey: ["planlaeg-inspectors"] });
 
-      // Sync shifts to ensure the new shifts appear as "B" items on the inspector panel
-      try {
-        await supabase.functions.invoke("sync-workfeed-shifts", {
-          body: { startDate: selectedDate, endDate: selectedDate },
-        });
-        // Re-invalidate inspectors after sync to get fresh shift_details
-        await queryClient.invalidateQueries({ queryKey: ["planlaeg-inspectors"] });
-      } catch (syncError) {
-        console.warn("Auto-sync after send failed (will sync on next cron):", syncError);
-      }
+      // Background sync - fire and forget
+      supabase.functions.invoke("sync-workfeed-shifts", {
+        body: { startDate: selectedDate, endDate: selectedDate },
+      }).then(() => {
+        queryClient.invalidateQueries({ queryKey: ["planlaeg-inspectors"] });
+      }).catch((syncError) => {
+        console.warn("Background sync failed:", syncError);
+        toast.warning("Vagter sendt, men baggrundssynkronisering fejlede. Opdateres automatisk.");
+      });
     } catch (err) {
       console.error("Send to WorkFeed error:", err);
       toast.error("Fejl ved afsendelse til WorkFeed");
-    } finally {
       setIsSending(false);
     }
   };
