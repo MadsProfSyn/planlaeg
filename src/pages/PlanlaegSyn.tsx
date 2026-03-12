@@ -698,10 +698,23 @@ export default function PlanlaegSyn() {
             selectedId={selectedInspectorId}
             onSelect={handleInspectorSelect}
             assignments={combinedAssignments}
-            existingAssignments={existingAssignments}
+            existingAssignments={(() => {
+              // Merge existingAssignments + pendingSentAssignments for "non-removable" display
+              const merged = new Map(existingAssignments);
+              pendingSentAssignments.forEach((items, inspectorId) => {
+                const existing = merged.get(inspectorId) || [];
+                merged.set(inspectorId, [...existing, ...items]);
+              });
+              return merged;
+            })()}
             onRemoveAssignment={handleRemoveAssignment}
             hasSelectedInspections={hasSelectedInspections}
-            scheduledTimes={scheduledTimes}
+            scheduledTimes={(() => {
+              // Merge scheduledTimes + pendingScheduledTimes
+              const merged = new Map(scheduledTimes);
+              pendingScheduledTimes.forEach((value, key) => merged.set(key, value));
+              return merged;
+            })()}
             onUpdateScheduledTimes={handleUserScheduledTimes}
             onAutoScheduledTimes={handleAutoScheduledTimes}
             getInspectorRoute={getInspectorRoute}
