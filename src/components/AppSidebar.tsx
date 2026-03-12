@@ -9,7 +9,10 @@ import {
   FileText,
   Brain,
   CalendarPlus,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
+import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -23,6 +26,11 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 const navigationItems = [
   {
@@ -57,12 +65,14 @@ const navigationItems = [
     title: "ProfSyn AI",
     url: "/profsyn-ai",
     icon: Brain,
+    hidden: true,
   },
   {
     title: "Planlagte syn",
     url: "/scheduled",
     icon: CalendarCheck,
     adminOnly: true,
+    hidden: true,
   },
 ];
 
@@ -94,6 +104,7 @@ export function AppSidebar() {
   const { hasRole } = useAuth();
   const location = useLocation();
   const isOnAdminRoute = location.pathname.startsWith("/admin");
+  const [adminOpen, setAdminOpen] = useState(isOnAdminRoute);
 
   return (
     <Sidebar>
@@ -112,6 +123,7 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {navigationItems.map((item) => {
+                if (item.hidden) return null;
                 if (item.adminOnly && !hasRole("admin")) return null;
 
                 return (
@@ -136,35 +148,46 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Admin Section */}
+        {/* Admin Section - Collapsible */}
         {hasRole("admin") && (
           <SidebarGroup>
-            <SidebarGroupLabel>Admin</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {adminNavigationItems.map((item) => {
-                  if (item.adminOnly && !hasRole("admin")) return null;
+            <Collapsible open={adminOpen} onOpenChange={setAdminOpen}>
+              <CollapsibleTrigger className="flex w-full items-center justify-between px-2 py-1.5 text-xs font-medium text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors cursor-pointer">
+                <span className="uppercase tracking-wider">Admin</span>
+                {adminOpen ? (
+                  <ChevronDown className="h-3.5 w-3.5" />
+                ) : (
+                  <ChevronRight className="h-3.5 w-3.5" />
+                )}
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {adminNavigationItems.map((item) => {
+                      if (item.adminOnly && !hasRole("admin")) return null;
 
-                  return (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton asChild>
-                        <NavLink
-                          to={item.url}
-                          className={({ isActive }) =>
-                            isActive
-                              ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                              : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                          }
-                        >
-                          <item.icon className="h-4 w-4" />
-                          <span>{item.title}</span>
-                        </NavLink>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            </SidebarGroupContent>
+                      return (
+                        <SidebarMenuItem key={item.title}>
+                          <SidebarMenuButton asChild>
+                            <NavLink
+                              to={item.url}
+                              className={({ isActive }) =>
+                                isActive
+                                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                                  : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                              }
+                            >
+                              <item.icon className="h-4 w-4" />
+                              <span>{item.title}</span>
+                            </NavLink>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    })}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </CollapsibleContent>
+            </Collapsible>
           </SidebarGroup>
         )}
       </SidebarContent>
