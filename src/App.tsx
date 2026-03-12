@@ -20,6 +20,7 @@ import Account from "./pages/admin/Account";
 import MySyn from "./pages/admin/MySyn";
 import Users from "./pages/admin/Users";
 import NotFound from "./pages/NotFound";
+import ResetPassword from "./pages/ResetPassword";
 import { ErrorBoundary } from "@/components/utility/ErrorBoundary";
 
 const queryClient = new QueryClient();
@@ -35,6 +36,7 @@ const App = () => {
             <BrowserRouter>
               <Routes>
                 <Route path="/" element={<Auth />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/inspections" element={<ProtectedRoute><AppLayout><Inspections /></AppLayout></ProtectedRoute>} />
                 <Route path="/scheduled" element={<ProtectedRoute><AppLayout><Scheduled /></AppLayout></ProtectedRoute>} />
                 <Route path="/availability" element={<ProtectedRoute><AppLayout><Availability /></AppLayout></ProtectedRoute>} />

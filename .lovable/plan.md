@@ -1,43 +1,35 @@
 
 
-## Fix: Password Reset Flow
+## Fix: Show Loading Spinner on Every Inspection Assignment
 
 ### Problem
-When a user clicks the reset link in their email, Supabase fires a `PASSWORD_RECOVERY` event via `onAuthStateChange`, which sets a valid session. The current `AuthContext` treats all sessions the same, so `Auth.tsx` sees `user` is set and redirects to `/admin/overview` — skipping the password reset form entirely.
 
-### Plan
+The loading spinner in the inspector card only appears for the first inspection placed. After the route optimizer returns data for that inspector, `routeData` is populated and the condition `!routeData` prevents the spinner from ever showing again.
 
-**1. Create `/reset-password` page** (`src/pages/ResetPassword.tsx`)
-- Form with "New password" and "Confirm password" fields
-- Password validation: min 6 chars, must match
-- Calls `supabase.auth.updateUser({ password })` on submit
-- On success: show toast, redirect to `/` (login)
-- On error: show appropriate error message
-- If no valid recovery session detected (no `PASSWORD_RECOVERY` event received), show an error state
+### Root Cause
 
-**2. Update `AuthContext.tsx`**
-- Track `isPasswordRecovery` boolean state
-- In `onAuthStateChange`, when `event === 'PASSWORD_RECOVERY'`, set `isPasswordRecovery = true` and do NOT fetch user data / set user as normally authenticated
-- Expose `isPasswordRecovery` and a `clearPasswordRecovery()` function in context
-- This prevents `ProtectedRoute` from treating recovery sessions as normal logins
+In `src/components/planlaeg-syn/InspectorsPanel.tsx`, the spinner rendering condition is:
 
-**3. Update `Auth.tsx`**
-- When `isPasswordRecovery` is true, redirect to `/reset-password` instead of `/admin/overview`
+```
+isRouteLoading && assignedItems.length > 0 && !routeData
+```
 
-**4. Update `App.tsx`**
-- Add route: `<Route path="/reset-password" element={<ResetPassword />} />`
-- This route is NOT wrapped in `ProtectedRoute` — it's public (the recovery session is already established by Supabase)
+After the first route preview, `routeData` is no longer undefined, so `!routeData` is always `false`.
 
-**5. Update Supabase redirect URL**
-- The existing `resetPassword` function in AuthContext already sets `redirectTo: window.location.origin + '/'`
-- This is correct — Supabase will redirect to the app root where `onAuthStateChange` fires `PASSWORD_RECOVERY`, and the context will redirect to `/reset-password`
+### Fix
 
-### Files Changed
-- `src/contexts/AuthContext.tsx` — add `isPasswordRecovery` state + detection
-- `src/pages/Auth.tsx` — redirect to `/reset-password` when recovery detected
-- `src/pages/ResetPassword.tsx` — new page with password update form
-- `src/App.tsx` — add `/reset-password` route
+**File:** `src/components/planlaeg-syn/InspectorsPanel.tsx`
 
-### Supabase Dashboard Config
-The user should ensure `https://planlaeg.lovable.app` is set as the Site URL in Supabase Auth settings (per existing memory). No other redirect URL changes needed.
+Remove the `!routeData` condition from the loading spinner check so it becomes:
+
+```
+isRouteLoading && assignedItems.length > 0
+```
+
+This ensures the spinner shows whenever a route preview is loading, regardless of whether previous route data exists.
+
+### Scope
+
+- **1 file changed, 1 line modified** - minimal, focused fix
+- No other files or logic affected
 

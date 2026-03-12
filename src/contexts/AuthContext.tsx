@@ -19,11 +19,13 @@ interface AuthContextType {
   profile: Profile | null;
   roles: UserRole[];
   loading: boolean;
+  isPasswordRecovery: boolean;
   signUp: (email: string, password: string, fullName?: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: any }>;
   hasRole: (role: 'user' | 'admin') => boolean;
+  clearPasswordRecovery: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -34,12 +36,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [roles, setRoles] = useState<UserRole[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        if (event === 'PASSWORD_RECOVERY') {
+          setIsPasswordRecovery(true);
+          setSession(session);
+          setUser(session?.user ?? null);
+          setLoading(false);
+          return;
+        }
+
         setSession(session);
         setUser(session?.user ?? null);
         
@@ -183,6 +194,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return roles.some(r => r.role === role);
   };
 
+  const clearPasswordRecovery = () => {
+    setIsPasswordRecovery(false);
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -190,11 +205,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       profile,
       roles,
       loading,
+      isPasswordRecovery,
       signUp,
       signIn,
       signOut,
       resetPassword,
-      hasRole
+      hasRole,
+      clearPasswordRecovery
     }}>
       {children}
     </AuthContext.Provider>
