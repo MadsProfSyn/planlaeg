@@ -442,6 +442,7 @@ export default function PlanlaegSyn() {
 
       // Refresh the existing scheduled inspections
       queryClient.invalidateQueries({ queryKey: ["existing-scheduled-inspections", selectedDate] });
+      queryClient.invalidateQueries({ queryKey: ["planlaeg-inspectors"] });
     } catch (err) {
       console.error("Sync error:", err);
       toast.error("Fejl ved synkronisering");
