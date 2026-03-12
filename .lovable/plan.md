@@ -1,44 +1,35 @@
 
 
-## Add "Ingen syn" Filter to Inspectors Panel
+## Fix: Show Loading Spinner on Every Inspection Assignment
 
-### What it does
-Adds a toggle filter in the right-side "Tilgængelige konsulenter" panel header. When enabled, it hides inspectors who already have booked shifts (`scheduled_shifts > 0`) or existing assignments, showing only inspectors with zero current inspections.
+### Problem
 
-### Implementation
+The loading spinner in the inspector card only appears for the first inspection placed. After the route optimizer returns data for that inspector, `routeData` is populated and the condition `!routeData` prevents the spinner from ever showing again.
 
-**File: `src/components/planlaeg-syn/InspectorsPanel.tsx`**
+### Root Cause
 
-1. Add a `showOnlyNoInspections` boolean state (default `false`).
+In `src/components/planlaeg-syn/InspectorsPanel.tsx`, the spinner rendering condition is:
 
-2. Add a toggle button/checkbox labeled "Ingen syn" in the card header, between the title and search input.
-
-3. Extend the `filteredInspectors` memo to also filter by this state:
-   - When enabled, only include inspectors where `inspector.scheduled_shifts` is 0 (or undefined) AND the inspector has no items in `existingAssignments`.
-
-```typescript
-const filteredInspectors = useMemo(() => {
-  let result = inspectors;
-  
-  if (showOnlyNoInspections) {
-    result = result.filter((inspector) => {
-      const bookedShifts = inspector.scheduled_shifts || 0;
-      const existingItems = (existingAssignments.get(inspector.inspector_uuid) || []).length;
-      return bookedShifts === 0 && existingItems === 0;
-    });
-  }
-  
-  if (searchQuery.trim()) {
-    const query = searchQuery.toLowerCase();
-    result = result.filter((i) => i.navn.toLowerCase().includes(query));
-  }
-  
-  return result;
-}, [inspectors, searchQuery, showOnlyNoInspections, existingAssignments]);
+```
+isRouteLoading && assignedItems.length > 0 && !routeData
 ```
 
-4. UI: A small toggle button using the existing `Button` component with `variant="outline"` and a size of `"sm"`, styled to look active when toggled on (e.g., `bg-primary text-primary-foreground`).
+After the first route preview, `routeData` is no longer undefined, so `!routeData` is always `false`.
 
-### Changes
-- **1 file**: `src/components/planlaeg-syn/InspectorsPanel.tsx` — add state, filter logic, and toggle UI.
+### Fix
+
+**File:** `src/components/planlaeg-syn/InspectorsPanel.tsx`
+
+Remove the `!routeData` condition from the loading spinner check so it becomes:
+
+```
+isRouteLoading && assignedItems.length > 0
+```
+
+This ensures the spinner shows whenever a route preview is loading, regardless of whether previous route data exists.
+
+### Scope
+
+- **1 file changed, 1 line modified** - minimal, focused fix
+- No other files or logic affected
 
