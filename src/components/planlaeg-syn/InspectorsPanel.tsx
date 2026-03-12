@@ -422,14 +422,26 @@ export function InspectorsPanel({
   selectedDate,
 }: InspectorsPanelProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [showOnlyNoInspections, setShowOnlyNoInspections] = useState(false);
 
   const filteredInspectors = useMemo(() => {
-    if (!searchQuery.trim()) return inspectors;
-    const query = searchQuery.toLowerCase();
-    return inspectors.filter((inspector) =>
-      inspector.navn.toLowerCase().includes(query)
-    );
-  }, [inspectors, searchQuery]);
+    let result = inspectors;
+
+    if (showOnlyNoInspections) {
+      result = result.filter((inspector) => {
+        const bookedShifts = inspector.scheduled_shifts || 0;
+        const existingItems = (existingAssignments.get(inspector.inspector_uuid) || []).length;
+        return bookedShifts === 0 && existingItems === 0;
+      });
+    }
+
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter((i) => i.navn.toLowerCase().includes(query));
+    }
+
+    return result;
+  }, [inspectors, searchQuery, showOnlyNoInspections, existingAssignments]);
 
   return (
     <Card className="flex flex-col h-full overflow-hidden">
