@@ -446,7 +446,17 @@ export function InspectorsPanel({
   return (
     <Card className="flex flex-col h-full overflow-hidden">
       <CardHeader className="pb-3 flex-shrink-0 space-y-3">
-        <CardTitle className="text-lg">Tilgængelige konsulenter</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg">Tilgængelige konsulenter</CardTitle>
+          <Button
+            variant={showOnlyNoInspections ? "default" : "outline"}
+            size="sm"
+            className="h-7 text-xs gap-1"
+            onClick={() => setShowOnlyNoInspections(!showOnlyNoInspections)}
+          >
+            Ingen syn
+          </Button>
+        </div>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
