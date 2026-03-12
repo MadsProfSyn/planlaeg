@@ -194,6 +194,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return roles.some(r => r.role === role);
   };
 
+  const clearPasswordRecovery = () => {
+    setIsPasswordRecovery(false);
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
