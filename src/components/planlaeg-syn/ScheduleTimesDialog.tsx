@@ -315,9 +315,42 @@ export function ScheduleTimesDialog({
       if (existing) {
         next.set(inspectionId, { ...existing, end: newEndTime });
       }
+
+      if (cascadeEnabled) {
+        const editedIndex = inspectionTimeData.findIndex(
+          (d) => d.inspection.id === inspectionId
+        );
+        if (editedIndex === -1) return next;
+
+        let currentEndMinutes = timeToMinutes(newEndTime);
+
+        for (let i = editedIndex + 1; i < inspectionTimeData.length; i++) {
+          const data = inspectionTimeData[i];
+          const prevData = inspectionTimeData[i - 1];
+
+          const lunchAfterPrev = lunchBreaks.find(
+            (l) => l.afterInspectionId === prevData.inspection.id
+          );
+
+          let newStart: number;
+          if (lunchAfterPrev) {
+            const lunchEnd = timeToMinutes(lunchAfterPrev.startTime) + lunchAfterPrev.durationMinutes;
+            newStart = roundToNearest5(lunchEnd + data.travelFromPreviousMins);
+          } else {
+            newStart = roundToNearest5(currentEndMinutes + data.travelFromPreviousMins);
+          }
+
+          const newEnd = newStart + data.durationMinutes;
+          next.set(data.inspection.id, {
+            start: minutesToTime(newStart),
+            end: minutesToTime(newEnd),
+          });
+          currentEndMinutes = newEnd;
+        }
+      }
+
       return next;
     });
-    // No cascade when editing end time - user is manually overriding
   };
 
   const handleSave = () => {
