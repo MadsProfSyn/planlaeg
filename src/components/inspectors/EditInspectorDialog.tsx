@@ -99,6 +99,8 @@ export function EditInspectorDialog({
     setIsSubmitting(true);
 
     try {
+      const addressChanged = (formData.address || '') !== (inspector.address || '');
+
       // 1. Update phone, address, and department
       const { error: updateError } = await supabase
         .from("inspectors")
@@ -110,6 +112,13 @@ export function EditInspectorDialog({
         .eq("id", inspector.id);
 
       if (updateError) throw updateError;
+
+      // Trigger geocoding in background if address changed
+      if (addressChanged) {
+        supabase.functions.invoke("geocode-inspector", {
+          body: { inspector_id: inspector.id },
+        }).catch((err) => console.error("Background geocoding failed:", err));
+      }
 
       // 2. Fetch existing skills
       const { data: existingSkills, error: skillsError } = await supabase
