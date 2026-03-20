@@ -180,6 +180,12 @@ serve(async (req) => {
           department: deptInfo.name,
         });
         console.log(`Created inspector: ${fullName} (${deptInfo.name})`);
+
+        // Trigger geocoding in background if employee has an address
+        // (WorkFeed employees typically don't have addresses, but just in case)
+        if (emp.phone) {
+          // We don't have home addresses from WorkFeed, but the function handles null gracefully
+        }
       } catch (empError) {
         const fullName = `${emp.firstname} ${emp.lastname}`.trim();
         const errorMsg = empError instanceof Error ? empError.message : String(empError);
