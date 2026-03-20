@@ -432,6 +432,9 @@ export default function PlanlaegSyn() {
     if (over && over.id.toString().startsWith("inspector-")) {
       const inspectorId = over.id.toString().replace("inspector-", "");
       assignInspectionsToInspector(inspectorId, selectedInspectionIds);
+    } else {
+      // Dropped on cancel zone or outside any valid target — clear selection
+      setSelectedInspectionIds([]);
     }
 
     setActiveDragId(null);
@@ -685,13 +688,17 @@ export default function PlanlaegSyn() {
         onDragEnd={handleDragEnd}
       >
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1 min-h-0 mt-4 min-w-0 overflow-hidden">
-          <InspectionsPanel
-            inspections={inspections}
-            isLoading={isLoadingInspections}
-            selectedIds={selectedInspectionIds}
-            onSelect={handleInspectionSelect}
-            hiddenIds={assignedInspectionIds}
-          />
+          <div className="overflow-hidden min-h-0">
+            <InspectionsPanel
+              inspections={inspections}
+              isLoading={isLoadingInspections}
+              selectedIds={selectedInspectionIds}
+              onSelect={handleInspectionSelect}
+              hiddenIds={assignedInspectionIds}
+              isDragActive={activeDragId !== null}
+            />
+          </div>
+          <div className="overflow-hidden min-h-0">
           <InspectorsPanel
             inspectors={inspectors}
             isLoading={isLoadingInspectors}
@@ -721,6 +728,7 @@ export default function PlanlaegSyn() {
             isRouteLoading={isRouteLoading}
             selectedDate={selectedDate || ""}
           />
+          </div>
         </div>
 
         <DragOverlay>{activeDragId !== null && <DragPreview count={dragCount} />}</DragOverlay>
