@@ -60,3 +60,6 @@ verify_jwt = false
 
 [functions.sync-inspectors-cron]
 verify_jwt = false
+
+[functions.geocode-inspector]
+verify_jwt = false
