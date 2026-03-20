@@ -3,8 +3,9 @@ import { format, parseISO } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useDraggable } from "@dnd-kit/core";
+import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
+import { X } from "lucide-react";
 import type { MondayItem } from "@/lib/supabase";
 
 interface InspectionsPanelProps {
@@ -13,6 +14,7 @@ interface InspectionsPanelProps {
   selectedIds: number[];
   onSelect: (id: number) => void;
   hiddenIds?: Set<number>;
+  isDragActive?: boolean;
 }
 
 const TYPE_MAP: Record<string, string> = {
@@ -95,12 +97,31 @@ function DraggableInspection({ inspection, isSelected, onSelect }: DraggableInsp
   );
 }
 
+function CancelDropZone() {
+  const { isOver, setNodeRef } = useDroppable({ id: "cancel-drop" });
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "flex items-center justify-center gap-2 rounded-lg border-2 border-dashed p-4 mb-3 transition-colors",
+        isOver
+          ? "border-destructive bg-destructive/10 text-destructive"
+          : "border-muted-foreground/30 text-muted-foreground"
+      )}
+    >
+      <X className="h-4 w-4" />
+      <span className="text-sm font-medium">Slip her for at annullere</span>
+    </div>
+  );
+}
+
 export function InspectionsPanel({
   inspections,
   isLoading,
   selectedIds,
   onSelect,
   hiddenIds,
+  isDragActive,
 }: InspectionsPanelProps) {
   // Filter out hidden inspections (assigned ones)
   const visibleInspections = hiddenIds
@@ -114,6 +135,7 @@ export function InspectionsPanel({
       </CardHeader>
       <CardContent className="flex-1 overflow-hidden p-0">
         <ScrollArea className="h-full px-6 pb-6">
+          {isDragActive && <CancelDropZone />}
           {isLoading ? (
             <div className="space-y-3">
               {Array.from({ length: 5 }).map((_, i) => (
