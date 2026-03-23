@@ -188,7 +188,10 @@ export function useRouteOptimizer({
         ...Array.from(newAssignments.values()).flat(),
         ...Array.from(existingAssignments.values()).flat(),
       ].map(item => item.id);
-      await preCacheTravelTimes(allItemIds);
+      // Fire-and-forget: Railway already handles cache lookups + Mapbox API calls internally
+      preCacheTravelTimes(allItemIds).catch(err =>
+        console.warn("⚠️ Background cache warming failed:", err)
+      );
       
       const payload = {
         date,
