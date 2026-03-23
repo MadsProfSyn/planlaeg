@@ -2,13 +2,13 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 
 serve(async (req) => {
   try {
-    // Calculate date range: today + 45 days ahead
+    // Calculate date range: today + 60 days ahead
     const today = new Date();
-    const fortyFiveDaysAhead = new Date(today);
-    fortyFiveDaysAhead.setDate(today.getDate() + 45);
+    const sixtyDaysAhead = new Date(today);
+    sixtyDaysAhead.setDate(today.getDate() + 60);
 
     const from = today.toISOString();
-    const to = fortyFiveDaysAhead.toISOString();
+    const to = sixtyDaysAhead.toISOString();
 
     console.log(`[sync-availability-cron] Running scheduled sync from ${from} to ${to}`);
 
