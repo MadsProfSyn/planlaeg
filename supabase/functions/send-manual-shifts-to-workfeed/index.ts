@@ -268,10 +268,11 @@ function buildWorkfeedComment(item: any): string {
     parts.push("");
   }
 
-  // 2. Notes with DYMO replacement
+  // 2. Notes — prefer user-edited note column, fall back to raw.Note
   const raw = item.raw || {};
-  if (raw.Note) {
-    let note = raw.Note;
+  const noteText = item.note || raw.Note || "";
+  if (noteText) {
+    let note = noteText;
     if (note.toUpperCase().includes("DYMO") && raw.Lejersnavn) {
       note = note.replace('" "', `"${raw.Lejersnavn}"`);
     }
