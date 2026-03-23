@@ -635,12 +635,12 @@ export default function PlanlaegSyn() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden px-6 lg:px-8">
-      <div className="mb-6">
+      <div className="mb-6 flex-shrink-0">
         <h1 className="text-2xl font-bold text-foreground">Planlæg syn</h1>
         <p className="text-muted-foreground">Tildel synsopgaver til tilgængelige konsulenter</p>
       </div>
 
-      <div className="flex items-center justify-between gap-4 flex-wrap">
+      <div className="flex items-center justify-between gap-4 flex-wrap flex-shrink-0">
         <PlanlaegSynFiltersBar
           selectedDate={selectedDate}
           onDateChange={setSelectedDate}
@@ -687,8 +687,8 @@ export default function PlanlaegSyn() {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="grid grid-cols-2 gap-6 flex-1 min-h-0 mt-4 min-w-0 overflow-hidden">
-          <div className="overflow-hidden min-h-0">
+        <div className="grid grid-cols-2 gap-6 flex-1 min-h-0 mt-4 min-w-0 overflow-hidden" style={{ gridTemplateRows: 'minmax(0, 1fr)' }}>
+          <div className="overflow-hidden min-h-0 h-full">
             <InspectionsPanel
               inspections={inspections}
               isLoading={isLoadingInspections}
@@ -698,7 +698,7 @@ export default function PlanlaegSyn() {
               isDragActive={activeDragId !== null}
             />
           </div>
-          <div className="overflow-hidden min-h-0">
+          <div className="overflow-hidden min-h-0 h-full">
           <InspectorsPanel
             inspectors={inspectors}
             isLoading={isLoadingInspectors}
