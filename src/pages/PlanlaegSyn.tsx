@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   DndContext,
@@ -197,6 +197,23 @@ export default function PlanlaegSyn() {
       return getMondayItems(1, 500, filters);
     },
   });
+
+  // Realtime subscription: auto-refresh when new inspections arrive from Monday.com
+  useEffect(() => {
+    const channel = supabase
+      .channel("planlaeg-syn-realtime")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "monday_items_selected" },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["planlaeg-inspections"] });
+          queryClient.invalidateQueries({ queryKey: ["existing-scheduled-inspections"] });
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [queryClient]);
 
   // Fetch inspectors for the selected date and afdeling (independent filter)
   const { data: inspectorsData, isLoading: isLoadingInspectors } = useQuery({
