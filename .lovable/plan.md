@@ -1,35 +1,51 @@
 
 
-## Fix: Make pre-cache non-blocking (no accuracy loss)
+## Fix: Send edited note to WorkFeed
 
-### Why this is safe
-The Railway Python service already:
-1. Reads from `mapbox_travel_cache`
-2. Calls Mapbox API for any cache misses
-3. Saves new results back to cache
+### Problem
+`buildWorkfeedComment()` in `send-manual-shifts-to-workfeed/index.ts` only reads `item.raw.Note` (original Monday JSON). When a user edits the note via /alle-syn, it's saved to `item.note` (dedicated column), which is never checked.
 
-The `preCacheTravelTimes` Edge Function does the **identical work** redundantly. Removing the `await` means Railway handles it all — same accuracy, no duplication.
+### Fix
 
-### Change
+**File: `supabase/functions/send-manual-shifts-to-workfeed/index.ts` — `buildWorkfeedComment` (~line 262-293)**
 
-**File: `src/hooks/useRouteOptimizer.ts` — line 191**
+Change the note source to prefer `item.note` (user-edited) over `item.raw.Note` (original):
 
-Replace:
 ```typescript
-await preCacheTravelTimes(allItemIds);
+function buildWorkfeedComment(item: any): string {
+  const parts: string[] = [];
+
+  // 1. Address
+  if (item.adresse) {
+    parts.push(item.adresse);
+    parts.push("");
+  }
+
+  // 2. Notes — prefer user-edited note column, fall back to raw.Note
+  const raw = item.raw || {};
+  const noteText = item.note || raw.Note || "";
+  if (noteText) {
+    let note = noteText;
+    if (note.toUpperCase().includes("DYMO") && raw.Lejersnavn) {
+      note = note.replace('" "', `"${raw.Lejersnavn}"`);
+    }
+    parts.push(note);
+    parts.push("");
+  }
+
+  // 3. OBS if present
+  if (raw.OBS && raw.OBS.trim() !== "") {
+    parts.push(`OBS: ${raw.OBS.trim()}`);
+  }
+
+  // Remove trailing empty lines
+  while (parts.length > 0 && parts[parts.length - 1] === "") {
+    parts.pop();
+  }
+
+  return parts.join("\n");
+}
 ```
 
-With:
-```typescript
-// Fire-and-forget: Railway already handles cache lookups + Mapbox API calls internally
-preCacheTravelTimes(allItemIds).catch(err =>
-  console.warn("⚠️ Background cache warming failed:", err)
-);
-```
-
-### Result
-- Route preview: ~4-5 seconds (Railway only) instead of 30-120 seconds
-- Zero accuracy loss — Railway does its own Mapbox lookups for cache misses
-- The background cache warming still runs, benefiting future calls
-- One line changed, one file
+One function changed in one file. The same pattern should also be applied to `post-to-workfeed/index.ts` `buildWorkfeedComment` for consistency, though that function uses `inspection.notes` from `inspection_queue` (different flow).
 
