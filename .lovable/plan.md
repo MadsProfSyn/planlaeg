@@ -1,58 +1,40 @@
 
 
-## Frontend updates to match Railway VRP backend changes
+## Fix frontend duration to use `has_dymo` / `has_cylinderskift` flags
 
-### 1. Cylinderskift now applies to FF
+### Problem
+`calculateInspectionDuration()` currently parses `raw.Note` for keyword detection. But the DB trigger now sets `has_dymo` and `has_cylinderskift` from both `note` and `raw->>'Note'`. The frontend ignores these boolean flags, so editing `note` in the UI doesn't update the displayed duration.
 
-**File: `src/lib/inspection-duration.ts` (line 28)**
-Update the `FALLBACK_MODIFIERS` to include "FF" in Cylinderskift's `applies_to` array:
-```
-Cylinderskift: { minutes: 10, applies_to: ["FF", "IF", "PS"] },
-```
+### Solution
+Update `calculateInspectionDuration()` to accept and use the boolean flags instead of parsing `raw.Note`. This aligns the frontend with the DB trigger logic.
 
-**Database**: Update the `inspection_duration_modifiers` row for "Cylinderskift" to set `applies_to = '{FF,IF,PS}'`. This requires a migration.
+### Changes
 
-**File: `src/pages/admin/SynVariabler.tsx` (line 203)**
-The "applies to" display already reads from the DB, so it will update automatically after the migration. Optionally, make `applies_to` editable so admins can change this in the future (stretch goal, not critical now).
+**`src/lib/inspection-duration.ts`**
+- Add `has_dymo` and `has_cylinderskift` to `DurationParams` interface (optional booleans)
+- Replace the raw.Note parsing block with simple boolean checks:
+  - If `has_dymo` is true and DYMO modifier applies to the type, add minutes
+  - If `has_cylinderskift` is true and Cylinderskift modifier applies to the type, add minutes
+  - Fall back to raw.Note parsing only if the booleans are not provided (backward compat)
+- Update `getEffectiveDuration()` signature to pass `has_dymo` and `has_cylinderskift` through
 
-### 2. Manual duration override — already done
+**`src/components/alle-syn/AlleSynTable.tsx`**
+- `getDisplayDuration()` already calls `getEffectiveDuration(item)` — no change needed since item already has `has_dymo`/`has_cylinderskift` from the DB query
 
-The `EditMondayItemDialog` (used in /alle-syn) already has a `duration_minutes` field with auto-placeholder, saves NULL when empty. The `getEffectiveDuration()` function in `inspection-duration.ts` already handles this. No changes needed for the edit UI.
+**`src/components/alle-syn/EditMondayItemDialog.tsx`**
+- The `autoDuration` calculation needs to pass `has_dymo`/`has_cylinderskift` from the item
 
-However, there is no "Manuel" badge shown anywhere when `duration_minutes` is set. Add a small visual indicator:
+**`src/components/planlaeg-syn/InlineTimeEditor.tsx` and `ScheduleTimesDialog.tsx`**
+- Already call `getEffectiveDuration(inspection)` — will work automatically once the signature accepts the flags
 
-**File: `src/components/planlaeg-syn/InspectorsPanel.tsx` (~line 354-357)**
-After the room count display, if the item has `duration_minutes` set, show a small "Manuel" badge in italic muted style.
-
-**File: `src/components/alle-syn/AlleSynTable.tsx`**
-In the duration column, if `duration_minutes` is set (non-null), show a small "Manuel" indicator next to the value.
-
-### 3. Display note on /planlaeg-syn route stops
-
-**File: `src/types/route-optimizer.ts` (line 22-30)**
-Add `note?: string` to the `RouteStop` interface.
-
-**File: `src/components/planlaeg-syn/InspectorsPanel.tsx` (~line 345-350)**
-Below the address display in each assigned inspection row, if the item's `note` field (from `MondayItem`) is non-empty, render it in a smaller muted text. Also check `routeStop.note` from the API response.
-
-Additionally, show the note from the route API response if available (Railway now returns it). Below the address line:
-```tsx
-{(item.note || routeStop?.note) && (
-  <p className="text-[10px] text-muted-foreground italic truncate max-w-[200px]">
-    {item.note || routeStop?.note}
-  </p>
-)}
+### Technical detail
+The key change in `calculateInspectionDuration`:
+```typescript
+// Before: parses raw.Note
+// After: uses boolean flags, falls back to raw.Note parsing
+const hasDymo = params.has_dymo ?? (note.toUpperCase().includes("DYMO"));
+const hasCyl = params.has_cylinderskift ?? (note.toUpperCase().includes("CYLINDERSKIFT") || note.toUpperCase().includes("CYLINDER"));
 ```
 
-### Summary of changes
-
-| File | Change |
-|------|--------|
-| `src/lib/inspection-duration.ts` | Add "FF" to Cylinderskift fallback `applies_to` |
-| Migration SQL | Update `inspection_duration_modifiers` Cylinderskift row |
-| `src/types/route-optimizer.ts` | Add `note?: string` to `RouteStop` |
-| `src/components/planlaeg-syn/InspectorsPanel.tsx` | Show note below address; show "Manuel" badge when `duration_minutes` set |
-| `src/components/alle-syn/AlleSynTable.tsx` | Show "Manuel" indicator in duration column |
-
-No new tables or columns needed.
+This ensures backward compatibility while preferring the DB-computed flags.
 
