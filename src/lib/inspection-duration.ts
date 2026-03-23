@@ -47,7 +47,7 @@ async function ensureCacheLoaded(): Promise<void> {
     try {
       const [durRes, modRes] = await Promise.all([
         supabase.from("inspection_durations").select("*"),
-        supabase.from("inspection_duration_modifiers" as any).select("*"),
+        (supabase as any).from("inspection_duration_modifiers").select("*"),
       ]);
 
       if (durRes.data && durRes.data.length > 0) {
