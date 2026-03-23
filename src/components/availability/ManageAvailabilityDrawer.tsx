@@ -117,24 +117,25 @@ export function ManageAvailabilityDrawer({ open, onOpenChange, onSuccess }: Mana
     // 2. Background save with loading toast
     const toastId = toast.loading("Gemmer tidsrum...");
 
-    supabase
-      .rpc("set_consultant_availability_with_ranges", {
+    Promise.resolve(
+      supabase.rpc("set_consultant_availability_with_ranges", {
         p_inspector_id: consultant.inspector_id,
         p_date: format(selectedDate, "yyyy-MM-dd"),
         p_is_available: true,
         p_time_ranges: ranges as any,
         p_source: "override",
       })
+    )
       .then(({ error }) => {
         if (error) throw error;
         toast.success(`Tidsrum opdateret for ${consultant.full_name}`, { id: toastId });
         onSuccess?.();
-        fetchConsultants(); // silent refresh
+        fetchConsultants();
       })
       .catch((err: any) => {
         console.error("Error updating availability:", err);
         toast.error(err.message || "Kunne ikke gemme tidsrum", { id: toastId });
-        fetchConsultants(); // revert optimistic update
+        fetchConsultants();
       });
   };
 
