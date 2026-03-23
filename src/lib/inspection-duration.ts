@@ -25,7 +25,7 @@ const FALLBACK_MATRIX: Record<string, Record<number, number>> = {
 
 const FALLBACK_MODIFIERS: Record<string, { minutes: number; applies_to: string[] }> = {
   DYMO: { minutes: 5, applies_to: ["IF", "PS"] },
-  Cylinderskift: { minutes: 10, applies_to: ["IF", "PS"] },
+  Cylinderskift: { minutes: 10, applies_to: ["FF", "IF", "PS"] },
 };
 
 // Cached duration data

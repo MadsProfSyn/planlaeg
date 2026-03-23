@@ -27,6 +27,7 @@ export interface RouteStop {
   start_time: string;
   end_time: string;
   travel_from_previous_mins: number;
+  note?: string;
 }
 
 export interface InspectorRoute {

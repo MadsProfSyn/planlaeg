@@ -350,11 +350,23 @@ function DroppableInspector({
                       </span>
                     </div>
                     
-                    {/* Compact badges: room count + travel + status */}
+                    {/* Note display */}
+                    {((item as any).note || routeStop?.note) && (
+                      <span className="text-[10px] text-muted-foreground italic truncate max-w-[160px]" title={(item as any).note || routeStop?.note}>
+                        {(item as any).note || routeStop?.note}
+                      </span>
+                    )}
+
+                    {/* Compact badges: room count + travel + duration override + status */}
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <span className="text-muted-foreground text-[10px]">
                         {item.antal_vaerelser ?? "?"}v
                       </span>
+                      {(item as any).duration_minutes != null && (
+                        <Badge variant="outline" className="text-[10px] px-1 py-0 text-amber-600 border-amber-400/40 font-normal italic">
+                          Manuel
+                        </Badge>
+                      )}
                       {routeStop && routeStop.travel_from_previous_mins > 0 && (
                         <span className="text-muted-foreground/60 text-[10px]">
                           +{routeStop.travel_from_previous_mins}m
