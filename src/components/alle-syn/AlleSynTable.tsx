@@ -21,9 +21,10 @@ interface AlleSynTableProps {
   onEdit: (item: MondayItem) => void;
 }
 
-function extractNote(raw: any): string {
-  if (!raw) return "";
-  const data = typeof raw === "string" ? JSON.parse(raw) : raw;
+function extractNote(item: MondayItem): string {
+  if ((item as any).note) return (item as any).note;
+  if (!item.raw) return "";
+  const data = typeof item.raw === "string" ? JSON.parse(item.raw) : item.raw;
   return data?.Note || "";
 }
 
@@ -90,7 +91,7 @@ export function AlleSynTable({ items, isLoading, onEdit }: AlleSynTableProps) {
         </TableHeader>
         <TableBody>
           {items.map((item) => {
-            const note = extractNote(item.raw);
+            const note = extractNote(item);
             const dur = getDisplayDuration(item);
             return (
               <TableRow key={item.id}>
