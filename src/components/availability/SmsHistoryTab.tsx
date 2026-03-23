@@ -4,9 +4,13 @@ import { useToast } from "@/hooks/use-toast";
 import { SmsHistoryFiltersBar } from "./SmsHistoryFiltersBar";
 import { SmsHistoryTable, type SmsHistoryEntry } from "./SmsHistoryTable";
 
-export function SmsHistoryTab() {
+interface SmsHistoryTabProps {
+  initialDate?: string;
+}
+
+export function SmsHistoryTab({ initialDate }: SmsHistoryTabProps) {
   const { toast } = useToast();
-  const [selectedDate, setSelectedDate] = React.useState(new Date().toISOString().split("T")[0]);
+  const [selectedDate, setSelectedDate] = React.useState(initialDate || new Date().toISOString().split("T")[0]);
   const [data, setData] = React.useState<SmsHistoryEntry[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
 
