@@ -444,7 +444,7 @@ export function InspectorsPanel({
   }, [inspectors, searchQuery, showOnlyNoInspections, existingAssignments]);
 
   return (
-    <Card className="flex flex-col h-full overflow-hidden">
+    <Card className="flex flex-col h-full min-h-0 overflow-hidden">
       <CardHeader className="pb-3 flex-shrink-0 space-y-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">Tilgængelige konsulenter</CardTitle>
@@ -467,8 +467,8 @@ export function InspectorsPanel({
           />
         </div>
       </CardHeader>
-      <CardContent className="flex-1 overflow-hidden p-0">
-        <ScrollArea className="h-full px-6 pb-6">
+      <CardContent className="flex-1 min-h-0 overflow-hidden p-0">
+        <ScrollArea className="h-full min-h-0 px-6 pb-6">
           {isLoading ? (
             <div className="space-y-3">
               {Array.from({ length: 5 }).map((_, i) => (

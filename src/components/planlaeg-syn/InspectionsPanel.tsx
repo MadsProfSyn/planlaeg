@@ -129,12 +129,12 @@ export function InspectionsPanel({
     : inspections;
 
   return (
-    <Card className="flex flex-col h-full overflow-hidden">
+    <Card className="flex flex-col h-full min-h-0 overflow-hidden">
       <CardHeader className="pb-3 flex-shrink-0">
         <CardTitle className="text-lg">Synsopgaver</CardTitle>
       </CardHeader>
-      <CardContent className="flex-1 overflow-hidden p-0">
-        <ScrollArea className="h-full px-6 pb-6">
+      <CardContent className="flex-1 min-h-0 overflow-hidden p-0">
+        <ScrollArea className="h-full min-h-0 px-6 pb-6">
           {isDragActive && <CancelDropZone />}
           {isLoading ? (
             <div className="space-y-3">
