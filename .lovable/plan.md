@@ -1,37 +1,27 @@
 
 
-## Auto-refresh /planlaeg-syn when new inspections arrive
+## Fix: Note not displaying after edit on /alle-syn
 
 ### Problem
-The inspections list on `/planlaeg-syn` only updates on page load or when filters change. When a new item is inserted into `monday_items_selected` (from Monday.com), the user must manually refresh.
+The `AlleSynTable` extracts the note from `item.raw?.Note` (the original Monday.com JSON), but the `EditMondayItemDialog` saves edits to the `note` column on the table. The display function never checks the `note` column, so edited notes appear as "—".
 
-### Solution
-Subscribe to Supabase Realtime on the `monday_items_selected` table for INSERT events. When a new row arrives, invalidate the relevant React Query caches so the UI refreshes automatically.
+### Fix
 
-### Change
+**File: `src/components/alle-syn/AlleSynTable.tsx` — `extractNote` function (~line 23-28)**
 
-**File: `src/pages/PlanlaegSyn.tsx`**
-
-Add a `useEffect` that creates a Supabase Realtime channel listening for `INSERT` on `monday_items_selected`. On receiving an event, call `queryClient.invalidateQueries` for both `"planlaeg-inspections"` and `"existing-scheduled-inspections"` keys. Clean up the subscription on unmount.
+Change the logic to prefer the `note` column (user-edited value) and fall back to `raw.Note` (original Monday data):
 
 ```typescript
-// Inside PlanlaegSyn component, after the query definitions (~line 200)
-useEffect(() => {
-  const channel = supabase
-    .channel("planlaeg-syn-realtime")
-    .on(
-      "postgres_changes",
-      { event: "INSERT", schema: "public", table: "monday_items_selected" },
-      () => {
-        queryClient.invalidateQueries({ queryKey: ["planlaeg-inspections"] });
-        queryClient.invalidateQueries({ queryKey: ["existing-scheduled-inspections"] });
-      }
-    )
-    .subscribe();
-
-  return () => { supabase.removeChannel(channel); };
-}, [queryClient]);
+function extractNote(item: MondayItem): string {
+  // Prefer the dedicated note column (user edits), fall back to raw.Note
+  if ((item as any).note) return (item as any).note;
+  if (!item.raw) return "";
+  const data = typeof item.raw === "string" ? JSON.parse(item.raw) : item.raw;
+  return data?.Note || "";
+}
 ```
 
-One block added to one file. No database or edge function changes needed — the table already has Realtime enabled via public RLS policies.
+Update the call site (~line 93) to pass `item` instead of `item.raw`.
+
+One function changed in one file.
 
