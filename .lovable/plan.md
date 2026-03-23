@@ -1,29 +1,21 @@
 
 
-## Fix: Add "Trekantsområdet" to filter dropdowns on /availability and /planlaeg-syn
+## Fix Independent Scrolling for Inspector Panel on /planlaeg-syn
 
 ### Problem
-"Trekantsområdet" exists in the `departments` table (used by `/inspectors`), but the `/availability` and `/planlaeg-syn` pages source their department/afdeling filters from the `afdeling_to_department` table via the `fetch-departments` edge function. That table currently only has 4 rows: Aalborg, Århus, Odense, Storkøbenhavn — missing Trekantsområdet.
+The `<main>` element in `AppLayout.tsx` has `overflow-auto`, which lets the entire page scroll as one unit. Even though the two-column grid has `min-h-0`, the panels expand to full content height and scroll together.
 
 ### Fix
-**1 migration file** — Insert the new row into `afdeling_to_department`:
+**1 file: `src/pages/PlanlaegSyn.tsx`**
 
-```sql
-INSERT INTO afdeling_to_department (afdeling, department)
-VALUES ('Trekantsområdet', 'Trekantsområdet')
-ON CONFLICT DO NOTHING;
+Change the root container div (line 637) from:
+```
+<div className="flex flex-col h-full px-6 lg:px-8">
+```
+to:
+```
+<div className="flex flex-col h-full overflow-hidden px-6 lg:px-8">
 ```
 
-This will make it appear automatically in both `/availability` and `/planlaeg-syn` filters since both use the `fetch-departments` edge function which reads from this table.
-
-### Also included (from approved plan)
-
-**Independent scrolling** — Update `src/pages/PlanlaegSyn.tsx` grid layout so both panels scroll independently.
-
-**Drag cancel zone** — Add a droppable "cancel" area in `InspectionsPanel` during active drag, and update `handleDragEnd` to clear selection when dropped there or outside any inspector.
-
-### Files changed
-1. New migration — insert Trekantsområdet into `afdeling_to_department`
-2. `src/pages/PlanlaegSyn.tsx` — grid layout fix, cancel drop handling
-3. `src/components/planlaeg-syn/InspectionsPanel.tsx` — cancel drop zone UI
+Adding `overflow-hidden` prevents the page content from exceeding the viewport height, forcing each panel's internal `ScrollArea` to handle scrolling independently. The header, filters, and action buttons remain fixed at the top while both panels scroll on their own.
 
