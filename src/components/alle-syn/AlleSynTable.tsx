@@ -13,7 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MondayItem } from "@/lib/supabase";
-import { calculateInspectionDuration } from "@/lib/inspection-duration";
+import { getEffectiveDuration } from "@/lib/inspection-duration";
 
 interface AlleSynTableProps {
   items: MondayItem[];
@@ -32,12 +32,7 @@ function getDisplayDuration(item: MondayItem): { value: number; isAuto: boolean 
   if ((item as any).duration_minutes != null) {
     return { value: (item as any).duration_minutes, isAuto: false };
   }
-  const auto = calculateInspectionDuration({
-    synstype: item.synstype,
-    antalVaerelser: item.antal_vaerelser,
-    raw: item.raw,
-  });
-  return { value: auto, isAuto: true };
+  return { value: getEffectiveDuration(item), isAuto: true };
 }
 
 export function AlleSynTable({ items, isLoading, onEdit }: AlleSynTableProps) {

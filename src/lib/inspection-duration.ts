@@ -86,6 +86,14 @@ export function calculateEndTime(startTime: string, params: DurationParams): str
  * @param minutes - Minutes to add
  * @returns New time in HH:mm format
  */
+/**
+ * Get effective duration: use manual override if set, otherwise auto-calculate
+ */
+export function getEffectiveDuration(item: { duration_minutes?: number | null; synstype: string | null; antal_vaerelser: number | null; raw?: any }): number {
+  if (item.duration_minutes != null) return item.duration_minutes;
+  return calculateInspectionDuration({ synstype: item.synstype, antalVaerelser: item.antal_vaerelser, raw: item.raw });
+}
+
 export function addMinutesToTime(time: string, minutes: number): string {
   const [hours, mins] = time.split(":").map(Number);
   const date = new Date();

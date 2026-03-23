@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Route, UtensilsCrossed, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { calculateInspectionDuration } from "@/lib/inspection-duration";
+import { getEffectiveDuration } from "@/lib/inspection-duration";
 import type { MondayItem } from "@/lib/supabase";
 import type { RouteStop } from "@/types/route-optimizer";
 
@@ -107,11 +107,7 @@ export function ScheduleTimesDialog({
     return inspections
       .map((inspection) => {
         const routeStop = routeData?.find((s) => s.monday_item_id === inspection.id);
-        const duration = calculateInspectionDuration({
-          synstype: inspection.synstype,
-          antalVaerelser: inspection.antal_vaerelser,
-          raw: inspection.raw,
-        });
+        const duration = getEffectiveDuration(inspection);
 
         return {
           inspection,
