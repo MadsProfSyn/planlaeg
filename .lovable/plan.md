@@ -1,25 +1,60 @@
 
 
-## Fix: SMS Historik tab not showing data
+## New "Alle syn" Page — Monday Items Overview with Editable Duration
 
-### Problem
-The `SmsHistoryTab` component initializes its date to **today** (`new Date().toISOString().split("T")[0]`). It does not read the `date` URL parameter from the Availability page. So when you navigate to `/availability?date=2026-04-16` and switch to the SMS Historik tab, it queries for today's date which has no SMS logs.
+### Summary
+Create a new page at `/alle-syn` that shows all items from `monday_items_selected` (including those already sent to WorkFeed). Users can view and edit item data inline, including a new `duration_minutes` column that auto-calculates from synstype/rooms/DYMO but can be manually overridden.
 
-The database confirms SMS logs exist for dates like `2026-04-16` (15 records), `2026-04-01` (7 records), etc. — but none for today (2026-03-23).
+### Database Change
+**Migration: Add `duration_minutes` column to `monday_items_selected`**
+```sql
+ALTER TABLE monday_items_selected
+ADD COLUMN duration_minutes integer;
+```
+- Nullable, no default — when NULL, the UI computes from `calculateInspectionDuration()`.
+- When user overrides, store their value here.
 
-### Fix
+### Files to Create
 
-**File: `src/pages/Availability.tsx`** (line 544)
-- Pass the URL `date` parameter (from `filters.date` or `searchParams.get("date")`) to `SmsHistoryTab` as an `initialDate` prop.
+**1. `src/pages/AlleSyn.tsx`**
+- Fetches ALL items from `monday_items_selected` (no `wf_shift_id IS NULL` filter — unlike Inspections page).
+- Pagination, search (Kunde, adresse, lejemalsnr), date filter, region filter.
+- Table columns in order: Kunde, Adresse, Synstype, Dato/tid, Antal værelser, Note (extracted from `raw.Note`), Duration (minutes).
+- Each row is editable — clicking edit opens a dialog (reuse/extend `MondayItemDialog` pattern) where user can change any field including duration override.
+- Duration column shows: stored `duration_minutes` if set, otherwise auto-calculated value with a subtle "(auto)" label.
+- Saving duration writes to the new `duration_minutes` column.
 
-**File: `src/components/availability/SmsHistoryTab.tsx`**
-- Accept an optional `initialDate` prop
-- Use `initialDate` (if provided) instead of today's date as the default for `selectedDate`
-- This way, when the user arrives at `/availability?date=2026-04-16` and clicks SMS Historik, it automatically loads SMS logs for that date
+**2. `src/components/alle-syn/AlleSynTable.tsx`**
+- Table component with sortable columns for the 7 fields.
+- Extracts Note from `raw?.Note`.
+- Shows duration with auto/manual indicator.
+- Edit and delete action buttons per row.
 
-### Technical detail
-- `SmsHistoryTab` will receive `initialDate?: string`
-- Default state: `useState(initialDate || new Date().toISOString().split("T")[0])`
-- The reset button will still reset to today's date (current behavior)
-- No database or edge function changes needed — the data is already there
+**3. `src/components/alle-syn/AlleSynFiltersBar.tsx`**
+- Search input, date filter, region select, clear all — same pattern as `InspectionsFiltersBar`.
+
+**4. `src/components/alle-syn/EditMondayItemDialog.tsx`**
+- Dialog with all 7 editable fields including duration_minutes.
+- Duration field shows placeholder with auto-calculated value.
+- If user clears duration, it reverts to auto-calculation.
+
+### Files to Modify
+
+**5. `src/App.tsx`**
+- Add route: `/alle-syn` → `<AlleSyn />` (protected, with AppLayout).
+
+**6. `src/components/AppSidebar.tsx`**
+- Add nav item "Alle syn" at position 3 (after "Planlæg syn (Manuelt)"), icon: `List` from lucide-react.
+
+**7. `src/lib/supabase.ts`**
+- Add `getAllMondayItems()` function — same as `getMondayItems()` but without the `.is("wf_shift_id", null)` filter, so it returns ALL items.
+- Add `duration_minutes` to `MondayItem` interface.
+
+**8. `src/lib/inspection-duration.ts`**
+- No changes needed — reuse `calculateInspectionDuration()` for auto-calculation in the UI.
+
+### Technical Details
+- The `duration_minutes` column integrates with the existing scheduling flow: when set, `send-manual-shifts-to-workfeed` and VRP calculations should prefer the stored value over auto-calculation.
+- Note extraction: `typeof raw === "string" ? JSON.parse(raw)?.Note : raw?.Note`.
+- Search matches against Kunde, adresse, and lejemalsnr (same as existing pattern).
 
