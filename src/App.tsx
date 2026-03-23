@@ -15,9 +15,7 @@ import UnavailableConsultants from "./pages/UnavailableConsultants";
 import Inspectors from "./pages/Inspectors";
 import ProfSynAI from "./pages/ProfSynAI";
 import PlanlaegSyn from "./pages/PlanlaegSyn";
-import Overview from "./pages/admin/Overview";
 import Account from "./pages/admin/Account";
-import MySyn from "./pages/admin/MySyn";
 import Users from "./pages/admin/Users";
 import NotFound from "./pages/NotFound";
 import ResetPassword from "./pages/ResetPassword";
@@ -46,10 +44,8 @@ const App = () => {
                 <Route path="/planlaeg-syn" element={<ProtectedRoute><AppLayout><PlanlaegSyn /></AppLayout></ProtectedRoute>} />
                 
                 {/* Admin Routes */}
-                <Route path="/admin" element={<ProtectedRoute><AppLayout><Navigate to="/admin/overview" replace /></AppLayout></ProtectedRoute>} />
-                <Route path="/admin/overview" element={<ProtectedRoute><AppLayout><Overview /></AppLayout></ProtectedRoute>} />
+                <Route path="/admin" element={<ProtectedRoute><AppLayout><Navigate to="/admin/account" replace /></AppLayout></ProtectedRoute>} />
                 <Route path="/admin/account" element={<ProtectedRoute><AppLayout><Account /></AppLayout></ProtectedRoute>} />
-                <Route path="/admin/my-syn" element={<ProtectedRoute><AppLayout><MySyn /></AppLayout></ProtectedRoute>} />
                 <Route path="/admin/users" element={<ProtectedRoute><AdminRoute><AppLayout><Users /></AppLayout></AdminRoute></ProtectedRoute>} />
                 
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
