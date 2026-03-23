@@ -33,12 +33,6 @@ import {
 
 const navigationItems = [
   {
-    title: "Planlæg syn (Automatisk)",
-    url: "/inspections",
-    icon: ClipboardList,
-    adminOnly: true,
-  },
-  {
     title: "Planlæg syn (Manuelt)",
     url: "/planlaeg-syn",
     icon: CalendarPlus,
@@ -83,6 +77,13 @@ const navigationItems = [
 
 const adminNavigationItems = [
   {
+    title: "Planlæg syn (Automatisk)",
+    url: "/inspections",
+    icon: ClipboardList,
+    adminOnly: true,
+    badge: "Beta",
+  },
+  {
     title: "Min konto",
     url: "/admin/account",
     icon: User,
@@ -105,7 +106,7 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader className="border-b border-sidebar-border">
         <div className="flex items-center gap-2 px-4 py-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-bold">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-foreground text-background text-sm font-bold">
             PS
           </div>
           <span className="font-semibold text-sidebar-foreground">ProfSyn</span>
@@ -174,6 +175,9 @@ export function AppSidebar() {
                             >
                               <item.icon className="h-4 w-4" />
                               <span>{item.title}</span>
+                              {(item as any).badge && (
+                                <span className="ml-auto rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">{(item as any).badge}</span>
+                              )}
                             </NavLink>
                           </SidebarMenuButton>
                         </SidebarMenuItem>

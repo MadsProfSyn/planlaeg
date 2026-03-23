@@ -42,7 +42,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-10 w-10 rounded-full">
                   <Avatar>
-                    <AvatarFallback className="bg-primary text-primary-foreground">
+                    <AvatarFallback className="bg-foreground text-background">
                       {getInitials(profile?.full_name || profile?.email || null)}
                     </AvatarFallback>
                   </Avatar>
