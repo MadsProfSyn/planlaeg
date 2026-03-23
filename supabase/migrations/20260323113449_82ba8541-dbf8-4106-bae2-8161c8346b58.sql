@@ -1,0 +1,1 @@
+ALTER TABLE monday_items_selected ADD COLUMN duration_minutes integer;

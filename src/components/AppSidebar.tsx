@@ -7,6 +7,7 @@ import {
   User,
   Brain,
   CalendarPlus,
+  List,
   ChevronDown,
   ChevronRight,
 } from "lucide-react";
@@ -41,6 +42,12 @@ const navigationItems = [
     title: "Planlæg syn (Manuelt)",
     url: "/planlaeg-syn",
     icon: CalendarPlus,
+    adminOnly: true,
+  },
+  {
+    title: "Alle syn",
+    url: "/alle-syn",
+    icon: List,
     adminOnly: true,
   },
   {
