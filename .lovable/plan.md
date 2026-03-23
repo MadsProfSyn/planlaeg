@@ -1,31 +1,35 @@
 
 
-## Respect manual duration overrides from /alle-syn in /planlaeg-syn
+## Fix: Make pre-cache non-blocking (no accuracy loss)
 
-### Problem
-When a user manually sets `duration_minutes` on an inspection via /alle-syn, the /planlaeg-syn page ignores it — `calculateInspectionDuration()` always recalculates from type/rooms/DYMO. The manual override stored in `monday_items_selected.duration_minutes` is never checked.
+### Why this is safe
+The Railway Python service already:
+1. Reads from `mapbox_travel_cache`
+2. Calls Mapbox API for any cache misses
+3. Saves new results back to cache
 
-### Solution
-Create a helper function that checks `item.duration_minutes` first, falling back to `calculateInspectionDuration()` only when null. Use it in the 3 places that calculate duration in /planlaeg-syn.
+The `preCacheTravelTimes` Edge Function does the **identical work** redundantly. Removing the `await` means Railway handles it all — same accuracy, no duplication.
 
-### Changes
+### Change
 
-**1. `src/lib/inspection-duration.ts`** — Add a new helper:
+**File: `src/hooks/useRouteOptimizer.ts` — line 191**
+
+Replace:
 ```typescript
-export function getEffectiveDuration(item: { duration_minutes?: number | null; synstype: string | null; antal_vaerelser: number | null; raw?: any }): number {
-  if (item.duration_minutes != null) return item.duration_minutes;
-  return calculateInspectionDuration({ synstype: item.synstype, antalVaerelser: item.antal_vaerelser, raw: item.raw });
-}
+await preCacheTravelTimes(allItemIds);
 ```
 
-**2. `src/components/planlaeg-syn/ScheduleTimesDialog.tsx`** (~line 110)
-- Replace `calculateInspectionDuration({...})` with `getEffectiveDuration(inspection)`
+With:
+```typescript
+// Fire-and-forget: Railway already handles cache lookups + Mapbox API calls internally
+preCacheTravelTimes(allItemIds).catch(err =>
+  console.warn("⚠️ Background cache warming failed:", err)
+);
+```
 
-**3. `src/components/planlaeg-syn/InlineTimeEditor.tsx`** (~line 74)
-- Replace `calculateInspectionDuration({...})` with `getEffectiveDuration(inspection)`
-
-**4. `src/components/alle-syn/AlleSynTable.tsx`** (~line 36)
-- Update `getDisplayDuration` to also use `getEffectiveDuration` for consistency
-
-Three files updated, one function added. No database changes.
+### Result
+- Route preview: ~4-5 seconds (Railway only) instead of 30-120 seconds
+- Zero accuracy loss — Railway does its own Mapbox lookups for cache misses
+- The background cache warming still runs, benefiting future calls
+- One line changed, one file
 
