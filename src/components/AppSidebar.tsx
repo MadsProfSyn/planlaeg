@@ -4,9 +4,7 @@ import {
   Users,
   UserX,
   Shield,
-  LayoutDashboard,
   User,
-  FileText,
   Brain,
   CalendarPlus,
   ChevronDown,
@@ -78,19 +76,9 @@ const navigationItems = [
 
 const adminNavigationItems = [
   {
-    title: "Oversigt",
-    url: "/admin/overview",
-    icon: LayoutDashboard,
-  },
-  {
     title: "Min konto",
     url: "/admin/account",
     icon: User,
-  },
-  {
-    title: "Mine syn",
-    url: "/admin/my-syn",
-    icon: FileText,
   },
   {
     title: "Brugere",
