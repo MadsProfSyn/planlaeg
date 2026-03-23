@@ -1,60 +1,23 @@
 
 
-## New "Alle syn" Page — Monday Items Overview with Editable Duration
+## Fix 3 issues on /alle-syn
 
-### Summary
-Create a new page at `/alle-syn` that shows all items from `monday_items_selected` (including those already sent to WorkFeed). Users can view and edit item data inline, including a new `duration_minutes` column that auto-calculates from synstype/rooms/DYMO but can be manually overridden.
+### Issue 1: Comma in search causes 400 error
+The comma in search strings like `Søndre Fasanvej 90,` breaks the PostgREST `.or()` filter syntax because commas are used as delimiters in the `or()` expression. Need to escape or strip commas from the search query before passing to Supabase.
 
-### Database Change
-**Migration: Add `duration_minutes` column to `monday_items_selected`**
-```sql
-ALTER TABLE monday_items_selected
-ADD COLUMN duration_minutes integer;
-```
-- Nullable, no default — when NULL, the UI computes from `calculateInspectionDuration()`.
-- When user overrides, store their value here.
+**File: `src/pages/AlleSyn.tsx` (line ~66-69)**
+- Sanitize the search query by replacing commas with spaces (or stripping them) before building the `.or()` filter. This preserves the search intent while avoiding the PostgREST parsing error.
 
-### Files to Create
+### Issue 2: Remove time from Dato/tid column
+The `02:00` shown is likely a timezone artifact from the stored timestamp. The time is not meaningful.
 
-**1. `src/pages/AlleSyn.tsx`**
-- Fetches ALL items from `monday_items_selected` (no `wf_shift_id IS NULL` filter — unlike Inspections page).
-- Pagination, search (Kunde, adresse, lejemalsnr), date filter, region filter.
-- Table columns in order: Kunde, Adresse, Synstype, Dato/tid, Antal værelser, Note (extracted from `raw.Note`), Duration (minutes).
-- Each row is editable — clicking edit opens a dialog (reuse/extend `MondayItemDialog` pattern) where user can change any field including duration override.
-- Duration column shows: stored `duration_minutes` if set, otherwise auto-calculated value with a subtle "(auto)" label.
-- Saving duration writes to the new `duration_minutes` column.
+**File: `src/components/alle-syn/AlleSynTable.tsx` (line ~101-103)**
+- Change the date format from `"dd. MMM yyyy HH:mm"` to `"dd. MMM yyyy"` to drop the time portion.
 
-**2. `src/components/alle-syn/AlleSynTable.tsx`**
-- Table component with sortable columns for the 7 fields.
-- Extracts Note from `raw?.Note`.
-- Shows duration with auto/manual indicator.
-- Edit and delete action buttons per row.
+### Issue 3: Date picker too wide
+The `SingleDatePicker` button has `w-full` which stretches it to fill available space.
 
-**3. `src/components/alle-syn/AlleSynFiltersBar.tsx`**
-- Search input, date filter, region select, clear all — same pattern as `InspectionsFiltersBar`.
-
-**4. `src/components/alle-syn/EditMondayItemDialog.tsx`**
-- Dialog with all 7 editable fields including duration_minutes.
-- Duration field shows placeholder with auto-calculated value.
-- If user clears duration, it reverts to auto-calculation.
-
-### Files to Modify
-
-**5. `src/App.tsx`**
-- Add route: `/alle-syn` → `<AlleSyn />` (protected, with AppLayout).
-
-**6. `src/components/AppSidebar.tsx`**
-- Add nav item "Alle syn" at position 3 (after "Planlæg syn (Manuelt)"), icon: `List` from lucide-react.
-
-**7. `src/lib/supabase.ts`**
-- Add `getAllMondayItems()` function — same as `getMondayItems()` but without the `.is("wf_shift_id", null)` filter, so it returns ALL items.
-- Add `duration_minutes` to `MondayItem` interface.
-
-**8. `src/lib/inspection-duration.ts`**
-- No changes needed — reuse `calculateInspectionDuration()` for auto-calculation in the UI.
-
-### Technical Details
-- The `duration_minutes` column integrates with the existing scheduling flow: when set, `send-manual-shifts-to-workfeed` and VRP calculations should prefer the stored value over auto-calculation.
-- Note extraction: `typeof raw === "string" ? JSON.parse(raw)?.Note : raw?.Note`.
-- Search matches against Kunde, adresse, and lejemalsnr (same as existing pattern).
+**File: `src/components/alle-syn/AlleSynFiltersBar.tsx`**
+- Either pass a className or wrap the `SingleDatePicker` in a container with a fixed width (e.g. `w-[180px]`).
+- Alternatively, change the `SingleDatePicker` trigger from `w-full` to `w-auto` or add a width prop. Since `SingleDatePicker` is shared, safest to constrain width at the call site in `AlleSynFiltersBar`.
 
