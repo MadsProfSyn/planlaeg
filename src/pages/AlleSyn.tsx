@@ -7,6 +7,16 @@ import { AlleSynFiltersBar } from "@/components/alle-syn/AlleSynFiltersBar";
 import { EditMondayItemDialog } from "@/components/alle-syn/EditMondayItemDialog";
 import { MondayItem } from "@/lib/supabase";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Pagination,
   PaginationContent,
   PaginationItem,
