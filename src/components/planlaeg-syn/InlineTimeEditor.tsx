@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Clock, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { calculateEndTime, calculateInspectionDuration } from "@/lib/inspection-duration";
+import { calculateEndTime, getEffectiveDuration } from "@/lib/inspection-duration";
 import type { MondayItem } from "@/lib/supabase";
 
 interface InlineTimeEditorProps {
@@ -71,11 +71,7 @@ export function InlineTimeEditor({
     }
   };
 
-  const duration = calculateInspectionDuration({
-    synstype: inspection.synstype,
-    antalVaerelser: inspection.antal_vaerelser,
-    raw: inspection.raw,
-  });
+  const duration = getEffectiveDuration(inspection);
 
   const hasTime = scheduledTime?.start && scheduledTime?.end;
 

@@ -107,11 +107,7 @@ export function ScheduleTimesDialog({
     return inspections
       .map((inspection) => {
         const routeStop = routeData?.find((s) => s.monday_item_id === inspection.id);
-        const duration = calculateInspectionDuration({
-          synstype: inspection.synstype,
-          antalVaerelser: inspection.antal_vaerelser,
-          raw: inspection.raw,
-        });
+        const duration = getEffectiveDuration(inspection);
 
         return {
           inspection,
