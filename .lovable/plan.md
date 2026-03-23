@@ -1,27 +1,63 @@
 
 
-## Fix: Note not displaying after edit on /alle-syn
+## Speed up inspector loading on /planlaeg-syn
 
-### Problem
-The `AlleSynTable` extracts the note from `item.raw?.Note` (the original Monday.com JSON), but the `EditMondayItemDialog` saves edits to the `note` column on the table. The display function never checks the `note` column, so edited notes appear as "—".
+### Root Cause
+The page calls the `fetch-available-inspectors` **Edge Function** which:
+1. Has cold-start latency (Deno spin-up)
+2. Makes 4 sequential DB queries: availability → inspectors → skills → capacity view
+3. Transforms/joins everything server-side
 
-### Fix
+But all this data **already exists in Supabase tables** synced by the cron job. The client can query these tables directly via the Supabase JS SDK, which is much faster (no Edge Function overhead).
 
-**File: `src/components/alle-syn/AlleSynTable.tsx` — `extractNote` function (~line 23-28)**
+### Solution
+Replace the Edge Function call in `/planlaeg-syn` with direct Supabase client queries using `Promise.all` for parallel fetching.
 
-Change the logic to prefer the `note` column (user-edited value) and fall back to `raw.Note` (original Monday data):
+### Changes
+
+**File: `src/pages/PlanlaegSyn.tsx` (~lines 218-248)**
+
+Replace the `supabase.functions.invoke("fetch-available-inspectors", ...)` call with direct queries:
 
 ```typescript
-function extractNote(item: MondayItem): string {
-  // Prefer the dedicated note column (user edits), fall back to raw.Note
-  if ((item as any).note) return (item as any).note;
-  if (!item.raw) return "";
-  const data = typeof item.raw === "string" ? JSON.parse(item.raw) : item.raw;
-  return data?.Note || "";
+queryFn: async () => {
+  if (!selectedDate) return { data: [] };
+
+  // 1. Query supabase_availability directly
+  let availQuery = supabase
+    .from("supabase_availability")
+    .select("*")
+    .eq("is_available", true)
+    .eq("date_local", selectedDate);
+
+  if (selectedAfdeling !== "all") {
+    availQuery = availQuery.eq("department", selectedAfdeling);
+  }
+
+  const { data: availData } = await availQuery;
+  if (!availData?.length) return { data: [] };
+
+  const inspectorIds = [...new Set(availData.map(r => r.inspector_id))];
+
+  // 2. Parallel fetch: addresses, skills, capacity
+  const [addressRes, skillsRes, capacityRes] = await Promise.all([
+    supabase.from("inspectors").select("id, address").in("id", inspectorIds),
+    supabase.from("inspector_skills").select("inspector_id, inspection_type").in("inspector_id", inspectorIds).eq("is_active", true),
+    supabase.from("inspector_capacity_view").select("*").in("inspector_id", inspectorIds).eq("date_local", selectedDate),
+  ]);
+
+  // 3. Build maps and transform (same logic as Edge Function)
+  // ... return { data: transformedData };
 }
 ```
 
-Update the call site (~line 93) to pass `item` instead of `item.raw`.
+This eliminates the Edge Function cold start and runs all secondary queries in parallel instead of sequentially. Expected load time: **< 2 seconds** instead of 30-60 seconds.
 
-One function changed in one file.
+### What stays the same
+- The Edge Function itself is **not deleted** — it's still used by the Availability page, InspectorSelector dialogs, etc.
+- The data shape returned stays identical so `InspectorsPanel` needs no changes.
+- The cron jobs continue syncing data as before.
+
+### Files Modified
+- `src/pages/PlanlaegSyn.tsx` — replace Edge Function call with direct DB queries + client-side transform
 
