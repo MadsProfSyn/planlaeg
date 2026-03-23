@@ -104,35 +104,38 @@ export function ManageAvailabilityDrawer({ open, onOpenChange, onSuccess }: Mana
     if (!timeRangeDialog.consultant) return;
 
     const consultant = timeRangeDialog.consultant;
-    setUpdatingIds((prev) => new Set(prev).add(consultant.inspector_id));
 
-    try {
-      const { error } = await supabase.rpc("set_consultant_availability_with_ranges", {
+    // 1. Optimistic update — instant UI feedback
+    setConsultants((prev) =>
+      prev.map((c) =>
+        c.inspector_id === consultant.inspector_id
+          ? { ...c, availability_status: "available" as const, source: "override" as const, time_ranges: ranges }
+          : c
+      )
+    );
+
+    // 2. Background save with loading toast
+    const toastId = toast.loading("Gemmer tidsrum...");
+
+    supabase
+      .rpc("set_consultant_availability_with_ranges", {
         p_inspector_id: consultant.inspector_id,
         p_date: format(selectedDate, "yyyy-MM-dd"),
         p_is_available: true,
         p_time_ranges: ranges as any,
         p_source: "override",
+      })
+      .then(({ error }) => {
+        if (error) throw error;
+        toast.success(`Tidsrum opdateret for ${consultant.full_name}`, { id: toastId });
+        onSuccess?.();
+        fetchConsultants(); // silent refresh
+      })
+      .catch((err: any) => {
+        console.error("Error updating availability:", err);
+        toast.error(err.message || "Kunne ikke gemme tidsrum", { id: toastId });
+        fetchConsultants(); // revert optimistic update
       });
-
-      if (error) throw error;
-
-      // Refetch to get updated time ranges
-      await fetchConsultants();
-
-      toast.success(`Tidsrum opdateret for ${consultant.full_name}`);
-      onSuccess?.();
-    } catch (error: any) {
-      console.error("Error updating availability:", error);
-      toast.error(error.message || "Kunne ikke opdatere tilgængelighed");
-      throw error;
-    } finally {
-      setUpdatingIds((prev) => {
-        const updated = new Set(prev);
-        updated.delete(consultant.inspector_id);
-        return updated;
-      });
-    }
   };
 
   const handleMakeUnavailable = async (inspectorId: string, inspectorName: string) => {
