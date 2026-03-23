@@ -54,7 +54,8 @@ export default function AlleSyn() {
 
     let query = supabase
       .from("monday_items_selected")
-      .select("*", { count: "exact" });
+      .select("*", { count: "exact" })
+      .is("wf_shift_id", null);
 
     if (selectedRegion) {
       query = query.eq("landsdel", selectedRegion);
