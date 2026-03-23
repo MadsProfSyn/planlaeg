@@ -18,6 +18,7 @@ export interface MondayItem {
   // Schedule tracking fields
   schedule_status?: string | null;
   wf_shift_id?: string | null;
+  duration_minutes?: number | null;
   scheduled_inspector_id?: string | null;
   scheduled_start_time?: string | null;
   scheduled_end_time?: string | null;

@@ -696,6 +696,7 @@ export type Database = {
           antal_vaerelser: number | null
           board_id: number | null
           dato_tid: string | null
+          duration_minutes: number | null
           geocode_status: string | null
           has_cylinderskift: boolean | null
           has_dymo: boolean | null
@@ -730,6 +731,7 @@ export type Database = {
           antal_vaerelser?: number | null
           board_id?: number | null
           dato_tid?: string | null
+          duration_minutes?: number | null
           geocode_status?: string | null
           has_cylinderskift?: boolean | null
           has_dymo?: boolean | null
@@ -764,6 +766,7 @@ export type Database = {
           antal_vaerelser?: number | null
           board_id?: number | null
           dato_tid?: string | null
+          duration_minutes?: number | null
           geocode_status?: string | null
           has_cylinderskift?: boolean | null
           has_dymo?: boolean | null
