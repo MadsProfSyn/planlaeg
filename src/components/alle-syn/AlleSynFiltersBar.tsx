@@ -48,7 +48,7 @@ export function AlleSynFiltersBar({
           className="w-64"
         />
 
-        <SingleDatePicker value={date} onChange={onDateChange} />
+        <SingleDatePicker date={date} onDateChange={(v) => onDateChange(v || "")} />
 
         <Select value={selectedRegion || "all"} onValueChange={(v) => onRegionChange(v === "all" ? "" : v)}>
           <SelectTrigger className="w-[160px]">
