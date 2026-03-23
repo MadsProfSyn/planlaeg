@@ -634,7 +634,7 @@ export default function PlanlaegSyn() {
   };
 
   return (
-    <div className="flex flex-col h-full px-6 lg:px-8">
+    <div className="flex flex-col h-full overflow-hidden px-6 lg:px-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-foreground">Planlæg syn</h1>
         <p className="text-muted-foreground">Tildel synsopgaver til tilgængelige konsulenter</p>
