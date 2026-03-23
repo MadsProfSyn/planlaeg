@@ -99,7 +99,7 @@ export function AlleSynTable({ items, isLoading, onEdit }: AlleSynTableProps) {
                 <TableCell>{item.synstype || "—"}</TableCell>
                 <TableCell className="whitespace-nowrap">
                   {item.dato_tid
-                    ? format(new Date(item.dato_tid), "dd. MMM yyyy HH:mm", { locale: da })
+                    ? format(new Date(item.dato_tid), "dd. MMM yyyy", { locale: da })
                     : "—"}
                 </TableCell>
                 <TableCell className="text-center">{item.antal_vaerelser ?? "—"}</TableCell>

@@ -63,7 +63,7 @@ export default function AlleSyn() {
       query = query.gte("dato_tid", `${date}T00:00:00`).lte("dato_tid", `${date}T23:59:59`);
     }
     if (searchQuery && searchQuery.trim().length >= 2) {
-      const q = searchQuery.trim();
+      const q = searchQuery.trim().replace(/,/g, " ").replace(/\s+/g, " ").trim();
       query = query.or(
         [`Kunde.ilike.%${q}%`, `lejemalsnr.ilike.%${q}%`, `adresse.ilike.%${q}%`].join(",")
       );
