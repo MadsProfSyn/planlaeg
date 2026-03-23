@@ -10,6 +10,7 @@ import {
   List,
   ChevronDown,
   ChevronRight,
+  Clock,
 } from "lucide-react";
 import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
@@ -92,6 +93,12 @@ const adminNavigationItems = [
     title: "Brugere",
     url: "/admin/users",
     icon: Users,
+    adminOnly: true,
+  },
+  {
+    title: "Syn variabler",
+    url: "/admin/syn-variabler",
+    icon: Clock,
     adminOnly: true,
   },
 ];

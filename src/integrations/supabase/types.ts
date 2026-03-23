@@ -179,6 +179,24 @@ export type Database = {
         }
         Relationships: []
       }
+      inspection_duration_modifiers: {
+        Row: {
+          applies_to: string[]
+          minutes: number
+          modifier_name: string
+        }
+        Insert: {
+          applies_to?: string[]
+          minutes?: number
+          modifier_name: string
+        }
+        Update: {
+          applies_to?: string[]
+          minutes?: number
+          modifier_name?: string
+        }
+        Relationships: []
+      }
       inspection_durations: {
         Row: {
           inspection_type: Database["public"]["Enums"]["inspection_type_enum"]
