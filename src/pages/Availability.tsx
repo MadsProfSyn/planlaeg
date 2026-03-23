@@ -541,7 +541,7 @@ ProfSyn`;
         </TabsContent>
 
         <TabsContent value="sms-history">
-          <SmsHistoryTab />
+          <SmsHistoryTab initialDate={filters.date} />
         </TabsContent>
       </Tabs>
 
