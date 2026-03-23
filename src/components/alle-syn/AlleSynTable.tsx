@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { da } from "date-fns/locale";
-import { Pencil } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -19,6 +19,7 @@ interface AlleSynTableProps {
   items: MondayItem[];
   isLoading: boolean;
   onEdit: (item: MondayItem) => void;
+  onDelete: (id: number) => void;
 }
 
 function extractNote(item: MondayItem): string {
@@ -35,7 +36,7 @@ function getDisplayDuration(item: MondayItem): { value: number; isAuto: boolean 
   return { value: getEffectiveDuration(item), isAuto: true };
 }
 
-export function AlleSynTable({ items, isLoading, onEdit }: AlleSynTableProps) {
+export function AlleSynTable({ items, isLoading, onEdit, onDelete }: AlleSynTableProps) {
   if (isLoading) {
     return (
       <div className="rounded-md border">
@@ -106,9 +107,12 @@ export function AlleSynTable({ items, isLoading, onEdit }: AlleSynTableProps) {
                     <Badge variant="outline" className="ml-1 text-xs font-normal">auto</Badge>
                   )}
                 </TableCell>
-                <TableCell>
+                <TableCell className="flex gap-1">
                   <Button variant="ghost" size="icon" onClick={() => onEdit(item)}>
                     <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="hover:bg-destructive/10" onClick={() => onDelete(item.id)}>
+                    <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
                 </TableCell>
               </TableRow>
