@@ -175,6 +175,9 @@ export function AppSidebar() {
                             >
                               <item.icon className="h-4 w-4" />
                               <span>{item.title}</span>
+                              {(item as any).badge && (
+                                <span className="ml-auto rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">{(item as any).badge}</span>
+                              )}
                             </NavLink>
                           </SidebarMenuButton>
                         </SidebarMenuItem>
