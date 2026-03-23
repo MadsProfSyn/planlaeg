@@ -83,10 +83,10 @@ export default function SynVariabler() {
       // Update modifiers
       for (const mod of modifiers) {
         updates.push(
-          supabase
-            .from("inspection_duration_modifiers" as any)
-            .update({ minutes: mod.minutes } as any)
-            .eq("modifier_name" as any, mod.modifier_name)
+          (supabase as any)
+            .from("inspection_duration_modifiers")
+            .update({ minutes: mod.minutes })
+            .eq("modifier_name", mod.modifier_name)
         );
       }
 
