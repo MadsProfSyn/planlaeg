@@ -1,21 +1,12 @@
 
 
-## Fix Independent Scrolling for Inspector Panel on /planlaeg-syn
+## Fix Independent Scrolling on /planlaeg-syn
 
-### Problem
-The `<main>` element in `AppLayout.tsx` has `overflow-auto`, which lets the entire page scroll as one unit. Even though the two-column grid has `min-h-0`, the panels expand to full content height and scroll together.
+### Root Cause
+The grid uses `lg:grid-cols-2` (breakpoint at 1024px). At the current preview viewport of ~673px, this falls back to single-column layout — both panels stack vertically and the whole page scrolls as one unit. The `overflow-hidden` and `h-full` constraints only work when both panels are side-by-side in a two-column grid.
 
 ### Fix
-**1 file: `src/pages/PlanlaegSyn.tsx`**
+**1 file: `src/pages/PlanlaegSyn.tsx`** (line 690)
 
-Change the root container div (line 637) from:
-```
-<div className="flex flex-col h-full px-6 lg:px-8">
-```
-to:
-```
-<div className="flex flex-col h-full overflow-hidden px-6 lg:px-8">
-```
-
-Adding `overflow-hidden` prevents the page content from exceeding the viewport height, forcing each panel's internal `ScrollArea` to handle scrolling independently. The header, filters, and action buttons remain fixed at the top while both panels scroll on their own.
+Change `grid-cols-1 lg:grid-cols-2` to `grid-cols-2` so the panels are always side-by-side regardless of viewport width. This ensures each panel stays within its column and scrolls independently via its internal `ScrollArea`.
 
