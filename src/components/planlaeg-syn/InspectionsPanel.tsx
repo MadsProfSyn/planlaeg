@@ -1,11 +1,13 @@
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { format, parseISO } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Input } from "@/components/ui/input";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
-import { X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import type { MondayItem } from "@/lib/supabase";
 
 interface InspectionsPanelProps {
@@ -123,15 +125,33 @@ export function InspectionsPanel({
   hiddenIds,
   isDragActive,
 }: InspectionsPanelProps) {
-  // Filter out hidden inspections (assigned ones)
+  const [searchQuery, setSearchQuery] = useState("");
+
   const visibleInspections = hiddenIds
     ? inspections.filter((i) => !hiddenIds.has(i.id))
     : inspections;
 
+  const filteredInspections = useMemo(() => {
+    if (!searchQuery.trim()) return visibleInspections;
+    const q = searchQuery.toLowerCase();
+    return visibleInspections.filter((i) =>
+      (i.adresse ?? "").toLowerCase().includes(q)
+    );
+  }, [visibleInspections, searchQuery]);
+
   return (
     <Card className="flex flex-col h-full min-h-0 overflow-hidden">
-      <CardHeader className="pb-3 flex-shrink-0">
+      <CardHeader className="pb-3 flex-shrink-0 space-y-2">
         <CardTitle className="text-lg">Synsopgaver</CardTitle>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Søg adresse..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
+        </div>
       </CardHeader>
       <CardContent className="flex-1 min-h-0 overflow-hidden p-0">
         <ScrollArea className="h-full min-h-0 px-6 pb-6">
@@ -142,13 +162,15 @@ export function InspectionsPanel({
                 <Skeleton key={i} className="h-20 w-full" />
               ))}
             </div>
-          ) : visibleInspections.length === 0 ? (
+          ) : filteredInspections.length === 0 ? (
             <div className="flex items-center justify-center h-40 text-muted-foreground">
-              Ingen synsopgaver for denne dato
+              {searchQuery.trim()
+                ? "Ingen synsopgaver matcher søgningen"
+                : "Ingen synsopgaver for denne dato"}
             </div>
           ) : (
             <div className="space-y-2">
-              {visibleInspections.map((inspection) => (
+              {filteredInspections.map((inspection) => (
                 <DraggableInspection
                   key={inspection.id}
                   inspection={inspection}
