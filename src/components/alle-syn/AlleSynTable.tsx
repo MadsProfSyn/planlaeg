@@ -29,11 +29,11 @@ function extractNote(item: MondayItem): string {
   return data?.Note || "";
 }
 
-function getDisplayDuration(item: MondayItem): { value: number; isAuto: boolean } {
+function getDisplayDuration(item: MondayItem): { value: number; isManual: boolean; isAuto: boolean } {
   if ((item as any).duration_minutes != null) {
-    return { value: (item as any).duration_minutes, isAuto: false };
+    return { value: (item as any).duration_minutes, isManual: true, isAuto: false };
   }
-  return { value: getEffectiveDuration(item), isAuto: true };
+  return { value: getEffectiveDuration(item), isManual: false, isAuto: true };
 }
 
 export function AlleSynTable({ items, isLoading, onEdit, onDelete }: AlleSynTableProps) {
@@ -103,7 +103,9 @@ export function AlleSynTable({ items, isLoading, onEdit, onDelete }: AlleSynTabl
                 <TableCell className="max-w-[160px] truncate" title={note}>{note || "—"}</TableCell>
                 <TableCell className="text-center whitespace-nowrap">
                   {dur.value} min
-                  {dur.isAuto && (
+                  {dur.isManual ? (
+                    <Badge variant="outline" className="ml-1 text-xs font-normal text-amber-600 border-amber-400/40 italic">Manuel</Badge>
+                  ) : (
                     <Badge variant="outline" className="ml-1 text-xs font-normal">auto</Badge>
                   )}
                 </TableCell>
