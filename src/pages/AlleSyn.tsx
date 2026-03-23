@@ -43,6 +43,8 @@ export default function AlleSyn() {
 
   const [editItem, setEditItem] = useState<MondayItem | null>(null);
   const [editOpen, setEditOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   // Fetch regions once
   useEffect(() => {
@@ -141,6 +143,22 @@ export default function AlleSyn() {
     fetchItems();
   };
 
+  const handleConfirmDelete = async () => {
+    if (!deleteId) return;
+    const { error } = await supabase
+      .from("monday_items_selected")
+      .delete()
+      .eq("id", deleteId);
+    if (error) {
+      toast({ title: "Fejl ved sletning", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Slettet", description: "Synsopgave er slettet." });
+      fetchItems();
+    }
+    setDeleteOpen(false);
+    setDeleteId(null);
+  };
+
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6">
       <div>
@@ -162,7 +180,7 @@ export default function AlleSyn() {
         isLoading={isLoading}
       />
 
-      <AlleSynTable items={items} isLoading={isLoading} onEdit={handleEdit} />
+      <AlleSynTable items={items} isLoading={isLoading} onEdit={handleEdit} onDelete={(id) => { setDeleteId(id); setDeleteOpen(true); }} />
 
       {totalPages > 1 && (
         <Pagination>
@@ -205,6 +223,21 @@ export default function AlleSyn() {
         item={editItem}
         onSave={handleSave}
       />
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Slet synsopgave</AlertDialogTitle>
+            <AlertDialogDescription>
+              Er du sikker på, at du vil slette denne synsopgave? Denne handling kan ikke fortrydes.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuller</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDelete}>Slet</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
