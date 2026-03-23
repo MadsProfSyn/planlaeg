@@ -38,6 +38,8 @@ export function EditMondayItemDialog({ open, onClose, item, onSave }: EditMonday
         synstype: item.synstype,
         antalVaerelser: item.antal_vaerelser,
         raw: item.raw,
+        has_dymo: (item as any).has_dymo,
+        has_cylinderskift: (item as any).has_cylinderskift,
       })
     : 45;
 

@@ -5,6 +5,8 @@ interface DurationParams {
   synstype: string | null;
   antalVaerelser: number | null;
   raw?: any;
+  has_dymo?: boolean | null;
+  has_cylinderskift?: boolean | null;
 }
 
 // Map full synstype name to abbreviation
@@ -111,21 +113,23 @@ export function calculateInspectionDuration(params: DurationParams): number {
   // Look up base duration from matrix
   let durationMinutes = matrix[type]?.[rooms] ?? matrix[type]?.[2] ?? 45;
 
-  // Check for DYMO modifier
+  // Determine modifier flags: prefer DB booleans, fall back to raw.Note parsing
   let note = "";
   if (raw) {
     const rawData = typeof raw === "string" ? JSON.parse(raw) : raw;
     note = rawData?.Note || "";
   }
 
+  const hasDymo = params.has_dymo ?? note.toUpperCase().includes("DYMO");
+  const hasCyl = params.has_cylinderskift ?? (note.toUpperCase().includes("CYLINDERSKIFT") || note.toUpperCase().includes("CYLINDER"));
+
   const dymo = modifiers["DYMO"];
-  if (dymo && note.toUpperCase().includes("DYMO") && dymo.applies_to.includes(type)) {
+  if (dymo && hasDymo && dymo.applies_to.includes(type)) {
     durationMinutes += dymo.minutes;
   }
 
-  // Check for Cylinderskift modifier
   const cyl = modifiers["Cylinderskift"];
-  if (cyl && note.toUpperCase().includes("CYLINDERSKIFT") && cyl.applies_to.includes(type)) {
+  if (cyl && hasCyl && cyl.applies_to.includes(type)) {
     durationMinutes += cyl.minutes;
   }
 
@@ -149,9 +153,9 @@ export function calculateEndTime(startTime: string, params: DurationParams): str
 /**
  * Get effective duration: use manual override if set, otherwise auto-calculate
  */
-export function getEffectiveDuration(item: { duration_minutes?: number | null; synstype: string | null; antal_vaerelser: number | null; raw?: any }): number {
+export function getEffectiveDuration(item: { duration_minutes?: number | null; synstype: string | null; antal_vaerelser: number | null; raw?: any; has_dymo?: boolean | null; has_cylinderskift?: boolean | null }): number {
   if (item.duration_minutes != null) return item.duration_minutes;
-  return calculateInspectionDuration({ synstype: item.synstype, antalVaerelser: item.antal_vaerelser, raw: item.raw });
+  return calculateInspectionDuration({ synstype: item.synstype, antalVaerelser: item.antal_vaerelser, raw: item.raw, has_dymo: item.has_dymo, has_cylinderskift: item.has_cylinderskift });
 }
 
 /**
