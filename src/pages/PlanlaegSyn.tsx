@@ -687,7 +687,7 @@ export default function PlanlaegSyn() {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1 min-h-0 mt-4 min-w-0 overflow-hidden">
+        <div className="grid grid-cols-2 gap-6 flex-1 min-h-0 mt-4 min-w-0 overflow-hidden">
           <div className="overflow-hidden min-h-0">
             <InspectionsPanel
               inspections={inspections}
