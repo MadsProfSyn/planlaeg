@@ -215,34 +215,94 @@ export default function PlanlaegSyn() {
     return () => { supabase.removeChannel(channel); };
   }, [queryClient]);
 
-  // Fetch inspectors for the selected date and afdeling (independent filter)
+  // Fetch inspectors for the selected date and afdeling — direct DB queries (no Edge Function)
   const { data: inspectorsData, isLoading: isLoadingInspectors } = useQuery({
     queryKey: ["planlaeg-inspectors", selectedDate, selectedAfdeling],
     queryFn: async () => {
       if (!selectedDate) return { data: [] };
 
-      const params: any = {
-        from: selectedDate,
-        to: selectedDate,
-        synstyper_all: true,
-        synstyper: [],
-        q: "",
-        page: 1,
-        pageSize: 500,
-        no_pagination: true,
-      };
+      // 1. Query availability directly
+      let availQuery = supabase
+        .from("supabase_availability")
+        .select("*")
+        .eq("is_available", true)
+        .eq("date_local", selectedDate);
 
-      // Filter by afdeling directly (Storkøbenhavn, Odense, Århus, Aalborg)
       if (selectedAfdeling !== "all") {
-        params.afdeling = [selectedAfdeling];
+        availQuery = availQuery.eq("department", selectedAfdeling);
       }
 
-      const { data, error } = await supabase.functions.invoke("fetch-available-inspectors", {
-        body: params,
+      const { data: availData, error: availError } = await availQuery;
+      if (availError) throw availError;
+      if (!availData?.length) return { data: [] };
+
+      const inspectorIds = [...new Set(availData.map(r => r.inspector_id))];
+
+      // 2. Parallel fetch: addresses, skills, capacity
+      const [addressRes, skillsRes, capacityRes] = await Promise.all([
+        supabase.from("inspectors").select("id, address").in("id", inspectorIds),
+        supabase.from("inspector_skills").select("inspector_id, inspection_type").in("inspector_id", inspectorIds).eq("is_active", true),
+        supabase.from("inspector_capacity_view").select("inspector_id, date_local, scheduled_shifts, shift_details, booked_minutes, remaining_minutes, capacity_status").in("inspector_id", inspectorIds).eq("date_local", selectedDate),
+      ]);
+
+      // 3. Build lookup maps
+      const addressMap = new Map<string, string>();
+      (addressRes.data || []).forEach((i: any) => addressMap.set(i.id, i.address || ''));
+
+      const skillsMap = new Map<string, string[]>();
+      (skillsRes.data || []).forEach((s: any) => {
+        if (!skillsMap.has(s.inspector_id)) skillsMap.set(s.inspector_id, []);
+        skillsMap.get(s.inspector_id)!.push(s.inspection_type);
       });
 
-      if (error) throw error;
-      return data;
+      const capacityMap = new Map<string, any>();
+      (capacityRes.data || []).forEach((c: any) => {
+        capacityMap.set(c.inspector_id, {
+          scheduled_shifts: c.scheduled_shifts || 0,
+          shift_details: c.shift_details || [],
+          booked_minutes: c.booked_minutes || 0,
+          remaining_minutes: c.remaining_minutes,
+          capacity_status: c.capacity_status,
+        });
+      });
+
+      // 4. Transform to match expected UI format
+      const transformedData = availData.map((row: any) => {
+        const skills = skillsMap.get(row.inspector_id) || [];
+
+        let tidspunkt_label = 'Hele dagen';
+        if (row.start_time_local && row.end_time_local) {
+          tidspunkt_label = `${row.start_time_local.substring(0, 5)} - ${row.end_time_local.substring(0, 5)}`;
+        } else if (row.start_time_local) {
+          tidspunkt_label = `Fra ${row.start_time_local.substring(0, 5)}`;
+        } else if (row.end_time_local) {
+          tidspunkt_label = `Til ${row.end_time_local.substring(0, 5)}`;
+        }
+
+        const cap = capacityMap.get(row.inspector_id) || {
+          scheduled_shifts: 0, shift_details: [], booked_minutes: 0,
+          remaining_minutes: null, capacity_status: null,
+        };
+
+        return {
+          availability_id: row.id,
+          inspector_uuid: row.inspector_id,
+          navn: row.inspector_name,
+          afdeling: row.department || '',
+          synstyper: skills,
+          adresse: addressMap.get(row.inspector_id) || '',
+          dato: row.date_local,
+          start_tid: row.start_time_local,
+          slut_tid: row.end_time_local,
+          tidspunkt_label,
+          scheduled_shifts: cap.scheduled_shifts,
+          shift_details: cap.shift_details,
+          booked_minutes: cap.booked_minutes,
+          capacity_status: cap.capacity_status,
+        };
+      });
+
+      return { data: transformedData };
     },
     enabled: !!selectedDate,
   });
