@@ -1,4 +1,5 @@
 // Duration calculation for inspections based on type and room count
+import { supabase } from "@/integrations/supabase/client";
 
 interface DurationParams {
   synstype: string | null;
@@ -14,50 +15,118 @@ const TYPE_MAP: Record<string, string> = {
   "Proforma": "PA",
 };
 
+// Hardcoded fallback matrix (used if DB fetch fails)
+const FALLBACK_MATRIX: Record<string, Record<number, number>> = {
+  FF: { 1: 65, 2: 75, 3: 80, 4: 90, 5: 90, 6: 90 },
+  IF: { 1: 35, 2: 45, 3: 45, 4: 50, 5: 60, 6: 65 },
+  PS: { 1: 35, 2: 45, 3: 45, 4: 50, 5: 60, 6: 65 },
+  PA: { 1: 35, 2: 45, 3: 45, 4: 50, 5: 60, 6: 65 },
+};
+
+const FALLBACK_MODIFIERS: Record<string, { minutes: number; applies_to: string[] }> = {
+  DYMO: { minutes: 5, applies_to: ["IF", "PS"] },
+  Cylinderskift: { minutes: 10, applies_to: ["IF", "PS"] },
+};
+
+// Cached duration data
+let cachedMatrix: Record<string, Record<number, number>> | null = null;
+let cachedModifiers: Record<string, { minutes: number; applies_to: string[] }> | null = null;
+let fetchPromise: Promise<void> | null = null;
+
+export function clearDurationCache() {
+  cachedMatrix = null;
+  cachedModifiers = null;
+  fetchPromise = null;
+}
+
+async function ensureCacheLoaded(): Promise<void> {
+  if (cachedMatrix && cachedModifiers) return;
+  if (fetchPromise) return fetchPromise;
+
+  fetchPromise = (async () => {
+    try {
+      const [durRes, modRes] = await Promise.all([
+        supabase.from("inspection_durations").select("*"),
+        (supabase as any).from("inspection_duration_modifiers").select("*"),
+      ]);
+
+      if (durRes.data && durRes.data.length > 0) {
+        const m: Record<string, Record<number, number>> = {};
+        for (const row of durRes.data) {
+          if (!m[row.inspection_type]) m[row.inspection_type] = {};
+          m[row.inspection_type][row.rooms] = row.minutes;
+        }
+        cachedMatrix = m;
+      } else {
+        cachedMatrix = FALLBACK_MATRIX;
+      }
+
+      if (modRes.data && (modRes.data as any[]).length > 0) {
+        const mods: Record<string, { minutes: number; applies_to: string[] }> = {};
+        for (const row of modRes.data as any[]) {
+          mods[row.modifier_name] = { minutes: row.minutes, applies_to: row.applies_to };
+        }
+        cachedModifiers = mods;
+      } else {
+        cachedModifiers = FALLBACK_MODIFIERS;
+      }
+    } catch {
+      cachedMatrix = FALLBACK_MATRIX;
+      cachedModifiers = FALLBACK_MODIFIERS;
+    }
+  })();
+
+  return fetchPromise;
+}
+
 /**
- * Calculate inspection duration in minutes based on type, room count, and DYMO presence
+ * Get the duration matrix (sync - returns fallback if not yet loaded)
+ */
+function getMatrix(): Record<string, Record<number, number>> {
+  return cachedMatrix || FALLBACK_MATRIX;
+}
+
+function getModifiers(): Record<string, { minutes: number; applies_to: string[] }> {
+  return cachedModifiers || FALLBACK_MODIFIERS;
+}
+
+/**
+ * Pre-load the duration cache. Call early in app lifecycle.
+ */
+export function preloadDurationCache(): void {
+  ensureCacheLoaded();
+}
+
+/**
+ * Calculate inspection duration in minutes based on type, room count, and flags
  */
 export function calculateInspectionDuration(params: DurationParams): number {
   const { synstype, antalVaerelser, raw } = params;
   const type = TYPE_MAP[synstype || ""] || "IF";
-  const rooms = antalVaerelser || 2;
+  const rooms = Math.min(Math.max(antalVaerelser || 2, 1), 6);
 
-  let durationMinutes: number;
+  const matrix = getMatrix();
+  const modifiers = getModifiers();
 
-  if (type === "FF") {
-    // Fraflytningssyn - longer durations
-    switch (rooms) {
-      case 1: durationMinutes = 65; break;
-      case 2: durationMinutes = 75; break;
-      case 3: durationMinutes = 80; break;
-      case 4:
-      case 5:
-      case 6:
-      default: durationMinutes = 90; // 4+ rooms
-    }
-  } else {
-    // IF, PA, PS - shorter durations
-    switch (rooms) {
-      case 1: durationMinutes = 35; break;
-      case 2: durationMinutes = 45; break;
-      case 3: durationMinutes = 45; break;
-      case 4: durationMinutes = 50; break;
-      case 5: durationMinutes = 60; break;
-      case 6:
-      default: durationMinutes = 65; // 6+ rooms
-    }
-  }
+  // Look up base duration from matrix
+  let durationMinutes = matrix[type]?.[rooms] ?? matrix[type]?.[2] ?? 45;
 
-  // Add 5 minutes if Note contains "DYMO" and type is IF or PS
+  // Check for DYMO modifier
   let note = "";
   if (raw) {
-    // Handle both parsed JSON and string cases
     const rawData = typeof raw === "string" ? JSON.parse(raw) : raw;
     note = rawData?.Note || "";
   }
-  
-  if (note.toUpperCase().includes("DYMO") && (type === "IF" || type === "PS")) {
-    durationMinutes += 5;
+
+  const dymo = modifiers["DYMO"];
+  if (dymo && note.toUpperCase().includes("DYMO") && dymo.applies_to.includes(type)) {
+    durationMinutes += dymo.minutes;
+  }
+
+  // Check for Cylinderskift modifier
+  const cyl = modifiers["Cylinderskift"];
+  if (cyl && note.toUpperCase().includes("CYLINDERSKIFT") && cyl.applies_to.includes(type)) {
+    durationMinutes += cyl.minutes;
   }
 
   return durationMinutes;
@@ -65,27 +134,18 @@ export function calculateInspectionDuration(params: DurationParams): number {
 
 /**
  * Calculate end time given a start time and inspection parameters
- * @param startTime - Start time in HH:mm format
- * @param params - Inspection parameters for duration calculation
- * @returns End time in HH:mm format
  */
 export function calculateEndTime(startTime: string, params: DurationParams): string {
   const durationMinutes = calculateInspectionDuration(params);
   const [hours, minutes] = startTime.split(":").map(Number);
-  
+
   const startDate = new Date();
   startDate.setHours(hours, minutes, 0, 0);
   const endDate = new Date(startDate.getTime() + durationMinutes * 60 * 1000);
-  
+
   return `${String(endDate.getHours()).padStart(2, "0")}:${String(endDate.getMinutes()).padStart(2, "0")}`;
 }
 
-/**
- * Add minutes to a time string
- * @param time - Time in HH:mm format
- * @param minutes - Minutes to add
- * @returns New time in HH:mm format
- */
 /**
  * Get effective duration: use manual override if set, otherwise auto-calculate
  */
@@ -94,6 +154,9 @@ export function getEffectiveDuration(item: { duration_minutes?: number | null; s
   return calculateInspectionDuration({ synstype: item.synstype, antalVaerelser: item.antal_vaerelser, raw: item.raw });
 }
 
+/**
+ * Add minutes to a time string
+ */
 export function addMinutesToTime(time: string, minutes: number): string {
   const [hours, mins] = time.split(":").map(Number);
   const date = new Date();

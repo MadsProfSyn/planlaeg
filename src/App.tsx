@@ -18,6 +18,7 @@ import PlanlaegSyn from "./pages/PlanlaegSyn";
 import AlleSyn from "./pages/AlleSyn";
 import Account from "./pages/admin/Account";
 import Users from "./pages/admin/Users";
+import SynVariabler from "./pages/admin/SynVariabler";
 import NotFound from "./pages/NotFound";
 import ResetPassword from "./pages/ResetPassword";
 import { ErrorBoundary } from "@/components/utility/ErrorBoundary";
@@ -49,6 +50,7 @@ const App = () => {
                 <Route path="/admin" element={<ProtectedRoute><AppLayout><Navigate to="/admin/account" replace /></AppLayout></ProtectedRoute>} />
                 <Route path="/admin/account" element={<ProtectedRoute><AppLayout><Account /></AppLayout></ProtectedRoute>} />
                 <Route path="/admin/users" element={<ProtectedRoute><AdminRoute><AppLayout><Users /></AppLayout></AdminRoute></ProtectedRoute>} />
+                <Route path="/admin/syn-variabler" element={<ProtectedRoute><AdminRoute><AppLayout><SynVariabler /></AppLayout></AdminRoute></ProtectedRoute>} />
                 
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
