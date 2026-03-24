@@ -26,7 +26,7 @@ export default function Auth() {
       return;
     }
     if (user && !loading) {
-      navigate('/admin/overview');
+      navigate('/alle-syn');
     }
   }, [user, loading, navigate, isPasswordRecovery]);
 
@@ -37,7 +37,7 @@ export default function Auth() {
     const { error } = await signIn(signInEmail, signInPassword);
     
     if (!error) {
-      navigate('/admin/overview');
+      navigate('/alle-syn');
     }
     
     setIsSubmitting(false);
