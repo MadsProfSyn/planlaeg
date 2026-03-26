@@ -451,6 +451,9 @@ function DroppableInspector({
       const newOrder = arrayMove(currentOrder, oldIndex, newIndex);
       setManualOrder(newOrder);
 
+      // Clear overrides immediately so Railway response is not blocked
+      onClearManualOverrides?.(newOrder);
+
       // Call Railway with fixed_order: true
       callRailwayReorder(newOrder, true);
     },
