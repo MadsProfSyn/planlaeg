@@ -457,7 +457,7 @@ function DroppableInspector({
       // Call Railway with fixed_order: true
       callRailwayReorder(newOrder, true);
     },
-    [sortedItems, existingItemIds, callRailwayReorder]
+    [sortedItems, existingItemIds, callRailwayReorder, onClearManualOverrides]
   );
 
   const handleResetOrder = useCallback(() => {
