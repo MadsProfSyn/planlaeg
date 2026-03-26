@@ -51,6 +51,8 @@ interface InspectorsPanelProps {
   isRouteLoading?: boolean;
   selectedDate: string;
   onClearManualOverrides?: (ids: number[]) => void;
+  existingAssignmentsMap: Map<string, MondayItem[]>;
+  inspectorShiftDetails: Map<string, { type: string; start_time: string; end_time: string; duration_minutes: number; address?: string; lat?: number; lng?: number }[]>;
 }
 
 const TYPE_COLORS: Record<string, string> = {
