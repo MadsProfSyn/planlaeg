@@ -568,7 +568,7 @@ function DroppableInspector({
                   <span>{routeData.total_travel_minutes} min</span>
                 </div>
               )}
-              {isRouteLoading && assignedItems.length > 0 && (
+              {(isRouteLoading || isReorderLoading) && assignedItems.length > 0 && (
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
               )}
               {assignedItems.length > 0 && (
