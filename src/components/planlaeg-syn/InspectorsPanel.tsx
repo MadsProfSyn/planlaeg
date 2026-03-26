@@ -26,7 +26,7 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Info, X, Plus, Clock, Search, Route, Loader2, Calendar, GripVertical, AlertTriangle, RotateCcw, StickyNote } from "lucide-react";
+import { Info, X, Plus, Clock, Search, Route, Loader2, Calendar, GripVertical, AlertTriangle, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ScheduleTimesDialog } from "./ScheduleTimesDialog";
 import { InlineTimeEditor } from "./InlineTimeEditor";
