@@ -1,37 +1,40 @@
 
 
-## Fix: Re-protect fixed_order times from stale auto-apply
+## Inspector Notes System
 
-### Problem
-The fixed_order Railway response applies correct times via `onAutoScheduledTimes(freshTimes, itemIds)`, but clearing `manualTimeOverrides` triggers a re-render causing the `useEffect` watching `routeData` to re-apply the old (non-fixed-order) times — overwriting the fresh ones.
+The `inspectors` table already has a `notes` TEXT column — no database migration needed.
 
-### Fix — one change in `callRailwayReorder` (InspectorsPanel.tsx)
+### Changes
 
-After applying fresh times with `onAutoScheduledTimes`, immediately call `onUpdateScheduledTimes(freshTimes)` to re-add those IDs to `manualTimeOverrides`, protecting them from the stale auto-apply.
+**1. `/inspectors` page — show notes and edit them (`src/pages/Inspectors.tsx`)**
 
-**Lines ~425-430**, change from:
-```ts
-// Clear manual overrides first so fresh times are not blocked
-onClearManualOverrides?.(itemIds);
-// Apply fresh Railway times with forceIds to bypass stale closure
-if (freshTimes.size > 0) {
-  onAutoScheduledTimes(freshTimes, itemIds);
-}
-```
+- Add `notes` to the `InspectorWithDetails` interface and the Supabase select query
+- Add a 📝 icon next to the inspector name when `notes` is non-empty, with a Tooltip showing the note text on hover
+- Pass `notes` to `EditInspectorDialog` via the `editingInspector` state object
 
-To:
-```ts
-// Clear manual overrides first so fresh times are not blocked
-onClearManualOverrides?.(itemIds);
-// Apply fresh Railway times with forceIds to bypass stale closure
-if (freshTimes.size > 0) {
-  onAutoScheduledTimes(freshTimes, itemIds);
-  // Re-protect these IDs so the stale routeData auto-apply cannot overwrite them
-  onUpdateScheduledTimes(freshTimes);
-}
-```
+**2. Edit dialog — add notes textarea (`src/components/inspectors/EditInspectorDialog.tsx`)**
 
-`onUpdateScheduledTimes` (which is `handleUserScheduledTimes` in PlanlaegSyn.tsx) writes the times to `scheduledTimes` AND adds all IDs to `manualTimeOverrides` — so the subsequent stale `routeData` useEffect auto-apply will be blocked.
+- Add `notes` to the `inspector` prop interface and to `formData` state
+- Add a `Textarea` field labeled "Noter" in the form, between the department select and skills checkboxes
+- Include `notes` in the Supabase `.update()` call on save
 
-No other changes needed.
+**3. Route planning — show notes in InspectorsPanel (`src/components/planlaeg-syn/InspectorsPanel.tsx`)**
+
+- Add `notes?: string | null` to the `Inspector` interface in `PlanlaegSyn.tsx`
+- In the `fetch-available-inspectors` response mapping (PlanlaegSyn.tsx), carry over inspector notes from the response
+- In `DroppableInspector`, when the inspector has notes, show a 📝 icon next to their name with a Tooltip/Popover displaying the note text — same pattern as the custom time Info icon already there
+
+**4. Fetch available inspectors edge function (`supabase/functions/fetch-available-inspectors/index.ts`)**
+
+- Include `notes` from the `inspectors` table in the query that fetches inspector details, so it's available in the response
+
+### Files modified
+
+| File | Change |
+|------|--------|
+| `src/pages/Inspectors.tsx` | Add `notes` to interface, query, table row (icon + tooltip), and edit handler |
+| `src/components/inspectors/EditInspectorDialog.tsx` | Add `notes` to props, form state, form UI (Textarea), and save mutation |
+| `src/pages/PlanlaegSyn.tsx` | Add `notes` to Inspector interface and response mapping |
+| `src/components/planlaeg-syn/InspectorsPanel.tsx` | Show 📝 icon + Tooltip on inspector card when notes exist |
+| `supabase/functions/fetch-available-inspectors/index.ts` | Include `notes` in inspector details query |
 
