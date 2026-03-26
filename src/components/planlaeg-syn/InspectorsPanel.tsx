@@ -455,6 +455,7 @@ function DroppableInspector({
       setManualOrder(newOrder);
 
       // Clear overrides immediately so Railway response is not blocked
+      console.log("🧹 onDragEnd clearing manualTimeOverrides for IDs:", newOrder);
       onClearManualOverrides?.(newOrder);
 
       // Call Railway with fixed_order: true
