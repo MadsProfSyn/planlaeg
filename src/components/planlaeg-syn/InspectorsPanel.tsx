@@ -334,6 +334,11 @@ function DroppableInspector({
   const [timeDialogOpen, setTimeDialogOpen] = useState(false);
   const [manualOrder, setManualOrder] = useState<number[] | null>(null);
 
+  // Reset manual order whenever Railway returns fresh route data
+  useEffect(() => {
+    setManualOrder(null);
+  }, [routeData]);
+
   const { setNodeRef, isOver } = useDroppable({
     id: `inspector-${inspector.inspector_uuid}`,
     data: { inspectorId: inspector.inspector_uuid },
