@@ -813,6 +813,7 @@ export default function PlanlaegSyn() {
             getInspectorRoute={getInspectorRoute}
             isRouteLoading={isRouteLoading}
             selectedDate={selectedDate || ""}
+            onClearManualOverrides={handleClearManualOverrides}
           />
           </div>
         </div>
