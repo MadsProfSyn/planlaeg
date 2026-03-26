@@ -110,6 +110,15 @@ export default function PlanlaegSyn() {
     });
   }, [manualTimeOverrides]);
 
+  // Handler for clearing manual overrides (used by reset order)
+  const handleClearManualOverrides = useCallback((ids: number[]) => {
+    setManualTimeOverrides((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => next.delete(id));
+      return next;
+    });
+  }, []);
+
   // Configure sensors with distance constraint to prevent clicks from triggering drag
   const sensors = useSensors(
     useSensor(PointerSensor, {
