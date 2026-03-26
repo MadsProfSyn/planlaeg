@@ -93,58 +93,7 @@ function getTypeColor(abbr: string): string {
   return TYPE_COLORS[abbr] || "bg-muted text-muted-foreground";
 }
 
-// Time helpers for cascade recalculation
-function timeToMinutes(time: string): number {
-  const [h, m] = time.split(":").map(Number);
-  return h * 60 + m;
-}
-
-function minutesToTime(minutes: number): string {
-  const h = Math.floor(minutes / 60) % 24;
-  const m = minutes % 60;
-  return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
-}
-
-function roundToNearest5(minutes: number): number {
-  return Math.ceil(minutes / 5) * 5;
-}
-
-/**
- * Cascade-recalculate scheduled times for an ordered list of items.
- * Stop 0 keeps its current start; subsequent stops are offset by travel + duration.
- */
-function recalculateCascade(
-  orderedItems: MondayItem[],
-  scheduledTimes: Map<number, { start: string; end: string }>,
-  routeData: InspectorRoute | undefined
-): Map<number, { start: string; end: string }> {
-  const result = new Map<number, { start: string; end: string }>();
-  if (orderedItems.length === 0) return result;
-
-  // First stop: keep its start, recalculate end from duration
-  const first = orderedItems[0];
-  // Always anchor position 1 to the inspector's Railway start time
-  const firstStart = routeData?.stops.find((s) => s.sequence === 1)?.start_time ?? "08:30";
-  const firstDuration = getEffectiveDuration(first);
-  const firstEndMin = timeToMinutes(firstStart) + firstDuration;
-  result.set(first.id, { start: firstStart, end: minutesToTime(firstEndMin) });
-
-  let prevEndMin = firstEndMin;
-
-  for (let i = 1; i < orderedItems.length; i++) {
-    const item = orderedItems[i];
-    const duration = getEffectiveDuration(item);
-    const routeStop = routeData?.stops.find((s) => s.monday_item_id === item.id);
-    const travel = routeStop?.travel_from_previous_mins ?? 5;
-
-    const startMin = roundToNearest5(prevEndMin + travel);
-    const endMin = startMin + duration;
-    result.set(item.id, { start: minutesToTime(startMin), end: minutesToTime(endMin) });
-    prevEndMin = endMin;
-  }
-
-  return result;
-}
+const ROUTE_OPTIMIZER_URL = "https://web-production-95fdd.up.railway.app";
 
 // ─── Sortable stop row ─────────────────────────────────────────────────────────
 
