@@ -499,6 +499,19 @@ export default function PlanlaegSyn() {
       );
       return next;
     });
+
+    // Clear stale scheduled times and manual overrides for the removed item
+    setScheduledTimes((prev) => {
+      const next = new Map(prev);
+      next.delete(inspectionId);
+      return next;
+    });
+
+    setManualTimeOverrides((prev) => {
+      const next = new Set(prev);
+      next.delete(inspectionId);
+      return next;
+    });
   };
 
   // Drag handlers
