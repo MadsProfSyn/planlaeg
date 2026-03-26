@@ -288,6 +288,7 @@ function DroppableInspector({
   const [timeDialogOpen, setTimeDialogOpen] = useState(false);
   const [manualOrder, setManualOrder] = useState<number[] | null>(null);
   const [isReorderLoading, setIsReorderLoading] = useState(false);
+  const [fixedOrderStops, setFixedOrderStops] = useState<import("@/types/route-optimizer").RouteStop[] | null>(null);
 
   // Reset manual order whenever Railway returns fresh route data
   useEffect(() => {
