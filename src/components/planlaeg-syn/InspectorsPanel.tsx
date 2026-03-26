@@ -121,8 +121,8 @@ function recalculateCascade(
 
   // First stop: keep its start, recalculate end from duration
   const first = orderedItems[0];
-  const firstExisting = scheduledTimes.get(first.id);
-  const firstStart = firstExisting?.start || "08:30";
+  // Always anchor position 1 to the inspector's Railway start time
+  const firstStart = routeData?.stops.find((s) => s.sequence === 1)?.start_time ?? "08:30";
   const firstDuration = getEffectiveDuration(first);
   const firstEndMin = timeToMinutes(firstStart) + firstDuration;
   result.set(first.id, { start: firstStart, end: minutesToTime(firstEndMin) });
