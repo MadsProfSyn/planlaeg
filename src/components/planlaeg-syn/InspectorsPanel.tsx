@@ -427,6 +427,8 @@ function DroppableInspector({
           // Apply fresh Railway times with forceIds to bypass stale closure
           if (freshTimes.size > 0) {
             onAutoScheduledTimes(freshTimes, itemIds);
+            // Re-protect these IDs so the stale routeData auto-apply cannot overwrite them
+            onUpdateScheduledTimes(freshTimes);
           }
         }
       } catch (err) {
