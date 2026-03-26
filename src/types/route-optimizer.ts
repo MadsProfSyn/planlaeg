@@ -12,6 +12,7 @@ export interface RouteOptimizerAssignment {
   inspection_ids: string[];
   existing_ids?: string[]; // IDs of already-scheduled inspections (times are fixed)
   fixed_stops?: FixedStop[]; // Booked shifts with coordinates (for travel time calculation)
+  fixed_order?: boolean; // If true, Railway preserves the inspection_ids sequence (no TSP)
 }
 
 export interface RouteOptimizerRequest {

@@ -28,7 +28,6 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { Info, X, Plus, Clock, Search, Route, Loader2, Calendar, GripVertical, AlertTriangle, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getEffectiveDuration } from "@/lib/inspection-duration";
 import { ScheduleTimesDialog } from "./ScheduleTimesDialog";
 import { InlineTimeEditor } from "./InlineTimeEditor";
 import type { Inspector } from "@/pages/PlanlaegSyn";
@@ -51,6 +50,8 @@ interface InspectorsPanelProps {
   isRouteLoading?: boolean;
   selectedDate: string;
   onClearManualOverrides?: (ids: number[]) => void;
+  existingAssignmentsMap: Map<string, MondayItem[]>;
+  inspectorShiftDetails: Map<string, { type: string; start_time: string; end_time: string; duration_minutes: number; address?: string; lat?: number; lng?: number }[]>;
 }
 
 const TYPE_COLORS: Record<string, string> = {
@@ -91,58 +92,7 @@ function getTypeColor(abbr: string): string {
   return TYPE_COLORS[abbr] || "bg-muted text-muted-foreground";
 }
 
-// Time helpers for cascade recalculation
-function timeToMinutes(time: string): number {
-  const [h, m] = time.split(":").map(Number);
-  return h * 60 + m;
-}
-
-function minutesToTime(minutes: number): string {
-  const h = Math.floor(minutes / 60) % 24;
-  const m = minutes % 60;
-  return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
-}
-
-function roundToNearest5(minutes: number): number {
-  return Math.ceil(minutes / 5) * 5;
-}
-
-/**
- * Cascade-recalculate scheduled times for an ordered list of items.
- * Stop 0 keeps its current start; subsequent stops are offset by travel + duration.
- */
-function recalculateCascade(
-  orderedItems: MondayItem[],
-  scheduledTimes: Map<number, { start: string; end: string }>,
-  routeData: InspectorRoute | undefined
-): Map<number, { start: string; end: string }> {
-  const result = new Map<number, { start: string; end: string }>();
-  if (orderedItems.length === 0) return result;
-
-  // First stop: keep its start, recalculate end from duration
-  const first = orderedItems[0];
-  // Always anchor position 1 to the inspector's Railway start time
-  const firstStart = routeData?.stops.find((s) => s.sequence === 1)?.start_time ?? "08:30";
-  const firstDuration = getEffectiveDuration(first);
-  const firstEndMin = timeToMinutes(firstStart) + firstDuration;
-  result.set(first.id, { start: firstStart, end: minutesToTime(firstEndMin) });
-
-  let prevEndMin = firstEndMin;
-
-  for (let i = 1; i < orderedItems.length; i++) {
-    const item = orderedItems[i];
-    const duration = getEffectiveDuration(item);
-    const routeStop = routeData?.stops.find((s) => s.monday_item_id === item.id);
-    const travel = routeStop?.travel_from_previous_mins ?? 5;
-
-    const startMin = roundToNearest5(prevEndMin + travel);
-    const endMin = startMin + duration;
-    result.set(item.id, { start: minutesToTime(startMin), end: minutesToTime(endMin) });
-    prevEndMin = endMin;
-  }
-
-  return result;
-}
+const ROUTE_OPTIMIZER_URL = "https://web-production-95fdd.up.railway.app";
 
 // ─── Sortable stop row ─────────────────────────────────────────────────────────
 
@@ -313,6 +263,8 @@ interface DroppableInspectorProps {
   isRouteLoading?: boolean;
   selectedDate: string;
   onClearManualOverrides?: (ids: number[]) => void;
+  existingAssignmentsMap: Map<string, MondayItem[]>;
+  inspectorShiftDetails: Map<string, { type: string; start_time: string; end_time: string; duration_minutes: number; address?: string; lat?: number; lng?: number }[]>;
 }
 
 function DroppableInspector({
@@ -330,9 +282,12 @@ function DroppableInspector({
   isRouteLoading,
   selectedDate,
   onClearManualOverrides,
+  existingAssignmentsMap,
+  inspectorShiftDetails,
 }: DroppableInspectorProps) {
   const [timeDialogOpen, setTimeDialogOpen] = useState(false);
   const [manualOrder, setManualOrder] = useState<number[] | null>(null);
+  const [isReorderLoading, setIsReorderLoading] = useState(false);
 
   // Reset manual order whenever Railway returns fresh route data
   useEffect(() => {
@@ -383,11 +338,9 @@ function DroppableInspector({
       return [...assignedItems].sort((a, b) => {
         const idxA = manualOrder.indexOf(a.id);
         const idxB = manualOrder.indexOf(b.id);
-        // Items not in manualOrder go to end
         return (idxA === -1 ? 999 : idxA) - (idxB === -1 ? 999 : idxB);
       });
     }
-    // Default: sort by Railway sequence
     return [...assignedItems].sort((a, b) => {
       if (!routeData) return 0;
       const seqA = routeData.stops.find((s) => s.monday_item_id === a.id)?.sequence ?? 999;
@@ -401,6 +354,87 @@ function DroppableInspector({
     [sortedItems, existingItemIds]
   );
 
+  // Call Railway /preview-routes for this inspector with a specific order
+  const callRailwayReorder = useCallback(
+    async (orderedIds: number[], fixedOrder: boolean) => {
+      const inspectorId = inspector.inspector_uuid;
+      const existingItems = existingAssignmentsMap.get(inspectorId) || [];
+      const shiftDetails = inspectorShiftDetails.get(inspectorId) || [];
+
+      // Build fixed_stops from shift_details (only geocoded ones)
+      const fixedStops = shiftDetails
+        .filter(s => s.lat && s.lng)
+        .map(s => ({
+          lat: s.lat!,
+          lng: s.lng!,
+          start_time: s.start_time?.substring(0, 5) || '',
+          end_time: s.end_time?.substring(0, 5) || '',
+          address: s.address || '',
+          type: s.type || 'B'
+        }));
+
+      const assignment: Record<string, unknown> = {
+        inspector_id: inspectorId,
+        inspection_ids: orderedIds.map(String),
+        existing_ids: existingItems.map((i) => String(i.id)),
+      };
+      if (fixedOrder) assignment.fixed_order = true;
+      if (fixedStops.length > 0) assignment.fixed_stops = fixedStops;
+
+      const payload = {
+        date: selectedDate,
+        assignments: [assignment],
+      };
+
+      setIsReorderLoading(true);
+      try {
+        const response = await fetch(`${ROUTE_OPTIMIZER_URL}/preview-routes`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          console.error("❌ Reorder preview failed:", response.status);
+          return;
+        }
+
+        const data = await response.json();
+        if (data.status === "error") {
+          console.error("❌ Reorder preview error:", data.error);
+          return;
+        }
+
+        const route = data.routes?.find((r: InspectorRoute) => r.inspector_id === inspectorId);
+        if (route && route.stops.length > 0) {
+          const freshTimes = new Map<number, { start: string; end: string }>();
+          const itemIds: number[] = [];
+          route.stops.forEach((stop: { monday_item_id?: number; start_time: string; end_time: string }) => {
+            if (stop.monday_item_id) {
+              freshTimes.set(stop.monday_item_id, {
+                start: stop.start_time,
+                end: stop.end_time,
+              });
+              itemIds.push(stop.monday_item_id);
+            }
+          });
+
+          // Clear manual overrides first so fresh times are not blocked
+          onClearManualOverrides?.(itemIds);
+          // Apply fresh Railway times
+          if (freshTimes.size > 0) {
+            onAutoScheduledTimes(freshTimes);
+          }
+        }
+      } catch (err) {
+        console.error("❌ Reorder Railway call failed:", err);
+      } finally {
+        setIsReorderLoading(false);
+      }
+    },
+    [inspector.inspector_uuid, existingAssignmentsMap, inspectorShiftDetails, selectedDate, onClearManualOverrides, onAutoScheduledTimes]
+  );
+
   const handleSortDragEnd = useCallback(
     (event: DragEndEvent) => {
       const { active, over } = event;
@@ -409,7 +443,6 @@ function DroppableInspector({
       const activeId = Number(active.id.toString().replace("stop-", ""));
       const overId = Number(over.id.toString().replace("stop-", ""));
 
-      // Build current order from sortedItems (only non-existing)
       const currentOrder = sortedItems.filter((i) => !existingItemIds.has(i.id)).map((i) => i.id);
       const oldIndex = currentOrder.indexOf(activeId);
       const newIndex = currentOrder.indexOf(overId);
@@ -418,43 +451,23 @@ function DroppableInspector({
       const newOrder = arrayMove(currentOrder, oldIndex, newIndex);
       setManualOrder(newOrder);
 
-      // Get items in the new order for cascade
-      const reorderedItems = newOrder
-        .map((id) => assignedItems.find((i) => i.id === id))
-        .filter(Boolean) as MondayItem[];
-
-      const cascadedTimes = recalculateCascade(reorderedItems, scheduledTimes, routeData);
-      onUpdateScheduledTimes(cascadedTimes);
+      // Call Railway with fixed_order: true
+      callRailwayReorder(newOrder, true);
     },
-    [sortedItems, existingItemIds, assignedItems, scheduledTimes, routeData, onUpdateScheduledTimes]
+    [sortedItems, existingItemIds, callRailwayReorder]
   );
 
   const handleResetOrder = useCallback(() => {
     setManualOrder(null);
 
-    // Re-apply Railway times for this inspector's items
-    if (routeData && routeData.stops.length > 0) {
-      const railwayTimes = new Map<number, { start: string; end: string }>();
-      const itemIds: number[] = [];
-      routeData.stops.forEach((stop) => {
-        if (stop.monday_item_id) {
-          railwayTimes.set(stop.monday_item_id, {
-            start: stop.start_time,
-            end: stop.end_time,
-          });
-          itemIds.push(stop.monday_item_id);
-        }
-      });
-
-      // Clear manual overrides first so auto times can apply
-      onClearManualOverrides?.(itemIds);
-
-      // Then apply railway times
-      if (railwayTimes.size > 0) {
-        onAutoScheduledTimes(railwayTimes);
-      }
+    // Re-call Railway without fixed_order (normal TSP)
+    const allItemIds = assignedItems.filter((i) => !existingItemIds.has(i.id)).map((i) => i.id);
+    if (allItemIds.length > 0) {
+      // Clear overrides first
+      onClearManualOverrides?.(allItemIds);
+      callRailwayReorder(allItemIds, false);
     }
-  }, [routeData, onAutoScheduledTimes, onClearManualOverrides]);
+  }, [assignedItems, existingItemIds, onClearManualOverrides, callRailwayReorder]);
 
   return (
     <>
@@ -554,7 +567,7 @@ function DroppableInspector({
                   <span>{routeData.total_travel_minutes} min</span>
                 </div>
               )}
-              {isRouteLoading && assignedItems.length > 0 && (
+              {(isRouteLoading || isReorderLoading) && assignedItems.length > 0 && (
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
               )}
               {assignedItems.length > 0 && (
@@ -684,6 +697,8 @@ export function InspectorsPanel({
   isRouteLoading,
   selectedDate,
   onClearManualOverrides,
+  existingAssignmentsMap,
+  inspectorShiftDetails,
 }: InspectorsPanelProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [showOnlyNoInspections, setShowOnlyNoInspections] = useState(false);
@@ -767,6 +782,8 @@ export function InspectorsPanel({
                     isRouteLoading={isRouteLoading}
                     selectedDate={selectedDate}
                     onClearManualOverrides={onClearManualOverrides}
+                    existingAssignmentsMap={existingAssignmentsMap}
+                    inspectorShiftDetails={inspectorShiftDetails}
                   />
                 );
               })}
