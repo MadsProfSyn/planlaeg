@@ -348,7 +348,7 @@ export default function Inspectors() {
                   <>
                     {Array.from({ length: 5 }).map((_, i) => (
                       <TableRow key={i}>
-                        <TableCell colSpan={7}>
+                        <TableCell colSpan={8}>
                           <Skeleton className="h-12 w-full" />
                         </TableCell>
                       </TableRow>
@@ -358,7 +358,7 @@ export default function Inspectors() {
 
                 {!isLoading && inspectors?.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12">
+                    <TableCell colSpan={8} className="text-center py-12">
                       <p className="text-muted-foreground">
                         Ingen synskonsulenter fundet
                       </p>
