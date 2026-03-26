@@ -288,10 +288,12 @@ function DroppableInspector({
   const [timeDialogOpen, setTimeDialogOpen] = useState(false);
   const [manualOrder, setManualOrder] = useState<number[] | null>(null);
   const [isReorderLoading, setIsReorderLoading] = useState(false);
+  const [fixedOrderStops, setFixedOrderStops] = useState<import("@/types/route-optimizer").RouteStop[] | null>(null);
 
-  // Reset manual order whenever Railway returns fresh route data
+  // Reset manual order and fixed stops whenever Railway returns fresh route data
   useEffect(() => {
     setManualOrder(null);
+    setFixedOrderStops(null);
   }, [routeData]);
 
   const { setNodeRef, isOver } = useDroppable({
@@ -407,6 +409,9 @@ function DroppableInspector({
 
         const route = data.routes?.find((r: InspectorRoute) => r.inspector_id === inspectorId);
         if (route && route.stops.length > 0) {
+          // Store the fresh fixed_order stops for the Rediger modal
+          setFixedOrderStops(route.stops);
+
           const freshTimes = new Map<number, { start: string; end: string }>();
           const itemIds: number[] = [];
           route.stops.forEach((stop: { monday_item_id?: number; start_time: string; end_time: string }) => {
@@ -468,6 +473,7 @@ function DroppableInspector({
 
   const handleResetOrder = useCallback(() => {
     setManualOrder(null);
+    setFixedOrderStops(null);
 
     // Re-call Railway without fixed_order (normal TSP)
     const allItemIds = assignedItems.filter((i) => !existingItemIds.has(i.id)).map((i) => i.id);
@@ -682,7 +688,7 @@ function DroppableInspector({
         inspections={assignedItems}
         existingTimes={scheduledTimes}
         onSave={onUpdateScheduledTimes}
-        routeData={routeData?.stops}
+        routeData={fixedOrderStops ?? routeData?.stops}
       />
     </>
   );
