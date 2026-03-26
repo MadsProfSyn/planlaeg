@@ -698,6 +698,8 @@ export function InspectorsPanel({
   isRouteLoading,
   selectedDate,
   onClearManualOverrides,
+  existingAssignmentsMap,
+  inspectorShiftDetails,
 }: InspectorsPanelProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [showOnlyNoInspections, setShowOnlyNoInspections] = useState(false);
@@ -781,6 +783,8 @@ export function InspectorsPanel({
                     isRouteLoading={isRouteLoading}
                     selectedDate={selectedDate}
                     onClearManualOverrides={onClearManualOverrides}
+                    existingAssignmentsMap={existingAssignmentsMap}
+                    inspectorShiftDetails={inspectorShiftDetails}
                   />
                 );
               })}

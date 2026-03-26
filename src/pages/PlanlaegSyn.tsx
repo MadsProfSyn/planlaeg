@@ -827,6 +827,8 @@ export default function PlanlaegSyn() {
             isRouteLoading={isRouteLoading}
             selectedDate={selectedDate || ""}
             onClearManualOverrides={handleClearManualOverrides}
+            existingAssignmentsMap={existingAssignments}
+            inspectorShiftDetails={inspectorShiftDetails}
           />
           </div>
         </div>
