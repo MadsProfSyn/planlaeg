@@ -1,38 +1,37 @@
 
 
-## Fix stale state bugs in cancel + re-drag cycle
+## Fix: Re-protect fixed_order times from stale auto-apply
 
-Two surgical fixes, no new files.
+### Problem
+The fixed_order Railway response applies correct times via `onAutoScheduledTimes(freshTimes, itemIds)`, but clearing `manualTimeOverrides` triggers a re-render causing the `useEffect` watching `routeData` to re-apply the old (non-fixed-order) times — overwriting the fresh ones.
 
-### Bug 1 — Clean up stale state on removal (`src/pages/PlanlaegSyn.tsx`)
+### Fix — one change in `callRailwayReorder` (InspectorsPanel.tsx)
 
-In `handleRemoveAssignment` (line 493-501), after the `setNewAssignments` call, add cleanup for `scheduledTimes` and `manualTimeOverrides`:
+After applying fresh times with `onAutoScheduledTimes`, immediately call `onUpdateScheduledTimes(freshTimes)` to re-add those IDs to `manualTimeOverrides`, protecting them from the stale auto-apply.
 
+**Lines ~425-430**, change from:
 ```ts
-setScheduledTimes((prev) => {
-  const next = new Map(prev);
-  next.delete(inspectionId);
-  return next;
-});
-
-setManualTimeOverrides((prev) => {
-  const next = new Set(prev);
-  next.delete(inspectionId);
-  return next;
-});
+// Clear manual overrides first so fresh times are not blocked
+onClearManualOverrides?.(itemIds);
+// Apply fresh Railway times with forceIds to bypass stale closure
+if (freshTimes.size > 0) {
+  onAutoScheduledTimes(freshTimes, itemIds);
+}
 ```
 
-### Bug 2 — Reset manualOrder on fresh Railway data (`src/components/planlaeg-syn/InspectorsPanel.tsx`)
-
-In `DroppableInspector`, add a `useEffect` after the `manualOrder` state declaration (line 335):
-
+To:
 ```ts
-useEffect(() => {
-  setManualOrder(null);
-}, [routeData]);
+// Clear manual overrides first so fresh times are not blocked
+onClearManualOverrides?.(itemIds);
+// Apply fresh Railway times with forceIds to bypass stale closure
+if (freshTimes.size > 0) {
+  onAutoScheduledTimes(freshTimes, itemIds);
+  // Re-protect these IDs so the stale routeData auto-apply cannot overwrite them
+  onUpdateScheduledTimes(freshTimes);
+}
 ```
 
-This resets the drag order whenever Railway returns a new route for that inspector.
+`onUpdateScheduledTimes` (which is `handleUserScheduledTimes` in PlanlaegSyn.tsx) writes the times to `scheduledTimes` AND adds all IDs to `manualTimeOverrides` — so the subsequent stale `routeData` useEffect auto-apply will be blocked.
 
-### No other changes needed.
+No other changes needed.
 
