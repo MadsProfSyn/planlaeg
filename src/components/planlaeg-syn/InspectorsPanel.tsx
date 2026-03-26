@@ -45,7 +45,7 @@ interface InspectorsPanelProps {
   hasSelectedInspections: boolean;
   scheduledTimes: Map<number, { start: string; end: string }>;
   onUpdateScheduledTimes: (times: Map<number, { start: string; end: string }>) => void;
-  onAutoScheduledTimes: (times: Map<number, { start: string; end: string }>) => void;
+  onAutoScheduledTimes: (times: Map<number, { start: string; end: string }>, forceIds?: number[]) => void;
   getInspectorRoute?: (inspectorId: string) => InspectorRoute | undefined;
   isRouteLoading?: boolean;
   selectedDate: string;
@@ -258,7 +258,7 @@ interface DroppableInspectorProps {
   hasSelectedInspections: boolean;
   scheduledTimes: Map<number, { start: string; end: string }>;
   onUpdateScheduledTimes: (times: Map<number, { start: string; end: string }>) => void;
-  onAutoScheduledTimes: (times: Map<number, { start: string; end: string }>) => void;
+  onAutoScheduledTimes: (times: Map<number, { start: string; end: string }>, forceIds?: number[]) => void;
   routeData?: InspectorRoute;
   isRouteLoading?: boolean;
   selectedDate: string;
@@ -419,11 +419,14 @@ function DroppableInspector({
             }
           });
 
+          console.log("🚂 Railway fixed_order response freshTimes:", Object.fromEntries(freshTimes));
+          console.log("🚂 Railway forceIds for autoSchedule:", itemIds);
+
           // Clear manual overrides first so fresh times are not blocked
           onClearManualOverrides?.(itemIds);
-          // Apply fresh Railway times
+          // Apply fresh Railway times with forceIds to bypass stale closure
           if (freshTimes.size > 0) {
-            onAutoScheduledTimes(freshTimes);
+            onAutoScheduledTimes(freshTimes, itemIds);
           }
         }
       } catch (err) {
@@ -452,6 +455,7 @@ function DroppableInspector({
       setManualOrder(newOrder);
 
       // Clear overrides immediately so Railway response is not blocked
+      console.log("🧹 onDragEnd clearing manualTimeOverrides for IDs:", newOrder);
       onClearManualOverrides?.(newOrder);
 
       // Call Railway with fixed_order: true

@@ -97,13 +97,18 @@ export default function PlanlaegSyn() {
   }, []);
   
   // Handler for auto-applied times (from VRP) - skips items that have been manually edited
-  const handleAutoScheduledTimes = useCallback((newTimes: Map<number, { start: string; end: string }>) => {
+  // forceIds: IDs that should bypass the manualTimeOverrides guard (e.g. after reorder clear)
+  const handleAutoScheduledTimes = useCallback((newTimes: Map<number, { start: string; end: string }>, forceIds?: number[]) => {
+    const forceSet = forceIds ? new Set(forceIds) : null;
     setScheduledTimes((prev) => {
       const next = new Map(prev);
       newTimes.forEach((value, key) => {
-        // Only apply if not manually overridden
-        if (!manualTimeOverrides.has(key)) {
+        // Apply if forced or not manually overridden
+        if (forceSet?.has(key) || !manualTimeOverrides.has(key)) {
+          console.log(`🕐 autoSchedule applying id=${key} start=${value.start} end=${value.end} forced=${!!forceSet?.has(key)}`);
           next.set(key, value);
+        } else {
+          console.log(`🚫 autoSchedule BLOCKED id=${key} by manualTimeOverrides`);
         }
       });
       return next;
