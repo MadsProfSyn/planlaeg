@@ -503,16 +503,6 @@ function DroppableInspector({
                 <p className="font-medium text-sm truncate">
                   {inspector.navn}
                 </p>
-                {inspector.notes && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <StickyNote className="h-4 w-4 text-amber-500 flex-shrink-0 cursor-help" />
-                    </TooltipTrigger>
-                    <TooltipContent side="right" className="max-w-xs">
-                      <p className="whitespace-pre-wrap text-sm">{inspector.notes}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                )}
                 {hasCustomTime && (
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -522,6 +512,11 @@ function DroppableInspector({
                       <p>Kun tilgængelig {formatTimeRange(inspector.start_tid, inspector.slut_tid)}</p>
                     </TooltipContent>
                   </Tooltip>
+                )}
+                {inspector.notes && (
+                  <span className="text-xs text-orange-500 truncate max-w-[150px]" title={inspector.notes}>
+                    {inspector.notes}
+                  </span>
                 )}
                 {(inspector.scheduled_shifts ?? 0) > 0 && (
                   <Tooltip>
