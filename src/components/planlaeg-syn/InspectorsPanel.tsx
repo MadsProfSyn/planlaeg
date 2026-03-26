@@ -28,7 +28,6 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { Info, X, Plus, Clock, Search, Route, Loader2, Calendar, GripVertical, AlertTriangle, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getEffectiveDuration } from "@/lib/inspection-duration";
 import { ScheduleTimesDialog } from "./ScheduleTimesDialog";
 import { InlineTimeEditor } from "./InlineTimeEditor";
 import type { Inspector } from "@/pages/PlanlaegSyn";
