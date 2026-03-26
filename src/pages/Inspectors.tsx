@@ -90,7 +90,7 @@ export default function Inspectors() {
   } | null>(null);
   const [deletingInspector, setDeletingInspector] = useState<InspectorWithDetails | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [sortField, setSortField] = useState<"name" | "email" | "phone" | "department" | "skills" | null>("name");
+  const [sortField, setSortField] = useState<"name" | "email" | "phone" | "address" | "department" | "skills" | null>("name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -177,6 +177,9 @@ export default function Inspectors() {
           break;
         case "phone":
           cmp = (a.phone || "").localeCompare(b.phone || "", "da");
+          break;
+        case "address":
+          cmp = (a.address || "").localeCompare(b.address || "", "da");
           break;
         case "department":
           cmp = (a.department?.name || "").localeCompare(b.department?.name || "", "da");
@@ -318,6 +321,7 @@ export default function Inspectors() {
                     ["name", "Navn"],
                     ["email", "Email"],
                     ["phone", "Telefon"],
+                    ["address", "Adresse"],
                     ["department", "Afdeling"],
                     ["skills", "Kompetencer"],
                   ] as const).map(([key, label]) => (
@@ -344,7 +348,7 @@ export default function Inspectors() {
                   <>
                     {Array.from({ length: 5 }).map((_, i) => (
                       <TableRow key={i}>
-                        <TableCell colSpan={7}>
+                        <TableCell colSpan={8}>
                           <Skeleton className="h-12 w-full" />
                         </TableCell>
                       </TableRow>
@@ -354,7 +358,7 @@ export default function Inspectors() {
 
                 {!isLoading && inspectors?.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12">
+                    <TableCell colSpan={8} className="text-center py-12">
                       <p className="text-muted-foreground">
                         Ingen synskonsulenter fundet
                       </p>
@@ -385,6 +389,9 @@ export default function Inspectors() {
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {inspector.phone || "-"}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground max-w-[200px] truncate" title={inspector.address || undefined}>
+                        {inspector.address || "-"}
                       </TableCell>
                       <TableCell>
                         {inspector.department?.name || "-"}
