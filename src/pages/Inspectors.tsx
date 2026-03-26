@@ -164,6 +164,31 @@ export default function Inspectors() {
     },
   });
 
+  const sortedInspectors = useMemo(() => {
+    if (!inspectors || !sortField) return inspectors;
+    return [...inspectors].sort((a, b) => {
+      let cmp = 0;
+      switch (sortField) {
+        case "name":
+          cmp = a.full_name.localeCompare(b.full_name, "da");
+          break;
+        case "email":
+          cmp = a.email.localeCompare(b.email, "da");
+          break;
+        case "phone":
+          cmp = (a.phone || "").localeCompare(b.phone || "", "da");
+          break;
+        case "department":
+          cmp = (a.department?.name || "").localeCompare(b.department?.name || "", "da");
+          break;
+        case "skills":
+          cmp = (a.inspector_skills?.filter(s => s.is_active).length || 0) - (b.inspector_skills?.filter(s => s.is_active).length || 0);
+          break;
+      }
+      return sortDirection === "asc" ? cmp : -cmp;
+    });
+  }, [inspectors, sortField, sortDirection]);
+
   const handleEdit = (inspector: InspectorWithDetails) => {
     setEditingInspector({
       id: inspector.id,
