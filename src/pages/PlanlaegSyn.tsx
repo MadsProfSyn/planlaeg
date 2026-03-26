@@ -31,6 +31,7 @@ export interface Inspector {
   start_tid: string | null;
   slut_tid: string | null;
   tidspunkt_label: string;
+  notes?: string | null;
   // Booked shifts data from fetch-available-inspectors
   scheduled_shifts?: number;
   shift_details?: Array<{
@@ -252,16 +253,20 @@ export default function PlanlaegSyn() {
 
       const inspectorIds = [...new Set(availData.map(r => r.inspector_id))];
 
-      // 2. Parallel fetch: addresses, skills, capacity
+      // 2. Parallel fetch: addresses+notes, skills, capacity
       const [addressRes, skillsRes, capacityRes] = await Promise.all([
-        supabase.from("inspectors").select("id, address").in("id", inspectorIds),
+        supabase.from("inspectors").select("id, address, notes").in("id", inspectorIds),
         supabase.from("inspector_skills").select("inspector_id, inspection_type").in("inspector_id", inspectorIds).eq("is_active", true),
         supabase.from("inspector_capacity_view").select("inspector_id, date_local, scheduled_shifts, shift_details, booked_minutes, remaining_minutes, capacity_status").in("inspector_id", inspectorIds).eq("date_local", selectedDate),
       ]);
 
       // 3. Build lookup maps
       const addressMap = new Map<string, string>();
-      (addressRes.data || []).forEach((i: any) => addressMap.set(i.id, i.address || ''));
+      const notesMap = new Map<string, string | null>();
+      (addressRes.data || []).forEach((i: any) => {
+        addressMap.set(i.id, i.address || '');
+        notesMap.set(i.id, i.notes || null);
+      });
 
       const skillsMap = new Map<string, string[]>();
       (skillsRes.data || []).forEach((s: any) => {
@@ -305,6 +310,7 @@ export default function PlanlaegSyn() {
           afdeling: row.department || '',
           synstyper: skills,
           adresse: addressMap.get(row.inspector_id) || '',
+          notes: notesMap.get(row.inspector_id) || null,
           dato: row.date_local,
           start_tid: row.start_time_local,
           slut_tid: row.end_time_local,

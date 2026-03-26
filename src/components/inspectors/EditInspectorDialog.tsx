@@ -20,6 +20,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
 
 interface EditInspectorDialogProps {
@@ -30,6 +31,7 @@ interface EditInspectorDialogProps {
     full_name: string;
     phone: string | null;
     address: string | null;
+    notes: string | null;
     skills: string[];
     department_id: string | null;
     department_name: string | null;
@@ -55,6 +57,7 @@ export function EditInspectorDialog({
   const [formData, setFormData] = useState({
     phone: "",
     address: "",
+    notes: "",
     skills: [] as string[],
     departmentId: "",
   });
@@ -79,6 +82,7 @@ export function EditInspectorDialog({
       setFormData({
         phone: inspector.phone || "",
         address: inspector.address || "",
+        notes: inspector.notes || "",
         skills: inspector.skills || [],
         departmentId: inspector.department_id || NO_DEPARTMENT,
       });
@@ -86,6 +90,7 @@ export function EditInspectorDialog({
       setFormData({
         phone: "",
         address: "",
+        notes: "",
         skills: [],
         departmentId: NO_DEPARTMENT,
       });
@@ -107,6 +112,7 @@ export function EditInspectorDialog({
         .update({
           phone: formData.phone || null,
           address: formData.address || null,
+          notes: formData.notes || null,
           department_id: formData.departmentId === NO_DEPARTMENT ? null : formData.departmentId,
         })
         .eq("id", inspector.id);
@@ -267,6 +273,19 @@ export function EditInspectorDialog({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="notes">Noter</Label>
+            <Textarea
+              id="notes"
+              placeholder="Tilføj noter om synskonsulenten (f.eks. præferencer, begrænsninger)..."
+              value={formData.notes}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, notes: e.target.value }))
+              }
+              rows={3}
+            />
           </div>
 
           <div className="space-y-3">

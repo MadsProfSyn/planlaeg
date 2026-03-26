@@ -113,7 +113,7 @@ serve(async (req) => {
     // Fetch inspector details (address only)
     const { data: inspectorsData } = await supabase
       .from('inspectors')
-      .select('id, address')
+      .select('id, address, notes')
       .in('id', inspectorIds);
 
     // Fetch skills for all inspectors
@@ -133,7 +133,8 @@ serve(async (req) => {
     const inspectorMap = new Map<string, any>();
     inspectorsData?.forEach((inspector: any) => {
       inspectorMap.set(inspector.id, {
-        address: inspector.address || ''
+        address: inspector.address || '',
+        notes: inspector.notes || null,
       });
     });
 
@@ -196,6 +197,7 @@ serve(async (req) => {
         afdeling: row.department || '', // Use department directly from supabase_availability
         synstyper: skills,
         adresse: inspectorDetails.address,
+        notes: inspectorDetails.notes,
         dato: row.date_local,
         start_tid: row.start_time_local,
         slut_tid: row.end_time_local,

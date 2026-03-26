@@ -13,7 +13,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search, Pencil, X, Trash2, RefreshCw, Users } from "lucide-react";
+import { Search, Pencil, X, Trash2, RefreshCw, Users, StickyNote } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { DepartmentSingleSelect } from "@/components/filters/DepartmentSingleSelect";
 import { EditInspectorDialog } from "@/components/inspectors/EditInspectorDialog";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -35,6 +40,7 @@ interface InspectorWithDetails {
   email: string;
   phone: string | null;
   address: string | null;
+  notes: string | null;
   is_active: boolean;
   department_id: string | null;
   department: { name: string } | null;
@@ -77,6 +83,7 @@ export default function Inspectors() {
     full_name: string;
     phone: string | null;
     address: string | null;
+    notes: string | null;
     skills: string[];
     department_id: string | null;
     department_name: string | null;
@@ -119,6 +126,7 @@ export default function Inspectors() {
           email,
           phone,
           address,
+          notes,
           is_active,
           department_id,
           department:departments(name),
@@ -150,6 +158,7 @@ export default function Inspectors() {
       full_name: inspector.full_name,
       phone: inspector.phone,
       address: inspector.address,
+      notes: inspector.notes,
       skills: inspector.inspector_skills
         ?.filter((s) => s.is_active)
         .map((s) => s.inspection_type) || [],
@@ -304,7 +313,19 @@ export default function Inspectors() {
                   inspectors?.map((inspector) => (
                     <TableRow key={inspector.id}>
                       <TableCell className="font-medium">
-                        {inspector.full_name}
+                        <div className="flex items-center gap-1.5">
+                          {inspector.full_name}
+                          {inspector.notes && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <StickyNote className="h-4 w-4 text-amber-500 flex-shrink-0 cursor-help" />
+                              </TooltipTrigger>
+                              <TooltipContent side="right" className="max-w-xs">
+                                <p className="whitespace-pre-wrap text-sm">{inspector.notes}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {inspector.email}
