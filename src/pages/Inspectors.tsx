@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search, Pencil, X, Trash2, RefreshCw, Users, StickyNote } from "lucide-react";
+import { Search, Pencil, X, Trash2, RefreshCw, Users, StickyNote, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -90,8 +90,20 @@ export default function Inspectors() {
   } | null>(null);
   const [deletingInspector, setDeletingInspector] = useState<InspectorWithDetails | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [sortField, setSortField] = useState<"name" | "email" | "phone" | "department" | "skills" | null>("name");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const queryClient = useQueryClient();
   const { toast } = useToast();
+
+  const handleSort = useCallback((field: typeof sortField) => {
+    if (sortField === field) {
+      setSortDirection(d => d === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  }, [sortField]);
+
 
   const { data: departments } = useQuery({
     queryKey: ["departments"],
@@ -151,6 +163,31 @@ export default function Inspectors() {
       return data as unknown as InspectorWithDetails[];
     },
   });
+
+  const sortedInspectors = useMemo(() => {
+    if (!inspectors || !sortField) return inspectors;
+    return [...inspectors].sort((a, b) => {
+      let cmp = 0;
+      switch (sortField) {
+        case "name":
+          cmp = a.full_name.localeCompare(b.full_name, "da");
+          break;
+        case "email":
+          cmp = a.email.localeCompare(b.email, "da");
+          break;
+        case "phone":
+          cmp = (a.phone || "").localeCompare(b.phone || "", "da");
+          break;
+        case "department":
+          cmp = (a.department?.name || "").localeCompare(b.department?.name || "", "da");
+          break;
+        case "skills":
+          cmp = (a.inspector_skills?.filter(s => s.is_active).length || 0) - (b.inspector_skills?.filter(s => s.is_active).length || 0);
+          break;
+      }
+      return sortDirection === "asc" ? cmp : -cmp;
+    });
+  }, [inspectors, sortField, sortDirection]);
 
   const handleEdit = (inspector: InspectorWithDetails) => {
     setEditingInspector({
@@ -277,12 +314,28 @@ export default function Inspectors() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Navn</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Telefon</TableHead>
-                  <TableHead>Adresse</TableHead>
-                  <TableHead>Afdeling</TableHead>
-                  <TableHead>Kompetencer</TableHead>
+                  {([
+                    ["name", "Navn"],
+                    ["email", "Email"],
+                    ["phone", "Telefon"],
+                    ["department", "Afdeling"],
+                    ["skills", "Kompetencer"],
+                  ] as const).map(([key, label]) => (
+                    <TableHead
+                      key={key}
+                      className="cursor-pointer select-none hover:text-foreground transition-colors"
+                      onClick={() => handleSort(key)}
+                    >
+                      <div className="flex items-center gap-1">
+                        {label}
+                        {sortField === key ? (
+                          sortDirection === "asc" ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />
+                        ) : (
+                          <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground/50" />
+                        )}
+                      </div>
+                    </TableHead>
+                  ))}
                   <TableHead className="text-right">Handlinger</TableHead>
                 </TableRow>
               </TableHeader>
@@ -310,7 +363,7 @@ export default function Inspectors() {
                 )}
 
                 {!isLoading &&
-                  inspectors?.map((inspector) => (
+                  sortedInspectors?.map((inspector) => (
                     <TableRow key={inspector.id}>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-1.5">
@@ -332,9 +385,6 @@ export default function Inspectors() {
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {inspector.phone || "-"}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground max-w-xs truncate">
-                        {inspector.address || "-"}
                       </TableCell>
                       <TableCell>
                         {inspector.department?.name || "-"}
