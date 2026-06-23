@@ -1,28 +1,44 @@
+## Simple Admin User Creation (No Email Confirmation)
 
+### Problem
 
-## Show Inspector Notes as Orange Text Instead of Tooltip
+The current "Opret bruger" flow on `/admin/users` calls `supabase.auth.signUp()`, which:
+- Triggers a confirmation email (and is currently failing — see auth logs: `554 Email address is not verified`)
+- Requires the user to click a link before they can log in
+- Signs the admin out / swaps their session in some flows
 
-### Change
+For an internal team app this is unnecessary friction.
 
-In `src/components/planlaeg-syn/InspectorsPanel.tsx` (lines 506-515), replace the StickyNote icon + Tooltip with inline orange text displayed to the right of the `(!)` availability icon.
+### Solution
 
-**Current** (lines 506-515): StickyNote icon with hover tooltip showing notes.
+Create users via a new admin-only edge function that uses the Supabase Admin API (`auth.admin.createUser`) with `email_confirm: true`. The user is immediately usable — no email sent, no confirmation step.
 
-**New**: Remove the StickyNote/Tooltip block. After the `hasCustomTime` Info icon block (line 525), add the notes as orange text:
+### Changes
 
-```tsx
-{inspector.notes && (
-  <span className="text-xs text-orange-500 truncate max-w-[150px]" title={inspector.notes}>
-    {inspector.notes}
-  </span>
-)}
-```
+**1. New edge function `supabase/functions/admin-create-user/index.ts`**
+- Verifies the caller is authenticated and has the `admin` role (via `has_role`)
+- Accepts `{ email, password, full_name }`
+- Calls `supabaseAdmin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name } })` using the service role key
+- The existing `handle_new_user` trigger automatically creates the profile + default `user` role
+- Returns the new user id / email or a clean error
 
-This places the note text on the same line, same height, right after the `(!)` icon — as orange text with truncation and a native title tooltip for overflow.
+**2. `src/pages/admin/Users.tsx`**
+- Replace the `supabase.auth.signUp(...)` call in `handleCreateUser` with `supabase.functions.invoke('admin-create-user', { body: { email, password, full_name } })`
+- Update the toast to "Bruger oprettet og kan logge ind med det samme"
+- Keep the rest of the form / dialog UI unchanged
+
+**3. `supabase/config.toml`**
+- Register the new function (no JWT verification disabled — we want the caller's JWT so we can check their admin role)
 
 ### Files modified
 
 | File | Change |
 |------|--------|
-| `src/components/planlaeg-syn/InspectorsPanel.tsx` | Replace StickyNote icon+Tooltip with inline orange text after the Info icon |
+| `supabase/functions/admin-create-user/index.ts` | New — admin-guarded user creation via service role, `email_confirm: true` |
+| `supabase/config.toml` | Register `admin-create-user` function |
+| `src/pages/admin/Users.tsx` | Call new edge function instead of `auth.signUp`; updated success toast |
 
+### Notes
+
+- No database migration needed — `handle_new_user` already populates `profiles` and `user_roles` on auth user insert.
+- Email sending stays untouched; this flow simply bypasses it.

@@ -152,24 +152,22 @@ export default function Users() {
     setIsCreating(true);
 
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email: createEmail,
-        password: createPassword,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`,
-          data: {
-            full_name: createFullName || ''
-          }
-        }
+      const { data, error } = await supabase.functions.invoke('admin-create-user', {
+        body: {
+          email: createEmail,
+          password: createPassword,
+          full_name: createFullName || '',
+        },
       });
 
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
       await queryClient.invalidateQueries({ queryKey: ['admin-users'] });
 
       toast({
         title: adminStrings.common.success,
-        description: `Bruger ${createEmail} er oprettet`
+        description: `Bruger ${createEmail} er oprettet og kan logge ind med det samme`
       });
 
       // Reset form and close dialog
