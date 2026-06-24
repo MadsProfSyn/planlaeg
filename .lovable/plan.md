@@ -1,34 +1,60 @@
-## What's wrong
+## Problem
 
-The route map on `/planlaeg-syn` only draws a route when the selected inspector's `shift_details` entries have `lat`/`lng`. For most inspectors those fields come back `null`, so the map only zooms to the home pin and skips the polyline. Henrik works by coincidence — his shift addresses happen to have a cache row that matches the broken join.
-
-Root cause is a normalization mismatch between writers and reader of `mapbox_coords_cache`:
-
-- All geocoder edge functions (`sync-workfeed-shifts`, `geocode-addresses`, `geocode-monday-items`, `geocode-inspector`) store rows as:
-  `normalized_address = lower(trim(address)) || ', danmark'`
-- But `inspector_capacity_view` joins shifts to the cache with:
-  `lower(trim(ss.address)) = mcc.normalized_address`  ← missing the `, danmark` suffix
-
-Result: the join misses almost every shift, `lat`/`lng` come back `null`, and `PlanlaegSynMapView` filters those shifts out before building waypoints — so no polyline is drawn.
+Mapbox can't geocode Danish addresses that include floor/door notations (`, 1. 11`, `, 6. th`, `, st. tv`, `, 2. sal`, `, 3. mf`). The current `normalizeAddress` in every geocoder just lowercases and appends `, danmark` — the floor segment stays in the query and Mapbox returns no result. Inspections from Monday with these suffixes never get coordinates, so `/planlaeg-syn` can't compute driving distances for them.
 
 ## Fix
 
-Recreate `inspector_capacity_view` with the join condition aligned to the writers' normalization:
+Strip Danish floor/door segments before geocoding, in every geocoder edge function. The clean address is what we send to Mapbox AND what we use as the `mapbox_coords_cache.normalized_address` key, so cache hits keep working.
 
-```sql
-LEFT JOIN mapbox_coords_cache mcc
-  ON mcc.normalized_address = lower(trim(ss.address)) || ', danmark'
+### 1. Shared cleaner (inlined per function, since edge functions don't share modules)
+
+```ts
+// Removes Danish floor/door segments like ", 1. 11" / ", 6. th" / ", st. tv" / ", 2. sal" / ", 3. mf"
+function stripFloorDoor(address: string): string {
+  return address.replace(
+    /,\s*(st\.?|kl\.?|\d+\.?)\s*(tv|th|mf|mid|sal|\.?\s*\d+)?(?=,|$)/gi,
+    ''
+  ).replace(/\s{2,}/g, ' ').trim();
+}
+
+function normalizeAddress(address: string): string {
+  return `${stripFloorDoor(address).toLowerCase().trim()}, danmark`;
+}
 ```
 
-Everything else in the view stays the same (columns, grouping, filters, status logic). This is a pure view recreation — no data migration, no table changes.
+Verified against representative samples — keeps `, 2200 København N` intact, removes the floor segment whether it appears mid-address or at the end.
+
+### 2. Files to update
+
+Replace `normalizeAddress` in:
+- `supabase/functions/geocode-monday-items/index.ts`
+- `supabase/functions/geocode-addresses/index.ts`
+- `supabase/functions/geocode-inspector/index.ts`
+- `supabase/functions/sync-workfeed-shifts/index.ts`
+
+All four already use the same `lower(trim(...)) || ', danmark'` shape, so changing the helper in-place is enough — no call-site changes.
+
+### 3. Backfill the items that already failed
+
+After the deploy, re-trigger geocoding for the stuck rows so `/planlaeg-syn` immediately sees their coords:
+
+```sql
+UPDATE public.monday_items_selected
+SET geocode_status = 'pending'
+WHERE geocode_status = 'failed'
+  AND adresse ~* ',\s*(st\.?|\d+\.?)\s*(tv|th|mf|sal|\d+)';
+```
+
+Then invoke `geocode-monday-items` with those IDs in batches (same pattern used last sync) so they hit Mapbox once and populate `mapbox_coords_cache`.
+
+For shifts, the next `sync-workfeed-shifts` run will re-geocode any address whose cache row is missing, so no manual step needed there — but we can optionally invoke it once after the deploy to refresh today's window immediately.
+
+### 4. Out of scope
+
+- Touching the cache rows that were created with the *old* (un-stripped) key. They're harmless: future lookups use the new stripped key and miss → Mapbox is called once → a new clean row is written. Old rows can be cleaned up later if desired.
+- Changing `inspector_capacity_view` (already fixed last turn).
+- Frontend changes.
 
 ## Why this is enough
 
-- `sync-workfeed-shifts` already geocodes shift addresses into `mapbox_coords_cache` on every sync, so rows exist for current shifts — they just weren't being matched.
-- Once the join matches, `shift_details[i].lat/lng` populates for all inspectors whose shift address is in the cache, and `PlanlaegSynMapView` will build the base → 1 → 2 → … polyline like it does for Henrik today.
-- No frontend changes needed. No edge function changes needed.
-
-## Out of scope
-
-- Backfilling cache rows for shifts whose addresses have never been geocoded (rare — `sync-workfeed-shifts` handles this on its regular cron). If, after this fix, a specific inspector still shows no route, the next step is to run a one-off geocode of their shift addresses, but that should not be needed for the cases the user reported.
-- Touching `RouteMapView` or `mapbox-directions.ts` — the Mapbox Directions calls themselves are working (Henrik's route proves it).
+Mapbox returns the building-level coordinate from the street + number + postcode alone — the floor/door has no geographic meaning. Stripping it server-side, in the same place we normalize for the cache, guarantees the geocoder sees a clean query and the cache key is stable across every writer/reader.
