@@ -1,37 +1,39 @@
-## Diagnosis
+## Goal
+Extend the Kort tab on `/planlaeg-syn` with a third toggle for already-booked inspections (from WorkFeed) and add a "booked count" badge on inspector markers.
 
-The Mapbox integration itself is correct — same pattern as `RouteMapView.tsx` (`mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_PUBLIC_TOKEN`, `streets-v12` style). The toggles render correctly with the right counts (17 / 23), which means data and component mount fine. The white area is almost certainly the **map canvas rendering at 0×0 px** — a classic Mapbox-GL pitfall when the container is sized by flexbox.
+All data needed is already loaded — the `inspectors` array from `PlanlaegSyn.tsx` already carries `scheduled_shifts` (count) and `shift_details[]` (each with `type`, `start_time`, `end_time`, `duration_minutes`, `address`, `lat`, `lng`). No new queries or backend work needed.
 
-Why: when `mapboxgl.Map` is constructed, it measures the container *once*. If the container's computed height is 0 at that moment (because the flex chain hasn't settled, or because the tab content was just switched in), the canvas stays 0×0 and you get a fully white box even after tiles load. RouteMapView avoids this because it lives in a modal with a fixed pixel height.
+## Changes (frontend only)
 
-The chain today:
+### 1. `src/components/planlaeg-syn/PlanlaegSynMapView.tsx`
 
-```text
-page root .........  flex flex-col h-full
-  └ tab wrapper ...  flex-1 min-h-0 mt-4 overflow-hidden     ← height fine
-      └ MapView ...  flex flex-col h-full gap-3
-          ├ toggles  (auto height)
-          └ canvas   flex-1 min-h-0 w-full                  ← can resolve to 0 during init
-```
+**Add third toggle "Vis planlagte syn"**
+- New state `showBookedShifts`, default `false` (off by default per request).
+- Render checkbox in the toggle row, same pattern as the two existing ones, with a distinct color (green `#10B981`) and count = total booked shifts across all visible inspectors.
 
-## Fix
+**New marker set: booked shifts**
+- Derive `bookedShiftPoints` via `useMemo` by flattening `inspectors[].shift_details`, keeping only entries with valid `lat`/`lng`. For each, capture: inspector name (`inspector.navn`), inspection type (`shift.type`), `start_time`, `end_time`, `duration_minutes`, `address`.
+- When `showBookedShifts` is true, render these as green pins. Popup shows:
+  - Inspector name (bold)
+  - Inspection type (e.g. "FF", "IF" — reuse existing abbreviation labels)
+  - Time range `HH:MM - HH:MM` and duration (e.g. "60 min")
+  - Address
 
-Edit only `src/components/planlaeg-syn/PlanlaegSynMapView.tsx`:
+**Inspector marker badge ("X booked")**
+- Render inspector markers as custom HTML elements (use `new mapboxgl.Marker({ element })` instead of the default color marker) so we can overlay a small circular badge in the top-right showing `inspector.scheduled_shifts` when > 0.
+- Badge style: small amber/primary circle with white number, similar visual weight to the count badges already used in the Planlægning tab.
+- Popup unchanged except we append "Planlagte syn: N" line.
 
-1. Give the map container a guaranteed size so Mapbox always initializes onto a non-zero box:
-   - Use `h-[600px]` (or `min-h-[500px] flex-1`) instead of bare `flex-1 min-h-0`.
-2. After init, call `map.resize()` once the style loads, and again whenever the container size could change:
-   - `map.on('load', () => map.resize())`
-   - Add a `ResizeObserver` on the container that calls `map.resize()` (covers tab switches and window resizes).
-3. Add a small diagnostic `console.log` on init failure / token missing so future regressions surface in the console.
-4. Confirm the token is present at runtime (it is in `.env`, but log a warning if `import.meta.env.VITE_MAPBOX_PUBLIC_TOKEN` is empty so we get a clear signal instead of a white box).
+**Filter integration**
+- All three marker sets continue to respect the existing `selectedDate`, `landsdel`, and `afdeling` filters because they operate on the already-filtered `inspections` and `inspectors` props passed from `PlanlaegSyn.tsx`. No prop changes needed.
 
-No changes to `PlanlaegSyn.tsx`, no DB or edge-function changes, no new dependencies — `mapbox-gl` is already installed and the same public token is already working for `RouteMapView`.
+**fitBounds**
+- Extend bounds calculation to also include `bookedShiftPoints` when that toggle is on.
 
-## Verification
+### 2. `src/pages/PlanlaegSyn.tsx`
+- No logic change required. `PlanlaegSynMapView` already receives `inspectors` (which includes `scheduled_shifts` and `shift_details`). No new props needed.
 
-After the change, open `/planlaeg-syn`, switch to the **Kort** tab with a date selected, and confirm:
-- Map tiles render (Denmark visible, then auto-fit to markers).
-- Blue inspection markers and amber inspector markers appear.
-- Toggling each layer hides/shows the corresponding markers.
-- Switching back to Planlægning and returning to Kort still renders correctly (ResizeObserver handles re-mount sizing).
+## Out of scope (for this step)
+- No new tabs, routes, or DB queries.
+- No changes to the Planlægning tab.
+- Click-to-highlight / route lines / hover sync between markers are deferred to the follow-up step you mentioned.

@@ -16,6 +16,14 @@ interface PlanlaegSynMapViewProps {
 
 const INSPECTION_COLOR = "#3B82F6"; // blue
 const INSPECTOR_COLOR = "#F59E0B"; // amber
+const BOOKED_COLOR = "#10B981"; // green
+
+const TYPE_LABEL: Record<string, string> = {
+  FF: "Fraflytningssyn",
+  IF: "Indflytningssyn",
+  PS: "Projektsyn",
+  PA: "Proforma",
+};
 
 export function PlanlaegSynMapView({
   selectedDate,
@@ -30,6 +38,7 @@ export function PlanlaegSynMapView({
   const [initError, setInitError] = useState<string | null>(null);
   const [showInspections, setShowInspections] = useState(true);
   const [showInspectors, setShowInspectors] = useState(true);
+  const [showBookedShifts, setShowBookedShifts] = useState(false);
 
   // Build point sets
   const inspectionPoints = useMemo(
@@ -56,6 +65,7 @@ export function PlanlaegSynMapView({
       title: string;
       subtitle: string;
       extra: string;
+      bookedCount: number;
     }> = [];
     inspectors.forEach((ins) => {
       if (seen.has(ins.inspector_uuid)) return;
@@ -69,10 +79,42 @@ export function PlanlaegSynMapView({
         title: ins.navn,
         subtitle: ins.adresse || "",
         extra: `${ins.afdeling || ""} • ${ins.tidspunkt_label}`,
+        bookedCount: ins.scheduled_shifts ?? 0,
       });
     });
     return out;
   }, [inspectors, inspectorCoords]);
+
+  const bookedShiftPoints = useMemo(() => {
+    const out: Array<{
+      key: string;
+      lat: number;
+      lng: number;
+      inspectorName: string;
+      type: string;
+      start: string;
+      end: string;
+      duration: number;
+      address: string;
+    }> = [];
+    inspectors.forEach((ins) => {
+      (ins.shift_details || []).forEach((s, idx) => {
+        if (typeof s.lat !== "number" || typeof s.lng !== "number") return;
+        out.push({
+          key: `${ins.inspector_uuid}-${idx}`,
+          lat: s.lat,
+          lng: s.lng,
+          inspectorName: ins.navn,
+          type: s.type || "",
+          start: (s.start_time || "").substring(0, 5),
+          end: (s.end_time || "").substring(0, 5),
+          duration: s.duration_minutes || 0,
+          address: s.address || "",
+        });
+      });
+    });
+    return out;
+  }, [inspectors]);
 
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
@@ -197,14 +239,54 @@ export function PlanlaegSynMapView({
 
       if (showInspectors) {
         inspectorPoints.forEach((p) => {
+          const el = document.createElement("div");
+          el.style.cssText =
+            "position:relative;width:24px;height:34px;cursor:pointer;";
+          el.innerHTML = `
+            <svg viewBox="0 0 24 34" width="24" height="34" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 22 12 22s12-13 12-22c0-6.6-5.4-12-12-12z" fill="${INSPECTOR_COLOR}" stroke="#fff" stroke-width="1.5"/>
+              <circle cx="12" cy="12" r="4" fill="#fff"/>
+            </svg>
+            ${
+              p.bookedCount > 0
+                ? `<div style="position:absolute;top:-4px;right:-6px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#1F2937;color:#fff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;border:1.5px solid #fff;box-sizing:border-box;line-height:1;">${p.bookedCount}</div>`
+                : ""
+            }
+          `;
+          const popupHtml = `<div style="font-family:inherit;min-width:180px">
+            <div style="font-weight:600;margin-bottom:2px">${escapeHtml(p.title)}</div>
+            <div style="font-size:12px;color:#555">${escapeHtml(p.subtitle)}</div>
+            ${p.extra ? `<div style="font-size:12px;color:#777;margin-top:4px">${escapeHtml(p.extra)}</div>` : ""}
+            <div style="font-size:12px;color:#111;margin-top:6px"><strong>Planlagte syn:</strong> ${p.bookedCount}</div>
+          </div>`;
+          const marker = new mapboxgl.Marker({ element: el, anchor: "bottom" })
+            .setLngLat([p.lng, p.lat])
+            .setPopup(new mapboxgl.Popup({ offset: 16 }).setHTML(popupHtml))
+            .addTo(map);
+          markersRef.current.push(marker);
+          bounds.extend([p.lng, p.lat]);
+          hasAny = true;
+        });
+      }
+
+      if (showBookedShifts) {
+        bookedShiftPoints.forEach((p) => {
+          const typeLabel = TYPE_LABEL[p.type] || p.type || "Syn";
+          const timeLine =
+            p.start && p.end
+              ? `${p.start} - ${p.end}${p.duration ? ` (${p.duration} min)` : ""}`
+              : p.duration
+              ? `${p.duration} min`
+              : "";
           addMarker(
             p.lng,
             p.lat,
-            INSPECTOR_COLOR,
-            `<div style="font-family:inherit;min-width:180px">
-              <div style="font-weight:600;margin-bottom:2px">${escapeHtml(p.title)}</div>
-              <div style="font-size:12px;color:#555">${escapeHtml(p.subtitle)}</div>
-              ${p.extra ? `<div style="font-size:12px;color:#777;margin-top:4px">${escapeHtml(p.extra)}</div>` : ""}
+            BOOKED_COLOR,
+            `<div style="font-family:inherit;min-width:200px">
+              <div style="font-weight:600;margin-bottom:2px">${escapeHtml(p.inspectorName)}</div>
+              <div style="font-size:12px;color:#111">${escapeHtml(typeLabel)}</div>
+              ${timeLine ? `<div style="font-size:12px;color:#555;margin-top:2px">${escapeHtml(timeLine)}</div>` : ""}
+              ${p.address ? `<div style="font-size:12px;color:#777;margin-top:4px">${escapeHtml(p.address)}</div>` : ""}
             </div>`
           );
         });
@@ -220,7 +302,7 @@ export function PlanlaegSynMapView({
     } else {
       map.once("load", apply);
     }
-  }, [inspectionPoints, inspectorPoints, showInspections, showInspectors]);
+  }, [inspectionPoints, inspectorPoints, bookedShiftPoints, showInspections, showInspectors, showBookedShifts]);
 
   if (initError) {
     return (
@@ -271,6 +353,20 @@ export function PlanlaegSynMapView({
               style={{ backgroundColor: INSPECTOR_COLOR }}
             />
             Vis konsulenter ({inspectorPoints.length})
+          </Label>
+        </div>
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="show-booked"
+            checked={showBookedShifts}
+            onCheckedChange={(v) => setShowBookedShifts(v === true)}
+          />
+          <Label htmlFor="show-booked" className="flex items-center gap-2 cursor-pointer">
+            <span
+              className="inline-block w-3 h-3 rounded-full"
+              style={{ backgroundColor: BOOKED_COLOR }}
+            />
+            Vis planlagte syn ({bookedShiftPoints.length})
           </Label>
         </div>
       </div>
