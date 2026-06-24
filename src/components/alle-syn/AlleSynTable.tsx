@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { da } from "date-fns/locale";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -15,11 +15,25 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { MondayItem } from "@/lib/supabase";
 import { getEffectiveDuration } from "@/lib/inspection-duration";
 
+export type AlleSynSortField =
+  | "Kunde"
+  | "adresse"
+  | "synstype"
+  | "dato_tid"
+  | "antal_vaerelser"
+  | "note"
+  | "duration_minutes";
+
+export type SortDir = "asc" | "desc";
+
 interface AlleSynTableProps {
   items: MondayItem[];
   isLoading: boolean;
   onEdit: (item: MondayItem) => void;
   onDelete: (id: number) => void;
+  sortField: AlleSynSortField;
+  sortDir: SortDir;
+  onSort: (field: AlleSynSortField) => void;
 }
 
 function extractNote(item: MondayItem): string {
@@ -36,7 +50,38 @@ function getDisplayDuration(item: MondayItem): { value: number; isManual: boolea
   return { value: getEffectiveDuration(item), isManual: false, isAuto: true };
 }
 
-export function AlleSynTable({ items, isLoading, onEdit, onDelete }: AlleSynTableProps) {
+function SortHeader({
+  label,
+  field,
+  sortField,
+  sortDir,
+  onSort,
+  className,
+}: {
+  label: string;
+  field: AlleSynSortField;
+  sortField: AlleSynSortField;
+  sortDir: SortDir;
+  onSort: (field: AlleSynSortField) => void;
+  className?: string;
+}) {
+  const active = sortField === field;
+  const Icon = active ? (sortDir === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown;
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(field)}
+      className={`inline-flex items-center gap-1 select-none hover:text-foreground transition-colors ${
+        active ? "text-foreground" : "text-muted-foreground"
+      } ${className ?? ""}`}
+    >
+      <span>{label}</span>
+      <Icon className="h-3.5 w-3.5" />
+    </button>
+  );
+}
+
+export function AlleSynTable({ items, isLoading, onEdit, onDelete, sortField, sortDir, onSort }: AlleSynTableProps) {
   if (isLoading) {
     return (
       <div className="rounded-md border">
@@ -75,13 +120,13 @@ export function AlleSynTable({ items, isLoading, onEdit, onDelete }: AlleSynTabl
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Kunde</TableHead>
-            <TableHead>Adresse</TableHead>
-            <TableHead>Synstype</TableHead>
-            <TableHead>Dato/tid</TableHead>
-            <TableHead className="text-center">Værelser</TableHead>
-            <TableHead>Note</TableHead>
-            <TableHead className="text-center">Varighed</TableHead>
+            <TableHead><SortHeader label="Kunde" field="Kunde" sortField={sortField} sortDir={sortDir} onSort={onSort} /></TableHead>
+            <TableHead><SortHeader label="Adresse" field="adresse" sortField={sortField} sortDir={sortDir} onSort={onSort} /></TableHead>
+            <TableHead><SortHeader label="Synstype" field="synstype" sortField={sortField} sortDir={sortDir} onSort={onSort} /></TableHead>
+            <TableHead><SortHeader label="Dato/tid" field="dato_tid" sortField={sortField} sortDir={sortDir} onSort={onSort} /></TableHead>
+            <TableHead className="text-center"><SortHeader label="Værelser" field="antal_vaerelser" sortField={sortField} sortDir={sortDir} onSort={onSort} /></TableHead>
+            <TableHead><SortHeader label="Note" field="note" sortField={sortField} sortDir={sortDir} onSort={onSort} /></TableHead>
+            <TableHead className="text-center"><SortHeader label="Varighed" field="duration_minutes" sortField={sortField} sortDir={sortDir} onSort={onSort} /></TableHead>
             <TableHead className="w-10" />
           </TableRow>
         </TableHeader>

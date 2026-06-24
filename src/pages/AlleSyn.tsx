@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { AlleSynTable } from "@/components/alle-syn/AlleSynTable";
+import { AlleSynTable, type AlleSynSortField, type SortDir } from "@/components/alle-syn/AlleSynTable";
 import { AlleSynFiltersBar } from "@/components/alle-syn/AlleSynFiltersBar";
 import { EditMondayItemDialog } from "@/components/alle-syn/EditMondayItemDialog";
 import { MondayItem } from "@/lib/supabase";
@@ -40,6 +40,13 @@ export default function AlleSyn() {
   const [selectedRegion, setSelectedRegion] = useState(searchParams.get("region") || "");
   const [date, setDate] = useState(searchParams.get("date") || "");
   const [regions, setRegions] = useState<string[]>([]);
+
+  const [sortField, setSortField] = useState<AlleSynSortField>(
+    (searchParams.get("sort") as AlleSynSortField) || "dato_tid"
+  );
+  const [sortDir, setSortDir] = useState<SortDir>(
+    (searchParams.get("dir") as SortDir) || "asc"
+  );
 
   const [editItem, setEditItem] = useState<MondayItem | null>(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -84,8 +91,9 @@ export default function AlleSyn() {
       }
     }
 
+    const ascending = sortDir === "asc";
     query = query
-      .order("dato_tid", { ascending: true, nullsFirst: false })
+      .order(sortField, { ascending, nullsFirst: false })
       .order("inserted_at", { ascending: true })
       .range(start, end);
 
@@ -98,7 +106,7 @@ export default function AlleSyn() {
       setCount(total || 0);
     }
     setIsLoading(false);
-  }, [page, searchQuery, selectedRegion, date, toast]);
+  }, [page, searchQuery, selectedRegion, date, sortField, sortDir, toast]);
 
   useEffect(() => {
     fetchItems();
@@ -110,8 +118,10 @@ export default function AlleSyn() {
     if (searchQuery) params.search = searchQuery;
     if (selectedRegion) params.region = selectedRegion;
     if (date) params.date = date;
+    if (sortField !== "dato_tid") params.sort = sortField;
+    if (sortDir !== "asc") params.dir = sortDir;
     setSearchParams(params, { replace: true });
-  }, [searchQuery, selectedRegion, date, setSearchParams]);
+  }, [searchQuery, selectedRegion, date, sortField, sortDir, setSearchParams]);
 
   const totalPages = Math.ceil(count / PAGE_SIZE);
 
@@ -121,6 +131,16 @@ export default function AlleSyn() {
     setSearchQuery("");
     setSelectedRegion("");
     setDate("");
+    setPage(1);
+  };
+
+  const handleSort = (field: AlleSynSortField) => {
+    if (field === sortField) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir("asc");
+    }
     setPage(1);
   };
 
@@ -180,7 +200,15 @@ export default function AlleSyn() {
         isLoading={isLoading}
       />
 
-      <AlleSynTable items={items} isLoading={isLoading} onEdit={handleEdit} onDelete={(id) => { setDeleteId(id); setDeleteOpen(true); }} />
+      <AlleSynTable
+        items={items}
+        isLoading={isLoading}
+        onEdit={handleEdit}
+        onDelete={(id) => { setDeleteId(id); setDeleteOpen(true); }}
+        sortField={sortField}
+        sortDir={sortDir}
+        onSort={handleSort}
+      />
 
       {totalPages > 1 && (
         <Pagination>
