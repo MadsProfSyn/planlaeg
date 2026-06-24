@@ -1,37 +1,37 @@
-## Root cause
-Inspector pins live on a Mapbox symbol layer, which is subject to symbol-placement/collision culling and zoom-based hiding. Blue/green pins use `mapboxgl.Marker` DOM elements (immune to culling) and never disappear. `icon-allow-overlap` + `icon-ignore-placement` didn't hold — likely async image-load race or layout props not applying at runtime. Fix: eliminate the symbol layer for inspectors and use DOM markers like blue/green.
+## Files involved
 
-## Change scope
-Single file: `src/components/planlaeg-syn/PlanlaegSynMapView.tsx`.
+- `src/components/AppLayout.tsx` — shared layout used by every routed page in `src/App.tsx` (wraps children with `SidebarProvider` + `AppSidebar` + `<header>` + `<main>`). This is the only place the top bar lives.
+- `src/components/AppSidebar.tsx` — left sidebar (shadcn `Sidebar`). Currently has `SidebarHeader` + `SidebarContent` only; we'll add a `SidebarFooter` with the profile block.
 
-## Edits
+Spacing audit (rg for `pt-16|pt-14|mt-16|top-16|top-[64px]|h-16`):
+- `src/components/AppLayout.tsx:38` — the `h-16` header itself (deleted).
+- `src/pages/admin/AdminLayout.tsx:37` — unrelated; this is a separate (unused-by-routes) admin layout, not wired into `App.tsx`. Leave untouched.
+- `src/components/inspections/MondayItemsTable.tsx:98` — `h-16` on a skeleton row, unrelated to header. Leave untouched.
 
-1. **Inside `apply()`, under `if (showInspectors) { ... }`** — replace the GeoJSON source + symbol/badge layer block with `inspectorPoints.forEach(p => ...)`:
-   - Build a `<div>` with `position:relative; width:24px; height:34px; cursor:pointer`.
-   - Inner HTML: 24×34 SVG teardrop (fill `INSPECTOR_COLOR`, white stroke, white center dot) + when `bookedCount > 0`, an absolutely-positioned `<span>` badge (top:-8, right:-8, dark bg, white text, white border).
-   - `new mapboxgl.Marker({ element: el, anchor: "bottom" }).setLngLat([p.lng, p.lat]).setPopup(new mapboxgl.Popup({ offset: 28 }).setHTML(popupHtml)).addTo(map)`.
-   - Push to `markersRef`, extend `bounds`, set `hasAny = true`.
+No `pt-16` / `mt-16` / `top-16` / `top-[64px]` / `pt-14` matches anywhere in `src/`. No page-level offsets to remove — pages already render flush inside `<main>`.
 
-2. **Drop the `else { setInspectorLayersVisible(map, false) }` branch** — `markersRef` is cleared at the top of `apply()`, so toggle-off works naturally.
+## Changes
 
-3. **Delete dead code**:
-   - `ensureInspectorPinImage` (function + call)
-   - `ensureInspectorLayers` (function + call)
-   - `setInspectorLayersVisible`
-   - `inspectorHandlersBoundRef`, `inspectorPopupRef`, `inspectorPinReadyRef`
-   - The `map.on("click"/"mouseenter"/"mouseleave", "inspectors-home-icon")` handlers (popup now handled by marker's `setPopup`)
-   - `MutableRefObject` import (no longer used)
+### 1. `src/components/AppLayout.tsx`
 
-## Drift guards (both hold after the change)
-- **Anchor**: `anchor: "bottom"` and element height = SVG height = 34px. The badge is `position: absolute` so it does NOT extend the box downward — the element's bottom edge equals the pin tip. No compensating pixel offset.
-- **Geometry**: `setLngLat([p.lng, p.lat])` reads only the static home coordinate from `inspectorPoints` (built from `inspectorCoords`). Booking coords feed only `bookedCount`, never geometry. No `project`/`unproject` round-trips.
+- Delete the entire `<header>` element (the `h-16` bar containing `SidebarTrigger` + profile `DropdownMenu`).
+- Remove the now-unused imports: `Button`, `DropdownMenu*`, `Avatar*`, `LogOut`, `User`, `SidebarTrigger`, `useAuth`, the `getInitials` helper. Keep `SidebarProvider` and `AppSidebar`.
+- The right column becomes just `<main className="flex-1 overflow-auto min-w-0 min-h-0">{children}</main>` so page content starts at viewport top with no gap.
+
+### 2. `src/components/AppSidebar.tsx`
+
+- Import `SidebarFooter` from `@/components/ui/sidebar`, plus `useAuth`, `Button`, `DropdownMenu*`, `Avatar*`, `LogOut`, `SidebarTrigger`.
+- Move the `getInitials` helper and the profile `DropdownMenu` (avatar trigger → label with name/email/admin badge → `Log ud` item calling `signOut()`) from `AppLayout` into a new `<SidebarFooter>` rendered after `<SidebarContent>`. Shadcn's `SidebarFooter` is already styled as a bottom-pinned flex region (the `Sidebar` shell is `flex-col` and `SidebarContent` has `flex-1`), so the footer naturally anchors at the bottom regardless of nav item count — no manual `mt-auto` needed.
+- Footer layout: a single row with the avatar `DropdownMenuTrigger` on the left and the existing `SidebarTrigger` (collapse toggle) on the right, so users keep the ability to collapse the sidebar now that the header trigger is gone.
+- Preserve all dropdown behavior verbatim (label block, separator, sign-out item).
+
+### 3. No other files
+
+No page wrappers, no routes, no nav items change. Confirmed by the rg sweep above.
 
 ## Verification
-- Continuous zoom out → in → out: every inspector pin stays visible the whole time.
-- Toggle "Vis konsulenter" off → all gone; on → all return.
-- For ~3 inspectors, `marker.getLngLat()` matches their Supabase `inspectors.lat/lng`; pin stays glued through full zoom cycle.
-- A plain blue `mapboxgl.Marker` at the same coordinate coincides with the orange pin at every zoom.
-- Badge shows correct count and never displaces the pin.
 
-## Out of scope
-Blue inspection markers, green booked-shift markers, clustering, filters bar, map init/error handling.
+- Every route renders with no top bar and no blank gap at the top of `<main>`.
+- Profile avatar sits at the bottom of the sidebar; dropdown opens with name/email/admin badge and `Log ud` still calls `signOut()`.
+- Resizing the window: nav stays at top, profile stays pinned at bottom (via `SidebarContent` `flex-1` pushing `SidebarFooter` down).
+- Sidebar can still be toggled via the `SidebarTrigger` now living in the sidebar footer.
