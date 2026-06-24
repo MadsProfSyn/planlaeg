@@ -242,9 +242,9 @@ export function PlanlaegSynMapView({
         inspectorPoints.forEach((p) => {
           const el = document.createElement("div");
           el.style.cssText =
-            "position:relative;width:24px;height:34px;cursor:pointer;";
+            "position:relative;width:24px;height:34px;cursor:pointer;line-height:0;display:block;box-sizing:content-box;";
           el.innerHTML = `
-            <svg viewBox="0 0 24 34" width="24" height="34" xmlns="http://www.w3.org/2000/svg">
+            <svg viewBox="0 0 24 34" width="24" height="34" style="display:block;" xmlns="http://www.w3.org/2000/svg">
               <path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 22 12 22s12-13 12-22c0-6.6-5.4-12-12-12z" fill="${INSPECTOR_COLOR}" stroke="#fff" stroke-width="1.5"/>
               <circle cx="12" cy="12" r="4" fill="#fff"/>
             </svg>
@@ -260,7 +260,11 @@ export function PlanlaegSynMapView({
             ${p.extra ? `<div style="font-size:12px;color:#777;margin-top:4px">${escapeHtml(p.extra)}</div>` : ""}
             <div style="font-size:12px;color:#111;margin-top:6px"><strong>Planlagte syn:</strong> ${p.bookedCount}</div>
           </div>`;
-          const marker = new mapboxgl.Marker({ element: el, anchor: "bottom" })
+          const marker = new mapboxgl.Marker({
+            element: el,
+            anchor: "bottom",
+            offset: [0, 0],
+          })
             .setLngLat([p.lng, p.lat])
             .setPopup(new mapboxgl.Popup({ offset: 16 }).setHTML(popupHtml))
             .addTo(map);
