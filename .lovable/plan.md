@@ -1,39 +1,46 @@
-## Goal
-Extend the Kort tab on `/planlaeg-syn` with a third toggle for already-booked inspections (from WorkFeed) and add a "booked count" badge on inspector markers.
+## Diagnosis
 
-All data needed is already loaded — the `inspectors` array from `PlanlaegSyn.tsx` already carries `scheduled_shifts` (count) and `shift_details[]` (each with `type`, `start_time`, `end_time`, `duration_minutes`, `address`, `lat`, `lng`). No new queries or backend work needed.
+The regression is in `PlanlaegSynMapView.tsx`, in the custom orange inspector marker added for `Vis konsulenter`.
 
-## Changes (frontend only)
+The issue appeared after adding the booked-count badge because the marker element now contains an absolutely positioned badge outside the 24×34 pin box:
 
-### 1. `src/components/planlaeg-syn/PlanlaegSynMapView.tsx`
+```text
+pin element: width 24px, height 34px
+badge: position absolute; top -4px; right -6px
+Mapbox marker anchor: bottom
+```
 
-**Add third toggle "Vis planlagte syn"**
-- New state `showBookedShifts`, default `false` (off by default per request).
-- Render checkbox in the toggle row, same pattern as the two existing ones, with a distinct color (green `#10B981`) and count = total booked shifts across all visible inspectors.
+Mapbox positions custom markers using the DOM element’s measured box and anchor. Because the badge visually extends outside the pin, the effective visual center/anchor no longer matches the actual pin tip. During zoom, Mapbox keeps the element’s anchor fixed, but the pin artwork appears to move because the anchor is being calculated against the wrong composite marker shape.
 
-**New marker set: booked shifts**
-- Derive `bookedShiftPoints` via `useMemo` by flattening `inspectors[].shift_details`, keeping only entries with valid `lat`/`lng`. For each, capture: inspector name (`inspector.navn`), inspection type (`shift.type`), `start_time`, `end_time`, `duration_minutes`, `address`.
-- When `showBookedShifts` is true, render these as green pins. Popup shows:
-  - Inspector name (bold)
-  - Inspection type (e.g. "FF", "IF" — reuse existing abbreviation labels)
-  - Time range `HH:MM - HH:MM` and duration (e.g. "60 min")
-  - Address
+The blue/green default Mapbox markers do not drift because they use Mapbox’s built-in marker sizing/anchor logic. Only the orange custom inspector marker is affected.
 
-**Inspector marker badge ("X booked")**
-- Render inspector markers as custom HTML elements (use `new mapboxgl.Marker({ element })` instead of the default color marker) so we can overlay a small circular badge in the top-right showing `inspector.scheduled_shifts` when > 0.
-- Badge style: small amber/primary circle with white number, similar visual weight to the count badges already used in the Planlægning tab.
-- Popup unchanged except we append "Planlagte syn: N" line.
+## Proposed fix
 
-**Filter integration**
-- All three marker sets continue to respect the existing `selectedDate`, `landsdel`, and `afdeling` filters because they operate on the already-filtered `inspections` and `inspectors` props passed from `PlanlaegSyn.tsx`. No prop changes needed.
+1. Keep the booked-count number visually attached to the orange inspector pin.
+2. Change the orange inspector marker so the outer Mapbox marker element has a stable fixed box that includes the badge area.
+3. Place the SVG pin inside that fixed box at a known position.
+4. Set the Mapbox marker `anchor` and `offset` so the geographic coordinate is locked exactly to the SVG pin tip, not to the badge-expanded visual bounds.
 
-**fitBounds**
-- Extend bounds calculation to also include `bookedShiftPoints` when that toggle is on.
+Concretely:
 
-### 2. `src/pages/PlanlaegSyn.tsx`
-- No logic change required. `PlanlaegSynMapView` already receives `inspectors` (which includes `scheduled_shifts` and `shift_details`). No new props needed.
+```text
+outer marker box: fixed e.g. 34px × 40px
+pin SVG: absolute left 5px top 4px, size 24px × 34px
+badge: absolute top 0 right 0
+marker anchor: bottom
+offset: [0, -2] or equivalent calibrated value so the pin tip is the locked point
+```
 
-## Out of scope (for this step)
-- No new tabs, routes, or DB queries.
-- No changes to the Planlægning tab.
-- Click-to-highlight / route lines / hover sync between markers are deferred to the follow-up step you mentioned.
+This makes the marker’s measured size stable and explicitly separates:
+
+- the visual badge area
+- the actual map coordinate anchor point
+
+## Validation
+
+After implementation I will verify that:
+
+- orange inspector pin tips stay on the same map location while zooming in/out
+- count badges still render correctly
+- blue inspection pins and green booked-inspection pins are unchanged
+- the map still loads correctly when switching to the `Kort` tab

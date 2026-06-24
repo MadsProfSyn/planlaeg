@@ -242,15 +242,15 @@ export function PlanlaegSynMapView({
         inspectorPoints.forEach((p) => {
           const el = document.createElement("div");
           el.style.cssText =
-            "position:relative;width:24px;height:34px;cursor:pointer;line-height:0;display:block;box-sizing:content-box;";
+            "position:relative;width:40px;height:40px;cursor:pointer;line-height:0;display:block;box-sizing:content-box;padding:0;margin:0;";
           el.innerHTML = `
-            <svg viewBox="0 0 24 34" width="24" height="34" style="display:block;" xmlns="http://www.w3.org/2000/svg">
+            <svg viewBox="0 0 24 34" width="24" height="34" style="position:absolute;left:8px;top:6px;display:block;" xmlns="http://www.w3.org/2000/svg">
               <path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 22 12 22s12-13 12-22c0-6.6-5.4-12-12-12z" fill="${INSPECTOR_COLOR}" stroke="#fff" stroke-width="1.5"/>
               <circle cx="12" cy="12" r="4" fill="#fff"/>
             </svg>
             ${
               p.bookedCount > 0
-                ? `<div style="position:absolute;top:-4px;right:-6px;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#1F2937;color:#fff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;border:1.5px solid #fff;box-sizing:border-box;line-height:1;">${p.bookedCount}</div>`
+                ? `<div style="position:absolute;top:2px;right:0;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#1F2937;color:#fff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;border:1.5px solid #fff;box-sizing:border-box;line-height:1;">${p.bookedCount}</div>`
                 : ""
             }
           `;
