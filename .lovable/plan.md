@@ -1,81 +1,37 @@
+## Diagnosis
 
-## Goal
+The Mapbox integration itself is correct — same pattern as `RouteMapView.tsx` (`mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_PUBLIC_TOKEN`, `streets-v12` style). The toggles render correctly with the right counts (17 / 23), which means data and component mount fine. The white area is almost certainly the **map canvas rendering at 0×0 px** — a classic Mapbox-GL pitfall when the container is sized by flexbox.
 
-Add a tabbed view to `/planlaeg-syn` with a new **Kort** (map) view showing inspection locations (from Monday) and available inspectors' home addresses for the selected date, using the existing Mapbox setup.
+Why: when `mapboxgl.Map` is constructed, it measures the container *once*. If the container's computed height is 0 at that moment (because the flex chain hasn't settled, or because the tab content was just switched in), the canvas stays 0×0 and you get a fully white box even after tiles load. RouteMapView avoids this because it lives in a modal with a fixed pixel height.
 
-## UX
+The chain today:
 
-- Add a `Tabs` switcher in the top-right of `/planlaeg-syn` header row (next to the action buttons): **Planlægning** (current two-panel view) and **Kort** (new map view).
-- Both tabs share the existing filter bar (`Dato`, `Landsdel`, `Afdeling`) so switching tabs preserves filters.
-- Date is required for the map (same as today's inspectors panel). If no date selected, show an empty state: "Vælg en dato for at se kortet."
-
-### Map view layout
-
-```
-[Filter bar (date / landsdel / afdeling) — shared]
-[Map toggles row: ☑ Vis synsopgaver  ☑ Vis konsulenter  •  legend]
-[Mapbox map — fills remaining height]
+```text
+page root .........  flex flex-col h-full
+  └ tab wrapper ...  flex-1 min-h-0 mt-4 overflow-hidden     ← height fine
+      └ MapView ...  flex flex-col h-full gap-3
+          ├ toggles  (auto height)
+          └ canvas   flex-1 min-h-0 w-full                  ← can resolve to 0 during init
 ```
 
-- Two checkboxes/switches above the map to toggle layers on/off:
-  - **Vis synsopgaver** (inspections) — default on
-  - **Vis konsulenter** (inspectors) — default on
-- Small legend chip explaining marker colors.
-- Map auto-fits bounds to currently visible markers when filters or toggles change.
-- Clicking a marker opens a Mapbox popup with key details (address, customer/synstype for inspections; name, afdeling, tidspunkt for inspectors).
+## Fix
 
-### Filters
+Edit only `src/components/planlaeg-syn/PlanlaegSynMapView.tsx`:
 
-The existing `Landsdel` filter already scopes inspections; `Afdeling` already scopes inspectors. On the map both filters apply simultaneously so users see only the relevant subset. The new "Vis synsopgaver / Vis konsulenter" toggles are *additional* layer-visibility switches on top of those filters (not replacements).
+1. Give the map container a guaranteed size so Mapbox always initializes onto a non-zero box:
+   - Use `h-[600px]` (or `min-h-[500px] flex-1`) instead of bare `flex-1 min-h-0`.
+2. After init, call `map.resize()` once the style loads, and again whenever the container size could change:
+   - `map.on('load', () => map.resize())`
+   - Add a `ResizeObserver` on the container that calls `map.resize()` (covers tab switches and window resizes).
+3. Add a small diagnostic `console.log` on init failure / token missing so future regressions surface in the console.
+4. Confirm the token is present at runtime (it is in `.env`, but log a warning if `import.meta.env.VITE_MAPBOX_PUBLIC_TOKEN` is empty so we get a clear signal instead of a white box).
 
-## Technical Plan
+No changes to `PlanlaegSyn.tsx`, no DB or edge-function changes, no new dependencies — `mapbox-gl` is already installed and the same public token is already working for `RouteMapView`.
 
-### 1. New component: `src/components/planlaeg-syn/PlanlaegSynMapView.tsx`
+## Verification
 
-Props:
-```ts
-{
-  selectedDate: string | undefined;
-  inspections: MondayItem[];   // already filtered by date+landsdel
-  inspectors: Inspector[];     // already filtered by date+afdeling
-  inspectorCoords: Map<string, { lat: number; lng: number }>;
-}
-```
-
-- Reuses the Mapbox pattern from `RouteMapView.tsx`:
-  - `mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_PUBLIC_TOKEN`
-  - Same style, same error state when token missing.
-- Renders two marker layers:
-  - **Inspections** — colored circle markers (e.g. blue) at `monday_items_selected.lat/lng`.
-  - **Inspectors** — differently colored markers (e.g. amber) at inspector home `lat/lng`.
-- Local state for `showInspections`, `showInspectors` (both default true).
-- Auto-fit bounds to the visible set on changes.
-- Empty / loading states when no coordinates resolve.
-
-### 2. Inspector coordinates
-
-`inspectors` (from `supabase_availability` + `inspectors`) currently fetches `address` but not `lat/lng`. Extend the inspectors query in `PlanlaegSyn.tsx` to also select `lat, lng` from the `inspectors` table and pass them via a `Map<inspectorId, {lat,lng}>` (or add to the `Inspector` interface). No DB change needed — `inspectors.lat/lng` already exists and is populated by the geocode flow.
-
-### 3. Inspection coordinates
-
-`monday_items_selected` already carries `lat`/`lng` (populated by `geocode-monday-items` trigger). Confirm `getMondayItems` returns these fields; if not, add them to the select. No new fetch needed.
-
-### 4. Tabs integration in `PlanlaegSyn.tsx`
-
-- Wrap the existing two-column DnD layout and the new map view in shadcn `Tabs` (`value`, `onValueChange` in component state, default `"plan"`).
-- `TabsList` placed in the top action row on the right side (`Planlægning` / `Kort`).
-- `TabsContent value="plan"` contains the existing `<DndContext>...</DndContext>` block, unchanged.
-- `TabsContent value="map"` contains `<PlanlaegSynMapView ... />`.
-- "Send til WorkFeed" / "Sync vagter" buttons remain visible in both tabs (they operate on shared state).
-
-### 5. Files touched
-
-- `src/pages/PlanlaegSyn.tsx` — add tab state, wrap views in `Tabs`, extend inspectors query with `lat/lng`.
-- `src/components/planlaeg-syn/PlanlaegSynMapView.tsx` — **new**, Mapbox map with two toggle-able marker layers, popups, fit-bounds.
-- (If needed) `src/lib/supabase.ts` — ensure `lat`/`lng` returned for monday items.
-
-## Out of scope
-
-- No drag-and-drop / scheduling from the map (read-only visualization).
-- No driving-route rendering on this map (that lives in the route preview); we only plot points.
-- No DB changes; no edge function changes.
+After the change, open `/planlaeg-syn`, switch to the **Kort** tab with a date selected, and confirm:
+- Map tiles render (Denmark visible, then auto-fit to markers).
+- Blue inspection markers and amber inspector markers appear.
+- Toggling each layer hides/shows the corresponding markers.
+- Switching back to Planlægning and returning to Kort still renders correctly (ResizeObserver handles re-mount sizing).

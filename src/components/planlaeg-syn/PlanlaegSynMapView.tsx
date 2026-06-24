@@ -26,6 +26,7 @@ export function PlanlaegSynMapView({
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const [initError, setInitError] = useState<string | null>(null);
   const [showInspections, setShowInspections] = useState(true);
   const [showInspectors, setShowInspectors] = useState(true);
@@ -79,6 +80,7 @@ export function PlanlaegSynMapView({
 
     const token = import.meta.env.VITE_MAPBOX_PUBLIC_TOKEN;
     if (!token || !token.startsWith("pk.")) {
+      console.warn("[PlanlaegSynMapView] Missing/invalid VITE_MAPBOX_PUBLIC_TOKEN");
       setInitError(
         "Ugyldig Mapbox token. Tilføj VITE_MAPBOX_PUBLIC_TOKEN i din .env."
       );
@@ -86,15 +88,33 @@ export function PlanlaegSynMapView({
     }
     mapboxgl.accessToken = token;
 
-    mapRef.current = new mapboxgl.Map({
+    const map = new mapboxgl.Map({
       container: mapContainer.current,
       style: "mapbox://styles/mapbox/streets-v12",
       center: [10.5, 56], // Denmark
       zoom: 6,
     });
-    mapRef.current.addControl(new mapboxgl.NavigationControl(), "top-right");
+    mapRef.current = map;
+    map.addControl(new mapboxgl.NavigationControl(), "top-right");
+
+    map.on("load", () => map.resize());
+    map.on("error", (e) => console.warn("[PlanlaegSynMapView] mapbox error", e));
+
+    // Ensure correct sizing even if container changes (tab switch, window resize)
+    if (typeof ResizeObserver !== "undefined") {
+      resizeObserverRef.current = new ResizeObserver(() => {
+        mapRef.current?.resize();
+      });
+      resizeObserverRef.current.observe(mapContainer.current);
+    }
+
+    // Safety resize after first paint
+    const t = window.setTimeout(() => map.resize(), 100);
 
     return () => {
+      window.clearTimeout(t);
+      resizeObserverRef.current?.disconnect();
+      resizeObserverRef.current = null;
       markersRef.current.forEach((m) => m.remove());
       markersRef.current = [];
       mapRef.current?.remove();
@@ -226,7 +246,7 @@ export function PlanlaegSynMapView({
 
       <div
         ref={mapContainer}
-        className="flex-1 min-h-0 w-full rounded-lg border overflow-hidden"
+        className="flex-1 w-full rounded-lg border overflow-hidden min-h-[500px] h-[calc(100vh-260px)]"
       />
     </div>
   );
