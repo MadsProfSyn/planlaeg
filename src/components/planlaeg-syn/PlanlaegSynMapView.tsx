@@ -37,6 +37,7 @@ export function PlanlaegSynMapView({
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const inspectorPopupRef = useRef<mapboxgl.Popup | null>(null);
   const inspectorHandlersBoundRef = useRef(false);
+  const inspectorPinReadyRef = useRef(false);
   const [initError, setInitError] = useState<string | null>(null);
   const [showInspections, setShowInspections] = useState(true);
   const [showInspectors, setShowInspectors] = useState(true);
@@ -269,76 +270,23 @@ export function PlanlaegSynMapView({
             dropped.map((d) => ({ id: d.id, title: d.title, lat: d.lat, lng: d.lng }))
           );
         }
-        console.log(
-          "[PlanlaegSynMapView] inspector rendering — total inspectors:",
-          inspectors.length,
-          "unique inspectorPoints:",
-          inspectorPoints.length,
-          "rendered features:",
-          features.length,
-          "missing coords (no entry in inspectorCoords):",
-          inspectors
-            .filter((ins) => !inspectorCoords.get(ins.inspector_uuid))
-            .map((ins) => ({ id: ins.inspector_uuid, navn: ins.navn }))
-        );
         const fc = {
           type: "FeatureCollection" as const,
           features,
         };
+        // Ensure source exists, then update its data.
         const existing = map.getSource("inspectors-home") as
           | mapboxgl.GeoJSONSource
           | undefined;
         if (existing) {
           existing.setData(fc as any);
         } else {
-          map.addSource("inspectors-home", {
-            type: "geojson",
-            data: fc as any,
-          });
-          map.addLayer({
-            id: "inspectors-home-icon", // keep id — click/hover handlers + visibility toggle reference it
-            type: "circle",
-            source: "inspectors-home",
-            paint: {
-              "circle-radius": 7,
-              "circle-color": INSPECTOR_COLOR,
-              "circle-stroke-color": "#ffffff",
-              "circle-stroke-width": 2,
-            },
-          });
-          map.addLayer({
-            id: "inspectors-home-badge-bg",
-            type: "circle",
-            source: "inspectors-home",
-            filter: [">", ["get", "bookedCount"], 0],
-            paint: {
-              "circle-radius": 9,
-              "circle-color": "#1F2937",
-              "circle-stroke-color": "#ffffff",
-              "circle-stroke-width": 1.5,
-              "circle-translate": [10, -12],
-              "circle-translate-anchor": "viewport",
-            },
-          });
-          map.addLayer({
-            id: "inspectors-home-badge",
-            type: "symbol",
-            source: "inspectors-home",
-            filter: [">", ["get", "bookedCount"], 0],
-            layout: {
-              "text-field": ["to-string", ["get", "bookedCount"]],
-              "text-size": 11,
-              "text-font": ["Noto Sans Regular"],
-              "text-allow-overlap": true,
-              "text-ignore-placement": true,
-              "text-offset": [0.9, -1.1],
-              "text-anchor": "center",
-            },
-            paint: {
-              "text-color": "#ffffff",
-            },
-          });
+          map.addSource("inspectors-home", { type: "geojson", data: fc as any });
         }
+        // Ensure the pin image is loaded once, then ensure layers exist.
+        ensureInspectorPinImage(map, inspectorPinReadyRef).then(() => {
+          ensureInspectorLayers(map);
+        });
 
         if (!inspectorHandlersBoundRef.current) {
           map.on("click", "inspectors-home-icon", (e) => {
@@ -504,4 +452,115 @@ function setInspectorLayersVisible(map: mapboxgl.Map, visible: boolean) {
       }
     }
   );
+}
+
+// Idempotently (re)create the three inspector layers if any are missing.
+// Called on every render so a style refresh can't leave the source orphaned.
+function ensureInspectorLayers(map: mapboxgl.Map) {
+  if (!map.getSource("inspectors-home")) return;
+
+  if (!map.getLayer("inspectors-home-icon")) {
+    if (map.hasImage("inspector-pin")) {
+      map.addLayer({
+        id: "inspectors-home-icon",
+        type: "symbol",
+        source: "inspectors-home",
+        layout: {
+          "icon-image": "inspector-pin",
+          "icon-anchor": "bottom",
+          "icon-size": 1,
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+        },
+      });
+    } else {
+      // Fallback so pins are always visible even if the icon failed to load.
+      map.addLayer({
+        id: "inspectors-home-icon",
+        type: "circle",
+        source: "inspectors-home",
+        paint: {
+          "circle-radius": 7,
+          "circle-color": INSPECTOR_COLOR,
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": 2,
+        },
+      });
+    }
+  }
+
+  if (!map.getLayer("inspectors-home-badge-bg")) {
+    map.addLayer({
+      id: "inspectors-home-badge-bg",
+      type: "circle",
+      source: "inspectors-home",
+      filter: [">", ["get", "bookedCount"], 0],
+      paint: {
+        "circle-radius": 9,
+        "circle-color": "#1F2937",
+        "circle-stroke-color": "#ffffff",
+        "circle-stroke-width": 1.5,
+        "circle-translate": [10, -28],
+        "circle-translate-anchor": "viewport",
+      },
+    });
+  }
+
+  if (!map.getLayer("inspectors-home-badge")) {
+    map.addLayer({
+      id: "inspectors-home-badge",
+      type: "symbol",
+      source: "inspectors-home",
+      filter: [">", ["get", "bookedCount"], 0],
+      layout: {
+        "text-field": ["to-string", ["get", "bookedCount"]],
+        "text-size": 11,
+        "text-font": ["Noto Sans Regular"],
+        "text-allow-overlap": true,
+        "text-ignore-placement": true,
+        "text-offset": [0.9, -2.5],
+        "text-anchor": "center",
+      },
+      paint: { "text-color": "#ffffff" },
+    });
+  }
+}
+
+// Load the orange teardrop pin once via an HTMLImageElement (NOT raw bytes —
+// raw byte registration triggered "Unimplemented type: 4"). Resolves when the
+// image is registered with the Mapbox style and ready to use.
+function ensureInspectorPinImage(
+  map: mapboxgl.Map,
+  readyRef: React.MutableRefObject<boolean>
+): Promise<void> {
+  if (map.hasImage("inspector-pin")) {
+    readyRef.current = true;
+    return Promise.resolve();
+  }
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="28" height="40" viewBox="0 0 28 40">
+  <path d="M14 1 C7 1 1 7 1 14 C1 24 14 39 14 39 C14 39 27 24 27 14 C27 7 21 1 14 1 Z"
+        fill="${INSPECTOR_COLOR}" stroke="#ffffff" stroke-width="2"/>
+  <circle cx="14" cy="14" r="5" fill="#ffffff"/>
+</svg>`;
+  const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  return new Promise<void>((resolve) => {
+    const img = new Image(56, 80); // 2x for crispness
+    img.onload = () => {
+      try {
+        if (!map.hasImage("inspector-pin")) {
+          map.addImage("inspector-pin", img, { pixelRatio: 2 });
+        }
+        readyRef.current = true;
+      } catch (err) {
+        console.warn("[PlanlaegSynMapView] addImage failed, will fall back to circle", err);
+      }
+      resolve();
+    };
+    img.onerror = (err) => {
+      console.warn("[PlanlaegSynMapView] inspector pin image failed to load", err);
+      resolve();
+    };
+    img.src = url;
+  });
 }
