@@ -133,6 +133,7 @@ export function PlanlaegSynMapView({
         projection: "mercator",
         style: {
           version: 8,
+          glyphs: "https://fonts.openmaptiles.org/{fontstack}/{range}.pbf",
           sources: {
             "osm-tiles": {
               type: "raster",
