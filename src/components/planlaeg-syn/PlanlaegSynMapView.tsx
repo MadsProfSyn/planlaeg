@@ -74,7 +74,6 @@ export function PlanlaegSynMapView({
     return out;
   }, [inspectors, inspectorCoords]);
 
-  // Init map once
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
 
@@ -152,7 +151,7 @@ export function PlanlaegSynMapView({
       mapRef.current?.remove();
       mapRef.current = null;
     };
-  }, []);
+  }, [selectedDate]);
 
   // Render markers + fit bounds when data/toggles change
   useEffect(() => {
