@@ -771,8 +771,16 @@ export default function PlanlaegSyn() {
           afdelinger={afdelinger}
         />
 
-        {selectedDate && (
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "plan" | "map")}>
+            <TabsList>
+              <TabsTrigger value="plan">Planlægning</TabsTrigger>
+              <TabsTrigger value="map">Kort</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {selectedDate && (
+            <>
             <Button
               variant="outline"
               size="sm"
@@ -796,10 +804,12 @@ export default function PlanlaegSyn() {
                 )}
               </Button>
             )}
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
+      {activeTab === "plan" ? (
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -855,6 +865,16 @@ export default function PlanlaegSyn() {
 
         <DragOverlay>{activeDragId !== null && <DragPreview count={dragCount} />}</DragOverlay>
       </DndContext>
+      ) : (
+        <div className="flex-1 min-h-0 mt-4 overflow-hidden">
+          <PlanlaegSynMapView
+            selectedDate={selectedDate}
+            inspections={inspections}
+            inspectors={inspectors}
+            inspectorCoords={inspectorCoords}
+          />
+        </div>
+      )}
     </div>
   );
 }
