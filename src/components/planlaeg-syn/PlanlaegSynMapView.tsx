@@ -35,6 +35,8 @@ export function PlanlaegSynMapView({
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const inspectorPopupRef = useRef<mapboxgl.Popup | null>(null);
+  const inspectorHandlersBoundRef = useRef(false);
   const [initError, setInitError] = useState<string | null>(null);
   const [showInspections, setShowInspections] = useState(true);
   const [showInspectors, setShowInspectors] = useState(true);
@@ -239,39 +241,115 @@ export function PlanlaegSynMapView({
       }
 
       if (showInspectors) {
+        // Render inspector home pins as a Mapbox-native GeoJSON symbol layer.
+        // Geometry comes ONLY from the static home lngLat — booking coords
+        // (shift_details) are used solely to populate the bookedCount property.
+        ensureInspectorPinImage(map);
+        const features = inspectorPoints.map((p) => ({
+          type: "Feature" as const,
+          geometry: { type: "Point" as const, coordinates: [p.lng, p.lat] },
+          properties: {
+            id: p.id,
+            title: p.title,
+            subtitle: p.subtitle,
+            extra: p.extra,
+            bookedCount: p.bookedCount,
+          },
+        }));
+        const fc = {
+          type: "FeatureCollection" as const,
+          features,
+        };
+        const existing = map.getSource("inspectors-home") as
+          | mapboxgl.GeoJSONSource
+          | undefined;
+        if (existing) {
+          existing.setData(fc as any);
+        } else {
+          map.addSource("inspectors-home", {
+            type: "geojson",
+            data: fc as any,
+          });
+          map.addLayer({
+            id: "inspectors-home-icon",
+            type: "symbol",
+            source: "inspectors-home",
+            layout: {
+              "icon-image": "inspector-pin",
+              "icon-anchor": "bottom",
+              "icon-allow-overlap": true,
+              "icon-ignore-placement": true,
+              "icon-size": 1,
+            },
+          });
+          map.addLayer({
+            id: "inspectors-home-badge-bg",
+            type: "circle",
+            source: "inspectors-home",
+            filter: [">", ["get", "bookedCount"], 0],
+            paint: {
+              "circle-radius": 9,
+              "circle-color": "#1F2937",
+              "circle-stroke-color": "#ffffff",
+              "circle-stroke-width": 1.5,
+              "circle-translate": [10, -28],
+              "circle-translate-anchor": "viewport",
+            },
+          });
+          map.addLayer({
+            id: "inspectors-home-badge",
+            type: "symbol",
+            source: "inspectors-home",
+            filter: [">", ["get", "bookedCount"], 0],
+            layout: {
+              "text-field": ["to-string", ["get", "bookedCount"]],
+              "text-size": 11,
+              "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+              "text-allow-overlap": true,
+              "text-ignore-placement": true,
+              "text-offset": [0.9, -2.5],
+              "text-anchor": "center",
+            },
+            paint: {
+              "text-color": "#ffffff",
+            },
+          });
+        }
+
+        if (!inspectorHandlersBoundRef.current) {
+          map.on("click", "inspectors-home-icon", (e) => {
+            const f = e.features?.[0];
+            if (!f) return;
+            const props: any = f.properties || {};
+            const coords = (f.geometry as any).coordinates.slice() as [number, number];
+            const popupHtml = `<div style="font-family:inherit;min-width:180px">
+              <div style="font-weight:600;margin-bottom:2px">${escapeHtml(props.title || "")}</div>
+              <div style="font-size:12px;color:#555">${escapeHtml(props.subtitle || "")}</div>
+              ${props.extra ? `<div style="font-size:12px;color:#777;margin-top:4px">${escapeHtml(props.extra)}</div>` : ""}
+              <div style="font-size:12px;color:#111;margin-top:6px"><strong>Planlagte syn:</strong> ${props.bookedCount ?? 0}</div>
+            </div>`;
+            inspectorPopupRef.current?.remove();
+            inspectorPopupRef.current = new mapboxgl.Popup({ offset: 28 })
+              .setLngLat(coords)
+              .setHTML(popupHtml)
+              .addTo(map);
+          });
+          map.on("mouseenter", "inspectors-home-icon", () => {
+            map.getCanvas().style.cursor = "pointer";
+          });
+          map.on("mouseleave", "inspectors-home-icon", () => {
+            map.getCanvas().style.cursor = "";
+          });
+          inspectorHandlersBoundRef.current = true;
+        }
+
+        setInspectorLayersVisible(map, true);
         inspectorPoints.forEach((p) => {
-          const el = document.createElement("div");
-          el.style.cssText =
-            "position:relative;width:40px;height:40px;cursor:pointer;line-height:0;display:block;box-sizing:content-box;padding:0;margin:0;";
-          el.innerHTML = `
-            <svg viewBox="0 0 24 34" width="24" height="34" style="position:absolute;left:8px;top:6px;display:block;" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 22 12 22s12-13 12-22c0-6.6-5.4-12-12-12z" fill="${INSPECTOR_COLOR}" stroke="#fff" stroke-width="1.5"/>
-              <circle cx="12" cy="12" r="4" fill="#fff"/>
-            </svg>
-            ${
-              p.bookedCount > 0
-                ? `<div style="position:absolute;top:2px;right:0;min-width:18px;height:18px;padding:0 4px;border-radius:9px;background:#1F2937;color:#fff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;border:1.5px solid #fff;box-sizing:border-box;line-height:1;">${p.bookedCount}</div>`
-                : ""
-            }
-          `;
-          const popupHtml = `<div style="font-family:inherit;min-width:180px">
-            <div style="font-weight:600;margin-bottom:2px">${escapeHtml(p.title)}</div>
-            <div style="font-size:12px;color:#555">${escapeHtml(p.subtitle)}</div>
-            ${p.extra ? `<div style="font-size:12px;color:#777;margin-top:4px">${escapeHtml(p.extra)}</div>` : ""}
-            <div style="font-size:12px;color:#111;margin-top:6px"><strong>Planlagte syn:</strong> ${p.bookedCount}</div>
-          </div>`;
-          const marker = new mapboxgl.Marker({
-            element: el,
-            anchor: "bottom",
-            offset: [0, 0],
-          })
-            .setLngLat([p.lng, p.lat])
-            .setPopup(new mapboxgl.Popup({ offset: 16 }).setHTML(popupHtml))
-            .addTo(map);
-          markersRef.current.push(marker);
           bounds.extend([p.lng, p.lat]);
           hasAny = true;
         });
+      } else {
+        setInspectorLayersVisible(map, false);
       }
 
       if (showBookedShifts) {
