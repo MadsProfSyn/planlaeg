@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { AlertCircle, MapPin } from "lucide-react";
@@ -35,9 +35,6 @@ export function PlanlaegSynMapView({
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
-  const inspectorPopupRef = useRef<mapboxgl.Popup | null>(null);
-  const inspectorHandlersBoundRef = useRef(false);
-  const inspectorPinReadyRef = useRef(false);
   const [initError, setInitError] = useState<string | null>(null);
   const [showInspections, setShowInspections] = useState(true);
   const [showInspectors, setShowInspectors] = useState(true);
@@ -243,85 +240,55 @@ export function PlanlaegSynMapView({
       }
 
       if (showInspectors) {
-        // Render inspector home pins as a Mapbox-native GeoJSON circle layer.
-        // Geometry comes ONLY from the static home lngLat — booking coords
-        // (shift_details) are used solely to populate the bookedCount property.
-        const dropped: typeof inspectorPoints = [];
-        const features = inspectorPoints
-          .filter((p) => {
-            const ok = Number.isFinite(p.lng) && Number.isFinite(p.lat);
-            if (!ok) dropped.push(p);
-            return ok;
-          })
-          .map((p) => ({
-            type: "Feature" as const,
-            geometry: { type: "Point" as const, coordinates: [p.lng, p.lat] },
-            properties: {
-              id: p.id,
-              title: p.title,
-              subtitle: p.subtitle,
-              extra: p.extra,
-              bookedCount: p.bookedCount,
-            },
-          }));
-        if (dropped.length) {
-          console.warn(
-            "[PlanlaegSynMapView] Dropped inspectors with non-finite coords:",
-            dropped.map((d) => ({ id: d.id, title: d.title, lat: d.lat, lng: d.lng }))
-          );
-        }
-        const fc = {
-          type: "FeatureCollection" as const,
-          features,
-        };
-        // Ensure source exists, then update its data.
-        const existing = map.getSource("inspectors-home") as
-          | mapboxgl.GeoJSONSource
-          | undefined;
-        if (existing) {
-          existing.setData(fc as any);
-        } else {
-          map.addSource("inspectors-home", { type: "geojson", data: fc as any });
-        }
-        // Ensure the pin image is loaded once, then ensure layers exist.
-        ensureInspectorPinImage(map, inspectorPinReadyRef).then(() => {
-          ensureInspectorLayers(map);
-        });
+        // Render inspector home pins as DOM markers (same path as blue/green),
+        // which are immune to Mapbox symbol-layer culling at any zoom level.
+        // Drift guards:
+        //   - anchor: "bottom" with element height === SVG height (34px). The
+        //     badge is position:absolute so it does NOT extend the box, keeping
+        //     the bottom edge = pin tip. No compensating pixel offset.
+        //   - Geometry comes ONLY from the static home lngLat. Booking coords
+        //     (shift_details) feed bookedCount only, never geometry.
+        inspectorPoints
+          .filter((p) => Number.isFinite(p.lng) && Number.isFinite(p.lat))
+          .forEach((p) => {
+            const el = document.createElement("div");
+            el.style.position = "relative";
+            el.style.width = "24px";
+            el.style.height = "34px";
+            el.style.cursor = "pointer";
 
-        if (!inspectorHandlersBoundRef.current) {
-          map.on("click", "inspectors-home-icon", (e) => {
-            const f = e.features?.[0];
-            if (!f) return;
-            const props: any = f.properties || {};
-            const coords = (f.geometry as any).coordinates.slice() as [number, number];
+            el.innerHTML = `
+              <svg width="24" height="34" viewBox="0 0 24 34" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 0 C5.4 0 0 5.4 0 12 C0 21 12 34 12 34 C12 34 24 21 24 12 C24 5.4 18.6 0 12 0 Z"
+                      fill="${INSPECTOR_COLOR}" stroke="#ffffff" stroke-width="1.5"/>
+                <circle cx="12" cy="12" r="4" fill="#ffffff"/>
+              </svg>
+              ${
+                p.bookedCount > 0
+                  ? `<span style="position:absolute;top:-8px;right:-8px;min-width:18px;height:18px;
+                      padding:0 4px;border-radius:9px;background:#1F2937;color:#fff;font-size:11px;
+                      font-weight:700;line-height:18px;text-align:center;border:1.5px solid #fff;
+                      box-sizing:border-box;">${p.bookedCount}</span>`
+                  : ""
+              }
+            `;
+
             const popupHtml = `<div style="font-family:inherit;min-width:180px">
-              <div style="font-weight:600;margin-bottom:2px">${escapeHtml(props.title || "")}</div>
-              <div style="font-size:12px;color:#555">${escapeHtml(props.subtitle || "")}</div>
-              ${props.extra ? `<div style="font-size:12px;color:#777;margin-top:4px">${escapeHtml(props.extra)}</div>` : ""}
-              <div style="font-size:12px;color:#111;margin-top:6px"><strong>Planlagte syn:</strong> ${props.bookedCount ?? 0}</div>
+              <div style="font-weight:600;margin-bottom:2px">${escapeHtml(p.title)}</div>
+              <div style="font-size:12px;color:#555">${escapeHtml(p.subtitle)}</div>
+              ${p.extra ? `<div style="font-size:12px;color:#777;margin-top:4px">${escapeHtml(p.extra)}</div>` : ""}
+              <div style="font-size:12px;color:#111;margin-top:6px"><strong>Planlagte syn:</strong> ${p.bookedCount}</div>
             </div>`;
-            inspectorPopupRef.current?.remove();
-            inspectorPopupRef.current = new mapboxgl.Popup({ offset: 28 })
-              .setLngLat(coords)
-              .setHTML(popupHtml)
-              .addTo(map);
-          });
-          map.on("mouseenter", "inspectors-home-icon", () => {
-            map.getCanvas().style.cursor = "pointer";
-          });
-          map.on("mouseleave", "inspectors-home-icon", () => {
-            map.getCanvas().style.cursor = "";
-          });
-          inspectorHandlersBoundRef.current = true;
-        }
 
-        setInspectorLayersVisible(map, true);
-        inspectorPoints.forEach((p) => {
-          bounds.extend([p.lng, p.lat]);
-          hasAny = true;
-        });
-      } else {
-        setInspectorLayersVisible(map, false);
+            const marker = new mapboxgl.Marker({ element: el, anchor: "bottom" })
+              .setLngLat([p.lng, p.lat])
+              .setPopup(new mapboxgl.Popup({ offset: 28 }).setHTML(popupHtml))
+              .addTo(map);
+
+            markersRef.current.push(marker);
+            bounds.extend([p.lng, p.lat]);
+            hasAny = true;
+          });
       }
 
       if (showBookedShifts) {
@@ -441,126 +408,4 @@ function escapeHtml(s: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
-}
-
-function setInspectorLayersVisible(map: mapboxgl.Map, visible: boolean) {
-  const v = visible ? "visible" : "none";
-  ["inspectors-home-icon", "inspectors-home-badge-bg", "inspectors-home-badge"].forEach(
-    (id) => {
-      if (map.getLayer(id)) {
-        map.setLayoutProperty(id, "visibility", v);
-      }
-    }
-  );
-}
-
-// Idempotently (re)create the three inspector layers if any are missing.
-// Called on every render so a style refresh can't leave the source orphaned.
-function ensureInspectorLayers(map: mapboxgl.Map) {
-  if (!map.getSource("inspectors-home")) return;
-
-  if (!map.getLayer("inspectors-home-icon")) {
-    if (map.hasImage("inspector-pin")) {
-      map.addLayer({
-        id: "inspectors-home-icon",
-        type: "symbol",
-        source: "inspectors-home",
-        layout: {
-          "icon-image": "inspector-pin",
-          "icon-anchor": "bottom",
-          "icon-size": 1,
-          "icon-allow-overlap": true,
-          "icon-ignore-placement": true,
-        },
-      });
-    } else {
-      // Fallback so pins are always visible even if the icon failed to load.
-      map.addLayer({
-        id: "inspectors-home-icon",
-        type: "circle",
-        source: "inspectors-home",
-        paint: {
-          "circle-radius": 7,
-          "circle-color": INSPECTOR_COLOR,
-          "circle-stroke-color": "#ffffff",
-          "circle-stroke-width": 2,
-        },
-      });
-    }
-  }
-
-  if (!map.getLayer("inspectors-home-badge-bg")) {
-    map.addLayer({
-      id: "inspectors-home-badge-bg",
-      type: "circle",
-      source: "inspectors-home",
-      filter: [">", ["get", "bookedCount"], 0],
-      paint: {
-        "circle-radius": 9,
-        "circle-color": "#1F2937",
-        "circle-stroke-color": "#ffffff",
-        "circle-stroke-width": 1.5,
-        "circle-translate": [10, -28],
-        "circle-translate-anchor": "viewport",
-      },
-    });
-  }
-
-  if (!map.getLayer("inspectors-home-badge")) {
-    map.addLayer({
-      id: "inspectors-home-badge",
-      type: "symbol",
-      source: "inspectors-home",
-      filter: [">", ["get", "bookedCount"], 0],
-      layout: {
-        "text-field": ["to-string", ["get", "bookedCount"]],
-        "text-size": 11,
-        "text-font": ["Noto Sans Regular"],
-        "text-allow-overlap": true,
-        "text-ignore-placement": true,
-        "text-offset": [0.9, -2.5],
-        "text-anchor": "center",
-      },
-      paint: { "text-color": "#ffffff" },
-    });
-  }
-}
-
-// Load the orange teardrop pin once via an HTMLImageElement (NOT raw bytes —
-// raw byte registration triggered "Unimplemented type: 4"). Resolves when the
-// image is registered with the Mapbox style and ready to use.
-function ensureInspectorPinImage(
-  map: mapboxgl.Map,
-  readyRef: MutableRefObject<boolean>
-): Promise<void> {
-  if (map.hasImage("inspector-pin")) {
-    readyRef.current = true;
-    return Promise.resolve();
-  }
-  const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="28" height="40" viewBox="0 0 28 40">
-  <path d="M14 1 C7 1 1 7 1 14 C1 24 14 39 14 39 C14 39 27 24 27 14 C27 7 21 1 14 1 Z"
-        fill="${INSPECTOR_COLOR}" stroke="#ffffff" stroke-width="2"/>
-  <circle cx="14" cy="14" r="5" fill="#ffffff"/>
-</svg>`;
-  const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
-  return new Promise<void>((resolve) => {
-    const img = new Image(56, 80); // 2x for crispness
-    img.onload = () => {
-      try {
-        if (!map.hasImage("inspector-pin")) {
-          map.addImage("inspector-pin", img, { pixelRatio: 2 });
-        }
-        readyRef.current = true;
-      } catch (err) {
-        console.warn("[PlanlaegSynMapView] addImage failed, will fall back to circle", err);
-      }
-      resolve();
-    };
-    img.onerror = (err) => {
-      console.warn("[PlanlaegSynMapView] inspector pin image failed to load", err);
-      resolve();
-    };
-    img.src = url;
-  });
 }
