@@ -39,7 +39,15 @@ function extractAddress(comment) {
 
 // Normalize address for cache lookup
 function normalizeAddress(address: string): string {
-  return `${address.toLowerCase().trim()}, danmark`;
+  return `${stripFloorDoor(address).toLowerCase().trim()}, danmark`;
+}
+
+// Removes Danish floor/door segments like ", 1. 11" / ", 6. th" / ", st. tv" / ", 2. sal" / ", 3. mf"
+function stripFloorDoor(address: string): string {
+  return address
+    .replace(/,\s*(st\.?|kl\.?|\d+\.?)\s*(tv|th|mf|mid|sal|\.?\s*\d+)?(?=,|$)/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
 }
 
 // Geocode an address using Mapbox with caching
