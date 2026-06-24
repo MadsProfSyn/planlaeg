@@ -470,3 +470,54 @@ function escapeHtml(s: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 }
+
+// Draw the orange teardrop pin once into a canvas and register it with Mapbox
+// as an SDF-free icon image. Keeping it in Mapbox's icon system means the pin
+// is positioned by the renderer using the feature's lngLat at every zoom — no
+// DOM box, no anchor ambiguity, no zoom drift.
+function ensureInspectorPinImage(map: mapboxgl.Map) {
+  if (map.hasImage("inspector-pin")) return;
+  const pr = 2;
+  const w = 24 * pr;
+  const h = 34 * pr;
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.scale(pr, pr);
+  // Teardrop path matching the previous SVG
+  ctx.beginPath();
+  ctx.moveTo(12, 0);
+  ctx.bezierCurveTo(5.4, 0, 0, 5.4, 0, 12);
+  ctx.bezierCurveTo(0, 21, 12, 34, 12, 34);
+  ctx.bezierCurveTo(12, 34, 24, 21, 24, 12);
+  ctx.bezierCurveTo(24, 5.4, 18.6, 0, 12, 0);
+  ctx.closePath();
+  ctx.fillStyle = INSPECTOR_COLOR;
+  ctx.fill();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = "#ffffff";
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(12, 12, 4, 0, Math.PI * 2);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+  const imageData = ctx.getImageData(0, 0, w, h);
+  map.addImage(
+    "inspector-pin",
+    { width: w, height: h, data: new Uint8Array(imageData.data.buffer) },
+    { pixelRatio: pr }
+  );
+}
+
+function setInspectorLayersVisible(map: mapboxgl.Map, visible: boolean) {
+  const v = visible ? "visible" : "none";
+  ["inspectors-home-icon", "inspectors-home-badge-bg", "inspectors-home-badge"].forEach(
+    (id) => {
+      if (map.getLayer(id)) {
+        map.setLayoutProperty(id, "visibility", v);
+      }
+    }
+  );
+}
