@@ -252,25 +252,28 @@ export function PlanlaegSynMapView({
           .filter((p) => Number.isFinite(p.lng) && Number.isFinite(p.lat))
           .forEach((p) => {
             const el = document.createElement("div");
-            el.style.position = "relative";
-            el.style.width = "24px";
-            el.style.height = "34px";
+            // IMPORTANT: do NOT set position/top/left/margin/transform/transition
+            // on the element passed to mapboxgl.Marker — Mapbox owns its
+            // positioning via .mapboxgl-marker { position:absolute } +
+            // transform:translate(...). Overriding position breaks drift-free
+            // tracking. The badge's positioning context lives on an inner div.
             el.style.cursor = "pointer";
-
             el.innerHTML = `
-              <svg width="24" height="34" viewBox="0 0 24 34" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 0 C5.4 0 0 5.4 0 12 C0 21 12 34 12 34 C12 34 24 21 24 12 C24 5.4 18.6 0 12 0 Z"
-                      fill="${INSPECTOR_COLOR}" stroke="#ffffff" stroke-width="1.5"/>
-                <circle cx="12" cy="12" r="4" fill="#ffffff"/>
-              </svg>
-              ${
-                p.bookedCount > 0
-                  ? `<span style="position:absolute;top:-8px;right:-8px;min-width:18px;height:18px;
-                      padding:0 4px;border-radius:9px;background:#1F2937;color:#fff;font-size:11px;
-                      font-weight:700;line-height:18px;text-align:center;border:1.5px solid #fff;
-                      box-sizing:border-box;">${p.bookedCount}</span>`
-                  : ""
-              }
+              <div style="position:relative;width:24px;height:34px;">
+                <svg width="24" height="34" viewBox="0 0 24 34" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 0 C5.4 0 0 5.4 0 12 C0 21 12 34 12 34 C12 34 24 21 24 12 C24 5.4 18.6 0 12 0 Z"
+                        fill="${INSPECTOR_COLOR}" stroke="#ffffff" stroke-width="1.5"/>
+                  <circle cx="12" cy="12" r="4" fill="#ffffff"/>
+                </svg>
+                ${
+                  p.bookedCount > 0
+                    ? `<span style="position:absolute;top:-8px;right:-8px;min-width:18px;height:18px;
+                        padding:0 4px;border-radius:9px;background:#1F2937;color:#fff;font-size:11px;
+                        font-weight:700;line-height:18px;text-align:center;border:1.5px solid #fff;
+                        box-sizing:border-box;">${p.bookedCount}</span>`
+                    : ""
+                }
+              </div>
             `;
 
             const popupHtml = `<div style="font-family:inherit;min-width:180px">
