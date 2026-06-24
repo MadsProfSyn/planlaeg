@@ -8,7 +8,15 @@ const corsHeaders = {
 };
 
 function normalizeAddress(address: string): string {
-  return address.trim().toLowerCase().replace(/\s+/g, ' ');
+  return stripFloorDoor(address).trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+// Removes Danish floor/door segments like ", 1. 11" / ", 6. th" / ", st. tv" / ", 2. sal" / ", 3. mf"
+function stripFloorDoor(address: string): string {
+  return address
+    .replace(/,\s*(st\.?|kl\.?|\d+\.?)\s*(tv|th|mf|mid|sal|\.?\s*\d+)?(?=,|$)/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
 }
 
 serve(async (req) => {
