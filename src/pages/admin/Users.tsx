@@ -187,7 +187,7 @@ export default function Users() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6 p-4 md:p-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="page-title">{adminStrings.users.title}</h1>
