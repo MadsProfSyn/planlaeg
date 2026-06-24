@@ -15,6 +15,8 @@ import { getMondayItems, getRegions, MondayItem } from "@/lib/supabase";
 import { PlanlaegSynFiltersBar } from "@/components/planlaeg-syn/PlanlaegSynFiltersBar";
 import { InspectionsPanel } from "@/components/planlaeg-syn/InspectionsPanel";
 import { InspectorsPanel } from "@/components/planlaeg-syn/InspectorsPanel";
+import { PlanlaegSynMapView } from "@/components/planlaeg-syn/PlanlaegSynMapView";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
@@ -59,6 +61,7 @@ export default function PlanlaegSyn() {
   const [selectedDate, setSelectedDate] = useState<string | undefined>();
   const [selectedLandsdel, setSelectedLandsdel] = useState<string>("all");
   const [selectedAfdeling, setSelectedAfdeling] = useState<string>("all");
+  const [activeTab, setActiveTab] = useState<"plan" | "map">("plan");
   const [selectedInspectionIds, setSelectedInspectionIds] = useState<number[]>([]);
   const [selectedInspectorId, setSelectedInspectorId] = useState<string | null>(null);
 
