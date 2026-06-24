@@ -171,10 +171,10 @@ export function PlanlaegSynMapView({
     map.on("load", () => map.resize());
     map.on("error", (e) => {
       console.warn("[PlanlaegSynMapView] mapbox error", e);
-      const message = e.error?.message || "Kortet kunne ikke indlæses.";
-      if (!message.toLowerCase().includes("tile")) {
-        setInitError(message);
-      }
+      const message = e.error?.message || "";
+      const fatal = /token|unauthorized|webgl|failed to initialize/i.test(message);
+      if (fatal) setInitError(message || "Kortet kunne ikke indlæses.");
+      // layer/source/image/glyph errors are logged, not surfaced as a full-screen error card
     });
 
     // Ensure correct sizing even if container changes (tab switch, window resize)
@@ -242,21 +242,33 @@ export function PlanlaegSynMapView({
       }
 
       if (showInspectors) {
-        // Render inspector home pins as a Mapbox-native GeoJSON symbol layer.
+        // Render inspector home pins as a Mapbox-native GeoJSON circle layer.
         // Geometry comes ONLY from the static home lngLat — booking coords
         // (shift_details) are used solely to populate the bookedCount property.
-        ensureInspectorPinImage(map);
-        const features = inspectorPoints.map((p) => ({
-          type: "Feature" as const,
-          geometry: { type: "Point" as const, coordinates: [p.lng, p.lat] },
-          properties: {
-            id: p.id,
-            title: p.title,
-            subtitle: p.subtitle,
-            extra: p.extra,
-            bookedCount: p.bookedCount,
-          },
-        }));
+        const dropped: typeof inspectorPoints = [];
+        const features = inspectorPoints
+          .filter((p) => {
+            const ok = Number.isFinite(p.lng) && Number.isFinite(p.lat);
+            if (!ok) dropped.push(p);
+            return ok;
+          })
+          .map((p) => ({
+            type: "Feature" as const,
+            geometry: { type: "Point" as const, coordinates: [p.lng, p.lat] },
+            properties: {
+              id: p.id,
+              title: p.title,
+              subtitle: p.subtitle,
+              extra: p.extra,
+              bookedCount: p.bookedCount,
+            },
+          }));
+        if (dropped.length) {
+          console.warn(
+            "[PlanlaegSynMapView] Dropped inspectors with non-finite coords:",
+            dropped.map((d) => ({ id: d.id, title: d.title, lat: d.lat, lng: d.lng }))
+          );
+        }
         const fc = {
           type: "FeatureCollection" as const,
           features,
@@ -272,15 +284,14 @@ export function PlanlaegSynMapView({
             data: fc as any,
           });
           map.addLayer({
-            id: "inspectors-home-icon",
-            type: "symbol",
+            id: "inspectors-home-icon", // keep id — click/hover handlers + visibility toggle reference it
+            type: "circle",
             source: "inspectors-home",
-            layout: {
-              "icon-image": "inspector-pin",
-              "icon-anchor": "bottom",
-              "icon-allow-overlap": true,
-              "icon-ignore-placement": true,
-              "icon-size": 1,
+            paint: {
+              "circle-radius": 7,
+              "circle-color": INSPECTOR_COLOR,
+              "circle-stroke-color": "#ffffff",
+              "circle-stroke-width": 2,
             },
           });
           map.addLayer({
@@ -293,7 +304,7 @@ export function PlanlaegSynMapView({
               "circle-color": "#1F2937",
               "circle-stroke-color": "#ffffff",
               "circle-stroke-width": 1.5,
-              "circle-translate": [10, -28],
+              "circle-translate": [10, -12],
               "circle-translate-anchor": "viewport",
             },
           });
@@ -305,10 +316,10 @@ export function PlanlaegSynMapView({
             layout: {
               "text-field": ["to-string", ["get", "bookedCount"]],
               "text-size": 11,
-              "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+              "text-font": ["Noto Sans Regular"],
               "text-allow-overlap": true,
               "text-ignore-placement": true,
-              "text-offset": [0.9, -2.5],
+              "text-offset": [0.9, -1.1],
               "text-anchor": "center",
             },
             paint: {
@@ -470,46 +481,6 @@ function escapeHtml(s: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
-}
-
-// Draw the orange teardrop pin once into a canvas and register it with Mapbox
-// as an SDF-free icon image. Keeping it in Mapbox's icon system means the pin
-// is positioned by the renderer using the feature's lngLat at every zoom — no
-// DOM box, no anchor ambiguity, no zoom drift.
-function ensureInspectorPinImage(map: mapboxgl.Map) {
-  if (map.hasImage("inspector-pin")) return;
-  const pr = 2;
-  const w = 24 * pr;
-  const h = 34 * pr;
-  const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return;
-  ctx.scale(pr, pr);
-  // Teardrop path matching the previous SVG
-  ctx.beginPath();
-  ctx.moveTo(12, 0);
-  ctx.bezierCurveTo(5.4, 0, 0, 5.4, 0, 12);
-  ctx.bezierCurveTo(0, 21, 12, 34, 12, 34);
-  ctx.bezierCurveTo(12, 34, 24, 21, 24, 12);
-  ctx.bezierCurveTo(24, 5.4, 18.6, 0, 12, 0);
-  ctx.closePath();
-  ctx.fillStyle = INSPECTOR_COLOR;
-  ctx.fill();
-  ctx.lineWidth = 1.5;
-  ctx.strokeStyle = "#ffffff";
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(12, 12, 4, 0, Math.PI * 2);
-  ctx.fillStyle = "#ffffff";
-  ctx.fill();
-  const imageData = ctx.getImageData(0, 0, w, h);
-  map.addImage(
-    "inspector-pin",
-    { width: w, height: h, data: new Uint8Array(imageData.data.buffer) },
-    { pixelRatio: pr }
-  );
 }
 
 function setInspectorLayersVisible(map: mapboxgl.Map, visible: boolean) {
