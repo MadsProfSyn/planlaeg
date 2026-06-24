@@ -258,7 +258,7 @@ export default function PlanlaegSyn() {
 
       // 2. Parallel fetch: addresses+notes, skills, capacity
       const [addressRes, skillsRes, capacityRes] = await Promise.all([
-        supabase.from("inspectors").select("id, address, notes").in("id", inspectorIds),
+        supabase.from("inspectors").select("id, address, notes, lat, lng").in("id", inspectorIds),
         supabase.from("inspector_skills").select("inspector_id, inspection_type").in("inspector_id", inspectorIds).eq("is_active", true),
         supabase.from("inspector_capacity_view").select("inspector_id, date_local, scheduled_shifts, shift_details, booked_minutes, remaining_minutes, capacity_status").in("inspector_id", inspectorIds).eq("date_local", selectedDate),
       ]);
@@ -266,9 +266,13 @@ export default function PlanlaegSyn() {
       // 3. Build lookup maps
       const addressMap = new Map<string, string>();
       const notesMap = new Map<string, string | null>();
+      const coordsMap = new Map<string, { lat: number; lng: number }>();
       (addressRes.data || []).forEach((i: any) => {
         addressMap.set(i.id, i.address || '');
         notesMap.set(i.id, i.notes || null);
+        if (typeof i.lat === "number" && typeof i.lng === "number") {
+          coordsMap.set(i.id, { lat: i.lat, lng: i.lng });
+        }
       });
 
       const skillsMap = new Map<string, string[]>();
@@ -325,13 +329,15 @@ export default function PlanlaegSyn() {
         };
       });
 
-      return { data: transformedData };
+      return { data: transformedData, coords: coordsMap };
     },
     enabled: !!selectedDate,
   });
 
   const inspections = inspectionsData?.data || [];
   const inspectors: Inspector[] = inspectorsData?.data || [];
+  const inspectorCoords: Map<string, { lat: number; lng: number }> =
+    (inspectorsData as any)?.coords || new Map();
 
   // Build inspectorShiftDetails map from inspectors data (for route optimizer fixed_stops)
   const inspectorShiftDetails = useMemo(() => {
