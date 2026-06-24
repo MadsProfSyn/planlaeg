@@ -15,6 +15,8 @@ import { getMondayItems, getRegions, MondayItem } from "@/lib/supabase";
 import { PlanlaegSynFiltersBar } from "@/components/planlaeg-syn/PlanlaegSynFiltersBar";
 import { InspectionsPanel } from "@/components/planlaeg-syn/InspectionsPanel";
 import { InspectorsPanel } from "@/components/planlaeg-syn/InspectorsPanel";
+import { PlanlaegSynMapView } from "@/components/planlaeg-syn/PlanlaegSynMapView";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
@@ -59,6 +61,7 @@ export default function PlanlaegSyn() {
   const [selectedDate, setSelectedDate] = useState<string | undefined>();
   const [selectedLandsdel, setSelectedLandsdel] = useState<string>("all");
   const [selectedAfdeling, setSelectedAfdeling] = useState<string>("all");
+  const [activeTab, setActiveTab] = useState<"plan" | "map">("plan");
   const [selectedInspectionIds, setSelectedInspectionIds] = useState<number[]>([]);
   const [selectedInspectorId, setSelectedInspectorId] = useState<string | null>(null);
 
@@ -255,7 +258,7 @@ export default function PlanlaegSyn() {
 
       // 2. Parallel fetch: addresses+notes, skills, capacity
       const [addressRes, skillsRes, capacityRes] = await Promise.all([
-        supabase.from("inspectors").select("id, address, notes").in("id", inspectorIds),
+        supabase.from("inspectors").select("id, address, notes, lat, lng").in("id", inspectorIds),
         supabase.from("inspector_skills").select("inspector_id, inspection_type").in("inspector_id", inspectorIds).eq("is_active", true),
         supabase.from("inspector_capacity_view").select("inspector_id, date_local, scheduled_shifts, shift_details, booked_minutes, remaining_minutes, capacity_status").in("inspector_id", inspectorIds).eq("date_local", selectedDate),
       ]);
@@ -263,9 +266,13 @@ export default function PlanlaegSyn() {
       // 3. Build lookup maps
       const addressMap = new Map<string, string>();
       const notesMap = new Map<string, string | null>();
+      const coordsMap = new Map<string, { lat: number; lng: number }>();
       (addressRes.data || []).forEach((i: any) => {
         addressMap.set(i.id, i.address || '');
         notesMap.set(i.id, i.notes || null);
+        if (typeof i.lat === "number" && typeof i.lng === "number") {
+          coordsMap.set(i.id, { lat: i.lat, lng: i.lng });
+        }
       });
 
       const skillsMap = new Map<string, string[]>();
@@ -322,13 +329,15 @@ export default function PlanlaegSyn() {
         };
       });
 
-      return { data: transformedData };
+      return { data: transformedData, coords: coordsMap };
     },
     enabled: !!selectedDate,
   });
 
   const inspections = inspectionsData?.data || [];
   const inspectors: Inspector[] = inspectorsData?.data || [];
+  const inspectorCoords: Map<string, { lat: number; lng: number }> =
+    (inspectorsData as any)?.coords || new Map();
 
   // Build inspectorShiftDetails map from inspectors data (for route optimizer fixed_stops)
   const inspectorShiftDetails = useMemo(() => {
@@ -762,8 +771,16 @@ export default function PlanlaegSyn() {
           afdelinger={afdelinger}
         />
 
-        {selectedDate && (
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "plan" | "map")}>
+            <TabsList>
+              <TabsTrigger value="plan">Planlægning</TabsTrigger>
+              <TabsTrigger value="map">Kort</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {selectedDate && (
+            <>
             <Button
               variant="outline"
               size="sm"
@@ -787,10 +804,12 @@ export default function PlanlaegSyn() {
                 )}
               </Button>
             )}
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
+      {activeTab === "plan" ? (
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -846,6 +865,16 @@ export default function PlanlaegSyn() {
 
         <DragOverlay>{activeDragId !== null && <DragPreview count={dragCount} />}</DragOverlay>
       </DndContext>
+      ) : (
+        <div className="flex-1 min-h-0 mt-4 overflow-hidden">
+          <PlanlaegSynMapView
+            selectedDate={selectedDate}
+            inspections={inspections}
+            inspectors={inspectors}
+            inspectorCoords={inspectorCoords}
+          />
+        </div>
+      )}
     </div>
   );
 }
