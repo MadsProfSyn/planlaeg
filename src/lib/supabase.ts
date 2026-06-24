@@ -24,6 +24,8 @@ export interface MondayItem {
   scheduled_end_time?: string | null;
   scheduled_at?: string | null;
   scheduled_by?: string | null;
+  lat?: number | null;
+  lng?: number | null;
 }
 
 export interface MondayItemFilters {
