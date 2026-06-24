@@ -269,6 +269,18 @@ export function PlanlaegSynMapView({
             dropped.map((d) => ({ id: d.id, title: d.title, lat: d.lat, lng: d.lng }))
           );
         }
+        console.log(
+          "[PlanlaegSynMapView] inspector rendering — total inspectors:",
+          inspectors.length,
+          "unique inspectorPoints:",
+          inspectorPoints.length,
+          "rendered features:",
+          features.length,
+          "missing coords (no entry in inspectorCoords):",
+          inspectors
+            .filter((ins) => !inspectorCoords.get(ins.inspector_uuid))
+            .map((ins) => ({ id: ins.inspector_uuid, navn: ins.navn }))
+        );
         const fc = {
           type: "FeatureCollection" as const,
           features,
