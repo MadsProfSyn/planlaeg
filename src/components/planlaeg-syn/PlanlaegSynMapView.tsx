@@ -128,6 +128,7 @@ export function PlanlaegSynMapView({
     try {
       map = new mapboxgl.Map({
         container: mapContainer.current,
+        projection: "mercator",
         style: {
           version: 8,
           sources: {
