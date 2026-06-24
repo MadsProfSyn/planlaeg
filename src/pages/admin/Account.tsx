@@ -111,7 +111,7 @@ export default function Account() {
   };
 
   return (
-    <div className="space-y-8 max-w-2xl">
+    <div className="flex flex-col gap-8 p-4 md:p-6 max-w-3xl">
       <div>
         <h1 className="page-title">{adminStrings.account.title}</h1>
         <p className="text-caption mt-2">
