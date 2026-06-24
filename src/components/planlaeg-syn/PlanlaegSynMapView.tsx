@@ -1,9 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { AlertCircle, MapPin } from "lucide-react";
+import { AlertCircle, Check, ChevronsUpDown, MapPin, X } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { buildDrivingPolylineWithLegs } from "@/lib/mapbox-directions";
 import type { MondayItem } from "@/lib/supabase";
 import type { Inspector } from "@/pages/PlanlaegSyn";
 
@@ -17,6 +29,7 @@ interface PlanlaegSynMapViewProps {
 const INSPECTION_COLOR = "#3B82F6"; // blue
 const INSPECTOR_COLOR = "#F59E0B"; // amber
 const BOOKED_COLOR = "#10B981"; // green
+const ROUTE_COLOR = "#8B5CF6"; // purple — distinctive for the "route mode" overlay
 
 const TYPE_LABEL: Record<string, string> = {
   FF: "Fraflytningssyn",
@@ -35,10 +48,17 @@ export function PlanlaegSynMapView({
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const routeMarkersRef = useRef<mapboxgl.Marker[]>([]);
+  const routeAbortRef = useRef<AbortController | null>(null);
+  const routeLayerIdsRef = useRef<string[]>([]);
   const [initError, setInitError] = useState<string | null>(null);
   const [showInspections, setShowInspections] = useState(true);
   const [showInspectors, setShowInspectors] = useState(true);
   const [showBookedShifts, setShowBookedShifts] = useState(false);
+  const [selectedRouteInspectorId, setSelectedRouteInspectorId] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [routeTotalKm, setRouteTotalKm] = useState<number | null>(null);
+  const [routeStatus, setRouteStatus] = useState<"idle" | "loading" | "ready" | "empty">("idle");
 
   // Build point sets
   const inspectionPoints = useMemo(
@@ -115,6 +135,32 @@ export function PlanlaegSynMapView({
     });
     return out;
   }, [inspectors]);
+
+  // Unique, sorted inspector list for the picker.
+  const routePickerInspectors = useMemo(() => {
+    const seen = new Set<string>();
+    const list: Inspector[] = [];
+    inspectors.forEach((i) => {
+      if (seen.has(i.inspector_uuid)) return;
+      seen.add(i.inspector_uuid);
+      list.push(i);
+    });
+    return list.sort((a, b) => a.navn.localeCompare(b.navn, "da"));
+  }, [inspectors]);
+
+  const selectedRouteInspector = useMemo(
+    () => routePickerInspectors.find((i) => i.inspector_uuid === selectedRouteInspectorId) || null,
+    [routePickerInspectors, selectedRouteInspectorId]
+  );
+
+  // Clear route selection if the chosen inspector falls out of the list (date/filter change).
+  useEffect(() => {
+    if (selectedRouteInspectorId && !selectedRouteInspector) {
+      setSelectedRouteInspectorId(null);
+    }
+  }, [selectedRouteInspectorId, selectedRouteInspector]);
+
+  const routeMode = !!selectedRouteInspectorId;
 
   useEffect(() => {
     if (!mapContainer.current || mapRef.current) return;
@@ -239,7 +285,7 @@ export function PlanlaegSynMapView({
         });
       }
 
-      if (showInspectors) {
+      if (showInspectors && !routeMode) {
         // Render inspector home pins as DOM markers (same path as blue/green),
         // which are immune to Mapbox symbol-layer culling at any zoom level.
         // Drift guards:
@@ -294,7 +340,7 @@ export function PlanlaegSynMapView({
           });
       }
 
-      if (showBookedShifts) {
+      if (showBookedShifts && !routeMode) {
         bookedShiftPoints.forEach((p) => {
           const typeLabel = TYPE_LABEL[p.type] || p.type || "Syn";
           const timeLine =
@@ -318,7 +364,10 @@ export function PlanlaegSynMapView({
       }
 
       if (hasAny) {
-        map.fitBounds(bounds, { padding: 60, maxZoom: 12, duration: 400 });
+        // Don't auto-fit while route mode owns the camera.
+        if (!routeMode) {
+          map.fitBounds(bounds, { padding: 60, maxZoom: 12, duration: 400 });
+        }
       }
     };
 
@@ -327,7 +376,196 @@ export function PlanlaegSynMapView({
     } else {
       map.once("load", apply);
     }
-  }, [inspectionPoints, inspectorPoints, bookedShiftPoints, showInspections, showInspectors, showBookedShifts]);
+  }, [inspectionPoints, inspectorPoints, bookedShiftPoints, showInspections, showInspectors, showBookedShifts, routeMode]);
+
+  // Route-mode overlay: numbered markers + driving polyline for the chosen inspector.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    // Clean previous overlay first.
+    const cleanup = () => {
+      routeAbortRef.current?.abort();
+      routeAbortRef.current = null;
+      routeMarkersRef.current.forEach((m) => m.remove());
+      routeMarkersRef.current = [];
+      routeLayerIdsRef.current.forEach((id) => {
+        try {
+          if (map.getLayer(id)) map.removeLayer(id);
+          if (map.getSource(id)) map.removeSource(id);
+        } catch {/* ignore */}
+      });
+      routeLayerIdsRef.current = [];
+    };
+    cleanup();
+
+    if (!selectedRouteInspector) {
+      setRouteTotalKm(null);
+      setRouteStatus("idle");
+      return;
+    }
+
+    const base = inspectorCoords.get(selectedRouteInspector.inspector_uuid);
+    const shifts = (selectedRouteInspector.shift_details || [])
+      .filter((s) => typeof s.lat === "number" && typeof s.lng === "number")
+      .slice()
+      .sort((a, b) => (a.start_time || "").localeCompare(b.start_time || ""));
+
+    if (!base && shifts.length === 0) {
+      setRouteTotalKm(null);
+      setRouteStatus("empty");
+      return;
+    }
+
+    const apply = async () => {
+      const token = import.meta.env.VITE_MAPBOX_PUBLIC_TOKEN;
+
+      // Base (home) marker — black home pin, consistent with RouteMapView.
+      if (base) {
+        const el = document.createElement("div");
+        el.style.cursor = "pointer";
+        el.innerHTML = `
+          <div style="width:30px;height:30px;border-radius:50%;background:#111;color:#fff;
+            display:flex;align-items:center;justify-content:center;border:2px solid #fff;
+            box-shadow:0 2px 6px rgba(0,0,0,0.35);font-size:14px;line-height:1;">🏠</div>
+        `;
+        const popup = new mapboxgl.Popup({ offset: 18 }).setHTML(
+          `<div style="font-family:inherit;min-width:180px">
+            <div style="font-weight:600;margin-bottom:2px">Base: ${escapeHtml(selectedRouteInspector.navn)}</div>
+            <div style="font-size:12px;color:#555">${escapeHtml(selectedRouteInspector.adresse || "")}</div>
+          </div>`
+        );
+        const marker = new mapboxgl.Marker({ element: el, anchor: "center" })
+          .setLngLat([base.lng, base.lat])
+          .setPopup(popup)
+          .addTo(map);
+        routeMarkersRef.current.push(marker);
+      }
+
+      // Numbered shift markers.
+      shifts.forEach((s, idx) => {
+        const number = idx + 1;
+        const el = document.createElement("div");
+        el.style.cursor = "pointer";
+        el.innerHTML = `
+          <div style="position:relative;width:30px;height:30px;">
+            <div style="position:absolute;inset:0;border-radius:50%;background:${ROUTE_COLOR};
+              color:#fff;display:flex;align-items:center;justify-content:center;border:2px solid #fff;
+              box-shadow:0 2px 6px rgba(0,0,0,0.35);font-size:13px;font-weight:700;line-height:1;">
+              ${number}
+            </div>
+          </div>
+        `;
+        const typeLabel = TYPE_LABEL[s.type] || s.type || "Syn";
+        const timeLine =
+          s.start_time && s.end_time
+            ? `${(s.start_time || "").substring(0, 5)} - ${(s.end_time || "").substring(0, 5)}${s.duration_minutes ? ` (${s.duration_minutes} min)` : ""}`
+            : "";
+        const popup = new mapboxgl.Popup({ offset: 18 }).setHTML(
+          `<div style="font-family:inherit;min-width:200px">
+            <div style="font-weight:600;margin-bottom:2px">${number}. ${escapeHtml(typeLabel)}</div>
+            ${timeLine ? `<div style="font-size:12px;color:#555;margin-top:2px">${escapeHtml(timeLine)}</div>` : ""}
+            ${s.address ? `<div style="font-size:12px;color:#777;margin-top:4px">${escapeHtml(s.address)}</div>` : ""}
+          </div>`
+        );
+        const marker = new mapboxgl.Marker({ element: el, anchor: "center" })
+          .setLngLat([s.lng as number, s.lat as number])
+          .setPopup(popup)
+          .addTo(map);
+        routeMarkersRef.current.push(marker);
+      });
+
+      // Fit to all points.
+      const bounds = new mapboxgl.LngLatBounds();
+      if (base) bounds.extend([base.lng, base.lat]);
+      shifts.forEach((s) => bounds.extend([s.lng as number, s.lat as number]));
+      try {
+        map.fitBounds(bounds, { padding: 80, maxZoom: 13, duration: 500 });
+      } catch {/* ignore — single point */}
+
+      // Build the driving polyline (base → 1 → 2 → ... → N).
+      const waypoints: [number, number][] = [];
+      if (base) waypoints.push([base.lng, base.lat]);
+      shifts.forEach((s) => waypoints.push([s.lng as number, s.lat as number]));
+
+      if (!token || !token.startsWith("pk.") || waypoints.length < 2) {
+        setRouteTotalKm(null);
+        setRouteStatus(shifts.length === 0 ? "empty" : "ready");
+        return;
+      }
+
+      setRouteStatus("loading");
+      const controller = new AbortController();
+      routeAbortRef.current = controller;
+
+      const built = await buildDrivingPolylineWithLegs(waypoints, token, controller.signal);
+      if (controller.signal.aborted || !mapRef.current) return;
+
+      const snappedFC = {
+        type: "FeatureCollection" as const,
+        features: built.legs
+          .filter((l) => l.snapped)
+          .map((l, i) => ({
+            type: "Feature" as const,
+            properties: { i },
+            geometry: { type: "LineString" as const, coordinates: l.coords },
+          })),
+      };
+      const fallbackFC = {
+        type: "FeatureCollection" as const,
+        features: built.legs
+          .filter((l) => !l.snapped)
+          .map((l, i) => ({
+            type: "Feature" as const,
+            properties: { i },
+            geometry: { type: "LineString" as const, coordinates: l.coords },
+          })),
+      };
+
+      const snappedId = "planlaeg-route-snapped";
+      const fallbackId = "planlaeg-route-fallback";
+      try {
+        map.addSource(snappedId, { type: "geojson", data: snappedFC });
+        map.addLayer({
+          id: snappedId,
+          type: "line",
+          source: snappedId,
+          layout: { "line-join": "round", "line-cap": "round" },
+          paint: { "line-color": ROUTE_COLOR, "line-width": 4, "line-opacity": 0.9 },
+        });
+        routeLayerIdsRef.current.push(snappedId);
+
+        map.addSource(fallbackId, { type: "geojson", data: fallbackFC });
+        map.addLayer({
+          id: fallbackId,
+          type: "line",
+          source: fallbackId,
+          layout: { "line-join": "round", "line-cap": "round" },
+          paint: {
+            "line-color": ROUTE_COLOR,
+            "line-width": 3,
+            "line-opacity": 0.6,
+            "line-dasharray": [2, 2],
+          },
+        });
+        routeLayerIdsRef.current.push(fallbackId);
+      } catch (e) {
+        console.error("Failed to add route layers", e);
+      }
+
+      setRouteTotalKm(built.totalDistanceMeters > 0 ? built.totalDistanceMeters / 1000 : null);
+      setRouteStatus("ready");
+    };
+
+    if (map.isStyleLoaded()) {
+      apply();
+    } else {
+      map.once("load", apply);
+    }
+
+    return cleanup;
+    // inspectorCoords is a Map; reference changes when data reloads.
+  }, [selectedRouteInspector, inspectorCoords]);
 
   if (initError) {
     return (
@@ -351,6 +589,82 @@ export function PlanlaegSynMapView({
 
   return (
     <div className="flex flex-col h-full gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
+        <Label className="text-sm text-muted-foreground">Vis synskonsulentens rute:</Label>
+        <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={pickerOpen}
+              className="w-[280px] justify-between"
+              disabled={routePickerInspectors.length === 0}
+            >
+              <span className="truncate">
+                {selectedRouteInspector ? selectedRouteInspector.navn : "Vælg synskonsulent…"}
+              </span>
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[320px] p-0" align="start">
+            <Command>
+              <CommandInput placeholder="Søg navn eller afdeling…" />
+              <CommandList>
+                <CommandEmpty>Ingen synskonsulenter fundet.</CommandEmpty>
+                <CommandGroup>
+                  {routePickerInspectors.map((ins) => (
+                    <CommandItem
+                      key={ins.inspector_uuid}
+                      value={`${ins.navn} ${ins.afdeling || ""}`}
+                      onSelect={() => {
+                        setSelectedRouteInspectorId(ins.inspector_uuid);
+                        setPickerOpen(false);
+                      }}
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4",
+                          selectedRouteInspectorId === ins.inspector_uuid ? "opacity-100" : "opacity-0"
+                        )}
+                      />
+                      <span className="flex-1 truncate">{ins.navn}</span>
+                      {ins.afdeling && (
+                        <span className="ml-2 text-xs text-muted-foreground">{ins.afdeling}</span>
+                      )}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+        {selectedRouteInspector && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSelectedRouteInspectorId(null)}
+            className="h-8 px-2"
+          >
+            <X className="h-4 w-4 mr-1" />
+            Ryd
+          </Button>
+        )}
+        {routeMode && routeStatus === "loading" && (
+          <span className="text-xs text-muted-foreground">Beregner rute…</span>
+        )}
+        {routeMode && routeStatus === "empty" && (
+          <span className="text-xs text-muted-foreground">Ingen planlagte syn for denne dato.</span>
+        )}
+        {routeMode && routeStatus === "ready" && routeTotalKm != null && (
+          <span
+            className="text-xs font-medium px-2 py-1 rounded-md"
+            style={{ backgroundColor: `${ROUTE_COLOR}1A`, color: ROUTE_COLOR }}
+          >
+            Total: {routeTotalKm.toFixed(1)} km kørt
+          </span>
+        )}
+      </div>
+
       <div className="flex items-center gap-6 flex-wrap">
         <div className="flex items-center gap-2">
           <Checkbox
@@ -371,8 +685,9 @@ export function PlanlaegSynMapView({
             id="show-inspectors"
             checked={showInspectors}
             onCheckedChange={(v) => setShowInspectors(v === true)}
+            disabled={routeMode}
           />
-          <Label htmlFor="show-inspectors" className="flex items-center gap-2 cursor-pointer">
+          <Label htmlFor="show-inspectors" className={cn("flex items-center gap-2 cursor-pointer", routeMode && "opacity-50")}>
             <span
               className="inline-block w-3 h-3 rounded-full"
               style={{ backgroundColor: INSPECTOR_COLOR }}
@@ -385,8 +700,9 @@ export function PlanlaegSynMapView({
             id="show-booked"
             checked={showBookedShifts}
             onCheckedChange={(v) => setShowBookedShifts(v === true)}
+            disabled={routeMode}
           />
-          <Label htmlFor="show-booked" className="flex items-center gap-2 cursor-pointer">
+          <Label htmlFor="show-booked" className={cn("flex items-center gap-2 cursor-pointer", routeMode && "opacity-50")}>
             <span
               className="inline-block w-3 h-3 rounded-full"
               style={{ backgroundColor: BOOKED_COLOR }}
