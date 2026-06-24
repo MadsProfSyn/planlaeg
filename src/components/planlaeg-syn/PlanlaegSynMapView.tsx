@@ -79,26 +79,58 @@ export function PlanlaegSynMapView({
     if (!mapContainer.current || mapRef.current) return;
 
     const token = import.meta.env.VITE_MAPBOX_PUBLIC_TOKEN;
-    if (!token || !token.startsWith("pk.")) {
-      console.warn("[PlanlaegSynMapView] Missing/invalid VITE_MAPBOX_PUBLIC_TOKEN");
-      setInitError(
-        "Ugyldig Mapbox token. Tilføj VITE_MAPBOX_PUBLIC_TOKEN i din .env."
-      );
+    if (token?.startsWith("pk.")) {
+      mapboxgl.accessToken = token;
+    }
+
+    let map: mapboxgl.Map;
+    try {
+      map = new mapboxgl.Map({
+        container: mapContainer.current,
+        style: {
+          version: 8,
+          sources: {
+            "osm-tiles": {
+              type: "raster",
+              tiles: [
+                "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
+                "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png",
+              ],
+              tileSize: 256,
+              attribution: "© OpenStreetMap contributors",
+            },
+          },
+          layers: [
+            {
+              id: "osm-tiles",
+              type: "raster",
+              source: "osm-tiles",
+              minzoom: 0,
+              maxzoom: 19,
+            },
+          ],
+        },
+        center: [12.5683, 55.6761], // Denmark
+        zoom: 7,
+      });
+    } catch (err) {
+      console.error("[PlanlaegSynMapView] Failed to create map", err);
+      setInitError(err instanceof Error ? err.message : "Kortet kunne ikke indlæses.");
       return;
     }
-    mapboxgl.accessToken = token;
 
-    const map = new mapboxgl.Map({
-      container: mapContainer.current,
-      style: "mapbox://styles/mapbox/streets-v12",
-      center: [10.5, 56], // Denmark
-      zoom: 6,
-    });
     mapRef.current = map;
-    map.addControl(new mapboxgl.NavigationControl(), "top-right");
+    map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), "top-left");
 
     map.on("load", () => map.resize());
-    map.on("error", (e) => console.warn("[PlanlaegSynMapView] mapbox error", e));
+    map.on("error", (e) => {
+      console.warn("[PlanlaegSynMapView] mapbox error", e);
+      const message = e.error?.message || "Kortet kunne ikke indlæses.";
+      if (!message.toLowerCase().includes("tile")) {
+        setInitError(message);
+      }
+    });
 
     // Ensure correct sizing even if container changes (tab switch, window resize)
     if (typeof ResizeObserver !== "undefined") {
@@ -246,7 +278,8 @@ export function PlanlaegSynMapView({
 
       <div
         ref={mapContainer}
-        className="flex-1 w-full rounded-lg border overflow-hidden min-h-[500px] h-[calc(100vh-260px)]"
+        className="flex-1 w-full rounded-lg border overflow-hidden min-h-[500px]"
+        style={{ height: "calc(100vh - 260px)" }}
       />
     </div>
   );
