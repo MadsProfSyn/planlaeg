@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { AlertCircle, MapPin } from "lucide-react";
@@ -531,7 +531,7 @@ function ensureInspectorLayers(map: mapboxgl.Map) {
 // image is registered with the Mapbox style and ready to use.
 function ensureInspectorPinImage(
   map: mapboxgl.Map,
-  readyRef: React.MutableRefObject<boolean>
+  readyRef: MutableRefObject<boolean>
 ): Promise<void> {
   if (map.hasImage("inspector-pin")) {
     readyRef.current = true;
