@@ -50,18 +50,23 @@ function stripFloorDoor(address: string): string {
     .trim();
 }
 
-// Geocode an address using Mapbox with caching
-const MAPBOX_TOKEN = Deno.env.get("MAPBOX_TOKEN");
+// Geocode an address using Mapbox with caching.
+// Token is read per-invocation (not at module load) so a cold deploy never silently fails.
+type GeocodeOutcome =
+  | { status: "success"; lat: number; lng: number; source: "cache" | "mapbox" }
+  | { status: "failed"; reason: string }
+  | { status: "no_address" };
 
 async function geocodeAddress(
   supabase: ReturnType<typeof createClient>,
-  address: string
-): Promise<{ lat: number; lng: number } | null> {
-  if (!address || !MAPBOX_TOKEN) return null;
+  address: string | null,
+  mapboxToken: string,
+): Promise<GeocodeOutcome> {
+  if (!address) return { status: "no_address" };
 
   const normalizedAddress = normalizeAddress(address);
 
-  // Check cache first
+  // Cache-first
   const { data: cached } = await supabase
     .from("mapbox_coords_cache")
     .select("lat, lon")
@@ -69,35 +74,43 @@ async function geocodeAddress(
     .maybeSingle();
 
   if (cached?.lat && cached?.lon) {
-    return { lat: cached.lat, lng: cached.lon };
+    return { status: "success", lat: cached.lat, lng: cached.lon, source: "cache" };
   }
 
-  // Not cached - call Mapbox
+  // Call Mapbox on miss
   try {
-    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(normalizedAddress)}.json?access_token=${MAPBOX_TOKEN}&country=DK&limit=1`;
-
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(normalizedAddress)}.json?access_token=${mapboxToken}&country=DK&limit=1`;
     const response = await fetch(url);
+    if (!response.ok) {
+      const body = await response.text();
+      console.warn(`Mapbox HTTP ${response.status} for "${normalizedAddress}": ${body.slice(0, 200)}`);
+      return { status: "failed", reason: `mapbox_http_${response.status}` };
+    }
     const data = await response.json();
 
     if (data.features && data.features.length > 0) {
       const [lng, lat] = data.features[0].center;
 
-      // Cache the result
+      // Write back to shared cache so future lookups (any path) hit
       await supabase.from("mapbox_coords_cache").upsert({
         normalized_address: normalizedAddress,
-        lat: lat,
+        lat,
         lon: lng,
         updated_at: new Date().toISOString(),
       }, { onConflict: "normalized_address" });
 
-      return { lat, lng };
+      return { status: "success", lat, lng, source: "mapbox" };
     }
+
+    console.warn(`Mapbox returned 0 features for "${normalizedAddress}"`);
+    return { status: "failed", reason: "no_features" };
   } catch (error) {
     console.error(`Geocoding error for "${address}":`, error);
+    return { status: "failed", reason: "exception" };
   }
-
-  return null;
 }
+
+export { geocodeAddress, normalizeAddress };
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -172,6 +185,12 @@ serve(async (req) => {
       throw new Error("WORKFEED_API_KEY is not configured");
     }
 
+    const mapboxToken = Deno.env.get("MAPBOX_TOKEN");
+    if (!mapboxToken) {
+      console.error("MAPBOX_TOKEN missing at runtime — aborting sync to avoid silent null-fill");
+      throw new Error("MAPBOX_TOKEN is not configured");
+    }
+
     const startFromISO = `${fromDate}T00:00:00.000Z`;
     const startToISO = `${toDate}T23:59:59.999Z`;
 
@@ -213,6 +232,8 @@ serve(async (req) => {
     let errors = 0;
     let addressesExtracted = 0;
     let geocoded = 0;
+    let geocodeFailed = 0;
+    let noAddress = 0;
 
     // Process each shift from WorkFeed
     for (const shift of workfeedData) {
@@ -260,15 +281,27 @@ serve(async (req) => {
           addressesExtracted++;
         }
 
-        // Geocode the address
-        let coords: { lat: number; lng: number } | null = null;
-        if (address) {
-          coords = await geocodeAddress(supabaseClient, address);
-          if (coords) {
-            geocoded++;
+        // Geocode the address (cache-first; observable outcome)
+        const outcome = await geocodeAddress(supabaseClient, address, mapboxToken);
+        let lat: number | null = null;
+        let lng: number | null = null;
+        let geocodeStatus: "success" | "failed" | "no_address" = "no_address";
+        if (outcome.status === "success") {
+          lat = outcome.lat;
+          lng = outcome.lng;
+          geocodeStatus = "success";
+          geocoded++;
+          if (outcome.source === "mapbox") {
+            // Rate-limit only real Mapbox calls
+            await new Promise(resolve => setTimeout(resolve, 100));
           }
-          // Rate limiting: 100ms delay between geocoding calls
-          await new Promise(resolve => setTimeout(resolve, 100));
+        } else if (outcome.status === "failed") {
+          geocodeStatus = "failed";
+          geocodeFailed++;
+          console.warn(`Shift ${shift.id} geocode failed (${outcome.reason}) for "${address}"`);
+        } else {
+          geocodeStatus = "no_address";
+          noAddress++;
         }
 
         // Prepare shift data
@@ -288,8 +321,9 @@ serve(async (req) => {
           duration_minutes: duration,
           wf_role_id: shift.roleID || null,
           address: address,
-          lat: coords?.lat || null,
-          lng: coords?.lng || null,
+          lat,
+          lng,
+          geocode_status: geocodeStatus,
         };
 
         // Insert the shift
@@ -317,12 +351,14 @@ serve(async (req) => {
       errors,
       addressesExtracted,
       geocoded,
+      geocodeFailed,
+      noAddress,
       total: workfeedData.length || 0,
       dateRange: {
         from: fromDate,
         to: toDate,
       },
-      summary: `Synced ${synced} shifts (${addressesExtracted} with addresses, ${geocoded} geocoded), ${unmapped} unmapped, ${errors} errors`,
+      summary: `Synced ${synced} shifts (${addressesExtracted} with addresses, ${geocoded} geocoded, ${geocodeFailed} geocode failures, ${noAddress} no address), ${unmapped} unmapped, ${errors} errors`,
     };
 
     console.log("Sync completed:", response);

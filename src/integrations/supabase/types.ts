@@ -1173,6 +1173,7 @@ export type Database = {
           duration_minutes: number | null
           end_time_local: string | null
           end_utc: string | null
+          geocode_status: string
           id: string
           inspection_id: string | null
           inspection_queue_id: string | null
@@ -1203,6 +1204,7 @@ export type Database = {
           duration_minutes?: number | null
           end_time_local?: string | null
           end_utc?: string | null
+          geocode_status?: string
           id?: string
           inspection_id?: string | null
           inspection_queue_id?: string | null
@@ -1233,6 +1235,7 @@ export type Database = {
           duration_minutes?: number | null
           end_time_local?: string | null
           end_utc?: string | null
+          geocode_status?: string
           id?: string
           inspection_id?: string | null
           inspection_queue_id?: string | null
