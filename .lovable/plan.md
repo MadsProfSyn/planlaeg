@@ -1,57 +1,49 @@
-## Token read comparison
+## Findings so far
 
-Both functions read `MAPBOX_TOKEN` the same way, per-invocation, inside the handler:
+- I have not touched any Mapbox token, dashboard setting, or code.
+- The two functions currently build the Mapbox URL in the same way for `Hegnet 41, 4000 Roskilde`.
+- WorkFeed row exists:
+  - `supabase_shifts.address = Hegnet 41, 4000 Roskilde`
+  - `geocode_status = failed`
+  - `lat/lng = null`
+- Cache has no `Hegnet 41` entry, so WorkFeed falls through to a live Mapbox call.
+- Recent `backfill-shift-geocodes` logs show:
+  - `Mapbox HTTP 403 for "hegnet 41, 4000 roskilde, danmark"`
+- There is no existing Monday item with `Hegnet 41` in `monday_items_selected`, and no recent `geocode-monday-items` logs for that address, so I cannot honestly claim Monday succeeds for this exact row from existing evidence.
 
-- `geocode-monday-items` line 106: `const mapboxToken = Deno.env.get('MAPBOX_TOKEN')!;`
-- `sync-workfeed-shifts` line 188: `const mapboxToken = Deno.env.get("MAPBOX_TOKEN");` (then explicit `throw` if missing)
+## Exact URL construction from source
 
-Same secret name, same call, same handler scope. The only textual difference is the `!` non-null assertion vs an explicit null-check — both end up with the same string at runtime. **Token reads are identical. The token is not the cause.**
+For `Hegnet 41, 4000 Roskilde`, both paths normalize to:
 
-## What the Step 1 probe actually showed
-
-I called the backfill on the Bispevej row. The edge-function log shows exactly one line:
-
-```
-WARNING  Mapbox HTTP 403 for "bispevej 1c, 2400 københavn nv, danmark": {"message":"Forbidden"}
-```
-
-Meanwhile the shared cache already contains coordinates for the same address — but under a different key:
-
-```
-mapbox_coords_cache.normalized_address = "bispevej 1c, st. tv, 2400 københavn nv, danmark"
-lat = 55.706712, lon = 12.530736
+```text
+hegnet 41, 4000 roskilde, danmark
 ```
 
-So the failure mode is a **cache-key mismatch**, not a token problem:
+Both source files currently build this final URL:
 
-1. Bispevej was cached long ago using the raw address (floor/door intact).
-2. The newer `stripFloorDoor` step normalizes to `"bispevej 1c, 2400 københavn nv, danmark"` before the cache lookup.
-3. That stripped key misses the cache.
-4. The function falls through to a live Mapbox call, which returns 403 for this particular query, and the row is marked `failed`.
+```text
+https://api.mapbox.com/geocoding/v5/mapbox.places/hegnet%2041%2C%204000%20roskilde%2C%20danmark.json?access_token=[REDACTED]&country=DK&limit=1
+```
 
-Coordinates that we already paid Mapbox for are sitting in the cache and we are not finding them.
+## Required next investigation step
 
-## Fix
+To complete the test exactly as requested, I need to run a controlled live probe that does not change token settings:
 
-Make `geocodeAddress` in `sync-workfeed-shifts` cache-compatible with both old and new keys, before any Mapbox call:
+1. Add or use a temporary/probe endpoint or one-off diagnostic path that calls the Monday normalization + fetch logic for the literal address without inserting/updating Monday rows.
+2. Call the WorkFeed/backfill geocoding logic for the same literal address in diagnostic mode without updating `supabase_shifts`.
+3. Return, in the response only:
+  - Monday final URL with token redacted
+  - Monday HTTP status
+  - Shift final URL with token redacted
+  - Shift HTTP status
+  - `stripFloorDoor('Strynøgade 5, 1. 105')`
+  - `stripFloorDoor('Roskildevej 33A, 5. 601')`
 
-1. Build two normalized keys for every lookup:
-   - `rawKey` = `${address.toLowerCase().trim()}, danmark` (no stripping — matches legacy cache entries written by the old Monday path)
-   - `strippedKey` = `${stripFloorDoor(address).toLowerCase().trim()}, danmark` (matches the new convention)
-2. Cache lookup order: `rawKey` first, then `strippedKey`. If either hits, use those coords and return `source: "cache"`. Skip Mapbox entirely.
-3. On a true miss, call Mapbox once with `strippedKey` (better hit-rate for v5 in DK), and on success write the result under **both** keys via two upserts so subsequent lookups from either convention hit.
-4. On Mapbox miss/error, keep the current behavior: log + set `geocode_status='failed'`, do not silently null-fill.
+## If approved, I will only investigate first
 
-No change to `geocode-monday-items`. No change to any Mapbox token, dashboard restriction, or `VITE_MAPBOX_PUBLIC_TOKEN`. No schema change (`geocode_status` already exists).
-
-## Validation
-
-1. Deploy `sync-workfeed-shifts` with the cache-compatibility fix.
-2. Call `backfill-shift-geocodes` with `{ shift_ids: ["3f9ba634-f074-4730-bb71-9fe60619abb5"] }` (the Bispevej row).
-3. Confirm it resolves from cache, returns `from_cache: 1`, and the row now has `lat=55.706712, lng=12.530736, geocode_status='success'`. Report the proof.
-4. Then run the backfill on the remaining ~377 failed/null rows in batches; report cache vs. Mapbox split and any residual failures.
-
-## Files touched
-
-- `supabase/functions/sync-workfeed-shifts/index.ts` — only the `geocodeAddress` helper.
-- No other files.
+- No token changes.
+- No Mapbox dashboard changes.
+- No production geocode backfill yet.
+- No fix until after the report confirms whether the URLs/statuses differ.  
+  
+Approved to investigate only — no token changes, no dashboard changes, no backfill, no fix. But your Hegnet 41 probe can't answer the question: both paths build an identical URL with the same token, so both will return the same status, proving nothing. And Monday never geocoded Hegnet 41, so it can't serve as the "Monday succeeds" control. Add this to the probe. Pick an address that DID succeed as a live Monday geocode — find one in monday_items_selected with geocode_status='success' whose coordinates were NOT a cache hit (a fresh live geocode), ideally one that does NOT appear in mapbox_coords_cache as a pre-existing entry. Then, server-side, in diagnostic mode (no writes): - call Mapbox for THAT known-good Monday address → report HTTP status - call Mapbox for a failing shift address (Hegnet 41) → report HTTP status Both calls use the same MAPBOX_TOKEN, same code, back to back, same function invocation. Interpretation: - If the known-good Monday address returns 200 and Hegnet 41 returns 403 in the SAME run → the token works server-side; the 403 is specific to these 40 addresses' content. Then show stripFloorDoor output for 'Strynøgade 5, 1. 105' and 'Roskildevej 33A, 5. 601' and the raw Mapbox 403 response body for Hegnet 41. - If BOTH return 403 in the same run → the token cannot geocode server-side at all, and Monday's successes were cache/precomputed, not live server calls. Say so explicitly. Also: print the full Mapbox 403 response BODY for Hegnet 41 (not just the status). Mapbox puts the reason in the body — 'Forbidden' (token/URL) reads very differently from a malformed-query or rate message. Report all of it before proposing any fix.
