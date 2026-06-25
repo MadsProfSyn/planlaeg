@@ -1,81 +1,57 @@
-## Goal
-`sync-workfeed-shifts` must produce the same lat/lng as the Monday path for identical addresses. Make failures observable. Reuse the shared cache. Backfill the 379 null rows.
+## Token read comparison
 
-## Step 1 — Verify the actual cause on one address
+Both functions read `MAPBOX_TOKEN` the same way, per-invocation, inside the handler:
 
-Before any code change, run a one-shot probe in `sync-workfeed-shifts` (temporary log) or a tiny standalone Deno script invoked once via the edge runtime that:
-- prints `typeof MAPBOX_TOKEN` and `MAPBOX_TOKEN?.length` (never the value),
-- calls Mapbox v5 with `'bispevej 1c, st. tv, 2400 københavn nv, danmark'` already-normalized,
-- prints status code + `features.length`.
+- `geocode-monday-items` line 106: `const mapboxToken = Deno.env.get('MAPBOX_TOKEN')!;`
+- `sync-workfeed-shifts` line 188: `const mapboxToken = Deno.env.get("MAPBOX_TOKEN");` (then explicit `throw` if missing)
 
-Two possible outcomes:
-- Token is undefined at module load → confirms the "module-load token + silent `!MAPBOX_TOKEN` return" theory.
-- Token is fine and Mapbox returns features → confirms the bug is one of: cache key mismatch at write time, the `upsert` silently failing, or an exception in the insert path that's being swallowed. Report which.
+Same secret name, same call, same handler scope. The only textual difference is the `!` non-null assertion vs an explicit null-check — both end up with the same string at runtime. **Token reads are identical. The token is not the cause.**
 
-Only proceed once the probe identifies the exact branch.
+## What the Step 1 probe actually showed
 
-## Step 2 — Schema change (migration)
+I called the backfill on the Bispevej row. The edge-function log shows exactly one line:
 
-Add observability column:
-
-```sql
-ALTER TABLE public.supabase_shifts
-  ADD COLUMN IF NOT EXISTS geocode_status text NOT NULL DEFAULT 'pending';
-CREATE INDEX IF NOT EXISTS supabase_shifts_geocode_status_idx
-  ON public.supabase_shifts (geocode_status);
+```
+WARNING  Mapbox HTTP 403 for "bispevej 1c, 2400 københavn nv, danmark": {"message":"Forbidden"}
 ```
 
-Values: `pending` | `success` | `failed` | `no_address`. No RLS change (table already has policies).
+Meanwhile the shared cache already contains coordinates for the same address — but under a different key:
 
-## Step 3 — Fix `sync-workfeed-shifts/index.ts`
+```
+mapbox_coords_cache.normalized_address = "bispevej 1c, st. tv, 2400 københavn nv, danmark"
+lat = 55.706712, lon = 12.530736
+```
 
-Minimal, surgical edits — do not touch normalization or the Monday function:
+So the failure mode is a **cache-key mismatch**, not a token problem:
 
-1. **Read token per-invocation.** Delete the module-top `const MAPBOX_TOKEN = …`. Inside `serve(...)` (top of handler), call `const mapboxToken = Deno.env.get("MAPBOX_TOKEN")`. Pass it into `geocodeAddress(supabase, address, mapboxToken)`. If missing → log a single explicit `console.error("MAPBOX_TOKEN missing at runtime")` and return 500 (do not silently null-fill the whole sync).
-2. **Cache-first, then Mapbox, then write-back.** Keep the existing cache lookup. On miss, call Mapbox; on hit features, `upsert` into `mapbox_coords_cache` with `onConflict: "normalized_address"` (already correct). This is the parity behavior with the Monday function.
-3. **Observability.** Replace silent `return null`:
-   - no address → `geocode_status = 'no_address'`, `lat/lng = null`, `console.warn` with shift id.
-   - 0 features → `geocode_status = 'failed'`, log `console.warn` with the normalized string and shift id.
-   - exception → `geocode_status = 'failed'`, log full error.
-   - success → `geocode_status = 'success'`, set lat/lng.
-4. **Final summary log.** Extend the existing summary with `geocoded_success`, `geocoded_failed`, `no_address` counters.
+1. Bispevej was cached long ago using the raw address (floor/door intact).
+2. The newer `stripFloorDoor` step normalizes to `"bispevej 1c, 2400 københavn nv, danmark"` before the cache lookup.
+3. That stripped key misses the cache.
+4. The function falls through to a live Mapbox call, which returns 403 for this particular query, and the row is marked `failed`.
 
-Do not change CORS, the clean-slate delete, or any other logic.
+Coordinates that we already paid Mapbox for are sitting in the cache and we are not finding them.
 
-## Step 4 — Backfill the 379 null rows
+## Fix
 
-Add a separate edge function `backfill-shift-geocodes` (small, idempotent, callable on demand):
+Make `geocodeAddress` in `sync-workfeed-shifts` cache-compatible with both old and new keys, before any Mapbox call:
 
-- Selects rows: `lat IS NULL AND address IS NOT NULL AND geocode_status IN ('pending','failed')`.
-- Processes in batches of 50 with the same `geocodeAddress` helper (cache-first → Mapbox on miss).
-- Updates each row in place with `lat`, `lng`, `geocode_status`.
-- Returns counts `{ processed, from_cache, from_mapbox, failed }`.
-- Run it once from the chat after deploy via `supabase--curl_edge_functions`. Re-runnable safely.
+1. Build two normalized keys for every lookup:
+   - `rawKey` = `${address.toLowerCase().trim()}, danmark` (no stripping — matches legacy cache entries written by the old Monday path)
+   - `strippedKey` = `${stripFloorDoor(address).toLowerCase().trim()}, danmark` (matches the new convention)
+2. Cache lookup order: `rawKey` first, then `strippedKey`. If either hits, use those coords and return `source: "cache"`. Skip Mapbox entirely.
+3. On a true miss, call Mapbox once with `strippedKey` (better hit-rate for v5 in DK), and on success write the result under **both** keys via two upserts so subsequent lookups from either convention hit.
+4. On Mapbox miss/error, keep the current behavior: log + set `geocode_status='failed'`, do not silently null-fill.
 
-Cache reuse means most of the 379 rows whose addresses Monday already geocoded will resolve with zero Mapbox calls.
+No change to `geocode-monday-items`. No change to any Mapbox token, dashboard restriction, or `VITE_MAPBOX_PUBLIC_TOKEN`. No schema change (`geocode_status` already exists).
 
-## Step 5 — Proof gate
+## Validation
 
-Before mass backfill, call the backfill function with a single `shift_id` filter (add an optional `{ shift_ids?: string[] }` body param) for a known failing row, e.g. the 'Bispevej 1C, st. tv, 2400 København NV' shift. Report:
-- before: `lat=null, lng=null, geocode_status='pending'`
-- after: `lat=…, lng=…, geocode_status='success'`, source `cache` or `mapbox`.
-
-Only after that confirmation, run with no filter to backfill all 379.
-
-## Step 6 — Re-run the regular sync once
-
-After backfill, invoke `sync-workfeed-shifts` for a 1-day window and verify new inserts now carry `geocode_status='success'` for addresses already in cache. Report the summary counters.
-
-## Out of scope
-- `geocode-monday-items`: untouched.
-- Route map / front-end: untouched.
-- Address normalization: untouched (already byte-identical between the two paths).
+1. Deploy `sync-workfeed-shifts` with the cache-compatibility fix.
+2. Call `backfill-shift-geocodes` with `{ shift_ids: ["3f9ba634-f074-4730-bb71-9fe60619abb5"] }` (the Bispevej row).
+3. Confirm it resolves from cache, returns `from_cache: 1`, and the row now has `lat=55.706712, lng=12.530736, geocode_status='success'`. Report the proof.
+4. Then run the backfill on the remaining ~377 failed/null rows in batches; report cache vs. Mapbox split and any residual failures.
 
 ## Files touched
-- `supabase/functions/sync-workfeed-shifts/index.ts` — token read timing, status writes, logs.
-- `supabase/functions/backfill-shift-geocodes/index.ts` — new.
-- `supabase/config.toml` — register new function.
-- One migration adding `supabase_shifts.geocode_status`.
 
-## Reporting at the end
-Post a short note stating which branch the Step-1 probe identified as the actual cause (module-load token vs cache-write mismatch vs swallowed exception), and the before/after for the proof address.
+- `supabase/functions/sync-workfeed-shifts/index.ts` — only the `geocodeAddress` helper.
+- No other files.

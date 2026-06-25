@@ -41,6 +41,9 @@ function extractAddress(comment) {
 function normalizeAddress(address: string): string {
   return `${stripFloorDoor(address).toLowerCase().trim()}, danmark`;
 }
+function rawNormalizeAddress(address: string): string {
+  return `${address.toLowerCase().trim()}, danmark`;
+}
 
 // Removes Danish floor/door segments like ", 1. 11" / ", 6. th" / ", st. tv" / ", 2. sal" / ", 3. mf"
 function stripFloorDoor(address: string): string {
@@ -64,18 +67,22 @@ async function geocodeAddress(
 ): Promise<GeocodeOutcome> {
   if (!address) return { status: "no_address" };
 
-  const normalizedAddress = normalizeAddress(address);
+  const rawKey = rawNormalizeAddress(address);
+  const strippedKey = normalizeAddress(address);
 
-  // Cache-first
-  const { data: cached } = await supabase
-    .from("mapbox_coords_cache")
-    .select("lat, lon")
-    .eq("normalized_address", normalizedAddress)
-    .maybeSingle();
-
-  if (cached?.lat && cached?.lon) {
-    return { status: "success", lat: cached.lat, lng: cached.lon, source: "cache" };
+  // Cache-first under BOTH conventions: legacy (raw, floor/door intact) then stripped.
+  const keysToTry = rawKey === strippedKey ? [rawKey] : [rawKey, strippedKey];
+  for (const key of keysToTry) {
+    const { data: cached } = await supabase
+      .from("mapbox_coords_cache")
+      .select("lat, lon")
+      .eq("normalized_address", key)
+      .maybeSingle();
+    if (cached?.lat && cached?.lon) {
+      return { status: "success", lat: cached.lat, lng: cached.lon, source: "cache" };
+    }
   }
+  const normalizedAddress = strippedKey;
 
   // Call Mapbox on miss
   try {
@@ -91,13 +98,15 @@ async function geocodeAddress(
     if (data.features && data.features.length > 0) {
       const [lng, lat] = data.features[0].center;
 
-      // Write back to shared cache so future lookups (any path) hit
-      await supabase.from("mapbox_coords_cache").upsert({
-        normalized_address: normalizedAddress,
-        lat,
-        lon: lng,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "normalized_address" });
+      // Write back under BOTH keys so future lookups from either convention hit.
+      const now = new Date().toISOString();
+      const rows = rawKey === strippedKey
+        ? [{ normalized_address: strippedKey, lat, lon: lng, updated_at: now }]
+        : [
+            { normalized_address: strippedKey, lat, lon: lng, updated_at: now },
+            { normalized_address: rawKey, lat, lon: lng, updated_at: now },
+          ];
+      await supabase.from("mapbox_coords_cache").upsert(rows, { onConflict: "normalized_address" });
 
       return { status: "success", lat, lng, source: "mapbox" };
     }
