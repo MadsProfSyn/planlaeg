@@ -483,10 +483,12 @@ export function PlanlaegSynMapView({
         map.fitBounds(bounds, { padding: 80, maxZoom: 13, duration: 500 });
       } catch {/* ignore — single point */}
 
-      // Build the driving polyline (base → 1 → 2 → ... → N).
+      // Build the driving polyline (base → 1 → 2 → ... → N → base) so the
+      // total km includes the return-to-base leg.
       const waypoints: [number, number][] = [];
       if (base) waypoints.push([base.lng, base.lat]);
       shifts.forEach((s) => waypoints.push([s.lng as number, s.lat as number]));
+      if (base && shifts.length > 0) waypoints.push([base.lng, base.lat]);
 
       if (!token || !token.startsWith("pk.") || waypoints.length < 2) {
         setRouteTotalKm(null);
