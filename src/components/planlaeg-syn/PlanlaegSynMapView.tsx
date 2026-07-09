@@ -307,9 +307,11 @@ export function PlanlaegSynMapView({
             el.innerHTML = `
               <div style="position:relative;width:24px;height:34px;">
                 <svg width="24" height="34" viewBox="0 0 24 34" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M12 0 C5.4 0 0 5.4 0 12 C0 21 12 34 12 34 C12 34 24 21 24 12 C24 5.4 18.6 0 12 0 Z"
-                        fill="${INSPECTOR_COLOR}" stroke="#ffffff" stroke-width="1.5"/>
-                  <circle cx="12" cy="12" r="4" fill="#ffffff"/>
+                  <circle cx="12" cy="12" r="11.25" fill="${INSPECTOR_COLOR}" stroke="#ffffff" stroke-width="1.5"/>
+                  <g transform="translate(4 4)" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M16 14v-1a4 4 0 0 0-4-4H4a4 4 0 0 0-4 4v1"/>
+                    <circle cx="8" cy="4" r="4"/>
+                  </g>
                 </svg>
                 ${
                   p.bookedCount > 0
