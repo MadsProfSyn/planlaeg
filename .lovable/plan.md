@@ -1,21 +1,20 @@
-## Goal
-On `/planlaeg-syn` → Kort tab, the purple "Total: X km kørt" should reflect the full roundtrip including the drive from the last inspection back to the inspector's home base.
+# Change inspector map marker to a person icon
 
-## Change
-In `src/components/planlaeg-syn/PlanlaegSynMapView.tsx`, route-mode waypoint construction (around lines 486–489):
+## What changes
+On `/planlaeg-syn` map, replace the orange teardrop pin SVG used for inspector home locations with a Lucide `User` icon, keeping the same orange color (`INSPECTOR_COLOR`) and existing badge for booked count.
 
-Currently: `base → shift 1 → shift 2 → … → shift N`
+## Where
+`src/components/planlaeg-syn/PlanlaegSynMapView.tsx`, inside the `if (showInspectors && !routeMode)` block (around lines 300–323) where the inspector marker DOM element's `innerHTML` is built.
 
-Update to: `base → shift 1 → … → shift N → base`
-
-This means appending the base coordinate as the final waypoint when a base exists and there is at least one shift. `buildDrivingPolylineWithLegs` will then return one additional leg (last shift → base), which automatically:
-- extends the purple polyline back to the home pin
-- increases `routeTotalKm` to include the return leg
-
-## Edge cases
-- No base coordinate: behavior unchanged (no closing leg can be drawn).
-- Zero shifts: behavior unchanged (no route).
-- Bounds fitting already includes base, so no change needed there.
+## How
+- Replace the current teardrop `<svg>` (path + inner white circle) with the Lucide `User` SVG path, inlined as an SVG string so it stays in the marker's DOM injection (Mapbox markers are built via `innerHTML`, not React).
+- Use the same 24×34 container so anchoring/positioning stays identical (`anchor: "bottom"`), meaning no drift changes.
+  - Draw a filled orange circle background (r=12) centered in the box, with white stroke, matching current visual weight.
+  - Overlay the Lucide `User` glyph in white on top (stroke=white, fill=none), sized ~16px, centered.
+- Keep the booked-count badge markup unchanged.
+- No changes to logic, state, popups, route mode, bounds fitting, or any other marker type (inspections, booked shifts).
 
 ## Out of scope
-No changes to data fetching, the Planlægning tab, or the VRP "Ruter" view. Frontend-only edit to a single file.
+- No color changes (still `INSPECTOR_COLOR` orange).
+- No changes to route-mode numbered markers, inspection pins, or booked-shift pins.
+- No dependency additions — the raw SVG path from `lucide-react`'s `User` icon is inlined as a string (same icon set already used across the app).
