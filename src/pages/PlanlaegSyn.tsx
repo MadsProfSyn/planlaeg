@@ -559,8 +559,8 @@ export default function PlanlaegSyn() {
     setActiveDragId(null);
   };
 
-  // Handle manual sync of shifts from WorkFeed
-  const handleSyncShifts = async () => {
+  // Handle manual sync of shifts AND availability from WorkFeed
+  const handleSyncData = async () => {
     if (!selectedDate) {
       toast.error("Vælg en dato først");
       return;
@@ -568,19 +568,56 @@ export default function PlanlaegSyn() {
 
     setIsSyncing(true);
     try {
-      const { data, error } = await supabase.functions.invoke("sync-workfeed-shifts", {
-        body: { startDate: selectedDate, endDate: selectedDate },
-      });
+      const fromISO = new Date(selectedDate).toISOString();
+      const toISO = new Date(selectedDate + "T23:59:59").toISOString();
+      const sessionRes = await supabase.auth.getSession();
+      const accessToken = sessionRes.data.session?.access_token;
 
-      if (error) {
-        console.error("Sync error:", error);
-        toast.error("Fejl ved synkronisering");
-        return;
+      const [shiftsRes, availRes] = await Promise.allSettled([
+        supabase.functions.invoke("sync-workfeed-shifts", {
+          body: { startDate: selectedDate, endDate: selectedDate },
+        }),
+        fetch(
+          `https://wtkyxxfeubpadivllowr.supabase.co/functions/v1/workfeed-ingest-availability?from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              "Content-Type": "application/json",
+            },
+          },
+        ).then(async (r) => {
+          if (!r.ok) throw new Error(await r.text());
+          return r.json();
+        }),
+      ]);
+
+      let shiftsCount: number | null = null;
+      let availCount: number | null = null;
+      const errors: string[] = [];
+
+      if (shiftsRes.status === "fulfilled" && !shiftsRes.value.error) {
+        shiftsCount = shiftsRes.value.data?.synced ?? 0;
+      } else {
+        errors.push("vagter");
+        console.error("Shift sync error:", shiftsRes);
       }
 
-      toast.success(`Synkroniseret ${data.synced} vagter fra WorkFeed`);
+      if (availRes.status === "fulfilled") {
+        availCount = availRes.value?.upserted ?? 0;
+      } else {
+        errors.push("tilgængelighed");
+        console.error("Availability sync error:", availRes.reason);
+      }
 
-      // Refresh the existing scheduled inspections
+      if (errors.length === 0) {
+        toast.success(`Synkroniseret ${shiftsCount} vagter og ${availCount} tilgængelighedsposter`);
+      } else if (errors.length === 2) {
+        toast.error("Fejl ved synkronisering");
+      } else {
+        toast.warning(`Delvis sync – fejl ved: ${errors.join(", ")}`);
+      }
+
       queryClient.invalidateQueries({ queryKey: ["existing-scheduled-inspections", selectedDate] });
       queryClient.invalidateQueries({ queryKey: ["planlaeg-inspectors"] });
     } catch (err) {
@@ -784,12 +821,12 @@ export default function PlanlaegSyn() {
             <Button
               variant="outline"
               size="sm"
-              onClick={handleSyncShifts}
+              onClick={handleSyncData}
               disabled={isSyncing}
-              title="Synkroniser vagter fra WorkFeed for denne dato"
+              title="Synkroniser vagter og tilgængelighed fra WorkFeed for denne dato"
             >
               {isSyncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              <span className="ml-2 hidden sm:inline">Sync vagter</span>
+              <span className="ml-2 hidden sm:inline">Sync data</span>
             </Button>
 
             {totalNewAssignments > 0 && (
