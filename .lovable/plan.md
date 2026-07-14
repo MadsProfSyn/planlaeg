@@ -1,52 +1,88 @@
-## Root cause
+## Validate the SQL normalizer before rebuilding the view
 
-On the map tab, the map filters shifts by `typeof lat === "number" && typeof lng === "number"`. Any shift where `lat`/`lng` come back `null` is silently dropped from the numbered route markers.
+The previous migration attempt bundled the helper function and the `inspector_capacity_view` rebuild in one step. The user is right to gate this: the regex `,\s*(st\.?|kl\.?|\d+\.?)\s*(tv|th|mf|mid|sal|\.?\s*\d+)?(,|$)` is the same shape that has misbehaved twice before, and if the SQL string doesn't produce byte-identical output to the TypeScript `stripFloorDoor`, the view rebuild fixes nothing.
 
-For Rasmus Kristiansen on Monday 3 August, the DB view `inspector_capacity_view` returns 6 shifts, but 3 of them have `lat: null, lng: null`:
+Split into two turns.
 
-| Shift | Address | lat/lng |
-|---|---|---|
-| 08:00–08:55 IF | Skovvejen 15, 2. 5, 8000 Aarhus C | NULL |
-| 08:55–09:50 IF | Skovvejen 15, 1. 3, 8000 Aarhus C | NULL |
-| 10:10–11:10 IF | Sønder Allé 9, 3. tv, 8000 Aarhus C | ok |
-| 11:10–12:10 IF | Amaliegade 20B, 2. 2, 8000 Aarhus C | NULL |
-| 13:35–14:30 IF | Amaliegade 20B, 8000 Aarhus C | ok |
-| 14:50–15:45 IF | Dirch Passers Gade 30, 2. tv, 8000 Aarhus C | ok |
+### Turn 1 (this migration) — function only
 
-Those are exactly the 3 the user cannot see on the map.
-
-### Why lat/lng is NULL
-
-`inspector_capacity_view` joins shift addresses to the geocode cache using an **exact string match**:
+Create `public.normalize_dk_address(text)` and nothing else. No behavior change: the view still uses its old exact-match join and continues to return NULL for the same shifts. Adding the function alone cannot break anything.
 
 ```sql
-LEFT JOIN mapbox_coords_cache mcc
-  ON mcc.normalized_address = lower(trim(ss.address)) || ', danmark'
+CREATE OR REPLACE FUNCTION public.normalize_dk_address(addr text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+SET search_path = public
+AS $$
+  SELECT lower(trim(
+    regexp_replace(
+      regexp_replace(
+        COALESCE(addr, ''),
+        ',\s*(st\.?|kl\.?|\d+\.?)\s*(tv|th|mf|mid|sal|\.?\s*\d+)?(,|$)',
+        '\3',
+        'gi'
+      ),
+      '\s{2,}', ' ', 'g'
+    )
+  )) || ', danmark'
+$$;
 ```
 
-But `mapbox_coords_cache.normalized_address` is written by the geocoding Edge Function using a **different normalisation** — it strips Danish floor/door segments (`stripFloorDoor`) before storing. So the cache contains:
+### Turn 2 — three acceptance tests, then decide
 
-- `skovvejen 15, 8000 aarhus c, danmark`
-- `amaliegade 20b, 8000 aarhus c, danmark`
+Run all three read-only queries; go/no-go depends on the results.
 
-…but the view looks for:
+1. Shape check — every row must keep postcode + city:
+   ```sql
+   SELECT addr, public.normalize_dk_address(addr) AS normalized
+   FROM (VALUES
+     ('Skovvejen 15, 2. 5, 8000 Aarhus C'),
+     ('Amaliegade 20B, 2. 2, 8000 Aarhus C'),
+     ('Amaliegade 20B, 8000 Aarhus C'),
+     ('Strynøgade 5, 1. 105, 2100 København Ø'),
+     ('Roskildevej 33A, 5. 601, 2500 Valby'),
+     ('Bispevej 1C, st. tv, 2400 København NV'),
+     ('Hegnet 41, 4000 Roskilde'),
+     ('Gartnerbyen 2, 5. 5, 5200 Odense V')
+   ) AS t(addr);
+   ```
 
-- `skovvejen 15, 2. 5, 8000 aarhus c, danmark`
-- `amaliegade 20b, 2. 2, 8000 aarhus c, danmark`
+2. Cache-hit lift — must jump meaningfully vs the current baseline:
+   ```sql
+   SELECT count(*) AS total_shifts,
+          count(mcc.normalized_address) AS would_match_cache
+   FROM supabase_shifts ss
+   LEFT JOIN mapbox_coords_cache mcc
+     ON mcc.normalized_address = public.normalize_dk_address(ss.address);
+   ```
 
-No match → NULL → shift dropped from the map. The base address (Amaliegade 20B without floor/door) happens to match verbatim, which is why that one row succeeds.
+3. Original repro — all 6 Rasmus rows must resolve:
+   ```sql
+   SELECT ss.address, mcc.lat, mcc.lon
+   FROM supabase_shifts ss
+   LEFT JOIN mapbox_coords_cache mcc
+     ON mcc.normalized_address = public.normalize_dk_address(ss.address)
+   WHERE ss.inspector_name = 'Rasmus Kristiansen'
+     AND ss.date_local = '2026-08-03';
+   ```
 
-The pattern is: any shift whose address contains a floor/door segment (`, 2. 5`, `, 1. 3`, `, 2. 2`, `, st. tv`, etc.) will always miss the cache, even after successful geocoding — which is why the same 3 keep disappearing.
+**Go criteria (all must hold):**
+- Test 1: no row collapses to just the street; every result contains the original postcode and city.
+- Test 2: `would_match_cache` climbs substantially over the current baseline (~243).
+- Test 3: all 6 Rasmus rows return non-null `lat` / `lon`.
 
-### Where the fix belongs (for a follow-up build turn)
+If any test fails, stop and inspect `mapbox_coords_cache.normalized_address` to find where SQL and TS diverge — do not rebuild the view.
 
-Two symmetrical options, only one is needed:
+### Turn 3 (only after Turn 2 passes) — rebuild the view
 
-1. **Fix the view's join key** to strip floor/door before matching (mirror `stripFloorDoor` + append `, danmark`). This aligns the view with the writer and immediately un-hides the 3 shifts with no re-geocoding.
-2. **Also** (recommended in addition) write a small helper SQL function `normalize_dk_address(text)` used by both the view and any future geocoder path, so drift can't recur.
+`CREATE OR REPLACE VIEW public.inspector_capacity_view` with the join changed to:
+```sql
+LEFT JOIN mapbox_coords_cache mcc
+  ON mcc.normalized_address = public.normalize_dk_address(ss.address)
+```
+Everything else in the view is preserved verbatim. No frontend changes.
 
-No frontend change is needed — the map's `typeof number` filter is correct; it just never received coordinates for those rows.
+## What this turn will do
 
-## Deliverable of this turn
-
-This is investigation only, per the request. No code changes proposed for approval yet — confirm you want me to fix it via option 1 (patch the view) or option 1 + 2 (view + shared normaliser), and I will write the migration in the next turn.
+I will call the migration tool with **only the `CREATE OR REPLACE FUNCTION`** above — no view change. After you approve and run it, I will execute the three acceptance queries and report the numbers before proposing the view rebuild.
