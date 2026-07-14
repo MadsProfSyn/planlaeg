@@ -444,6 +444,27 @@ export function PlanlaegSynMapView({
         routeMarkersRef.current.push(marker);
       }
 
+      // Group shifts by coordinate so overlapping pins can be fanned out.
+      const coordGroups = new Map<string, number[]>();
+      shifts.forEach((s, idx) => {
+        const key = `${(s.lat as number).toFixed(6)},${(s.lng as number).toFixed(6)}`;
+        const arr = coordGroups.get(key) ?? [];
+        arr.push(idx);
+        coordGroups.set(key, arr);
+      });
+      const markerOffsets = new Map<number, [number, number]>();
+      coordGroups.forEach((idxs) => {
+        if (idxs.length === 1) {
+          markerOffsets.set(idxs[0], [0, 0]);
+          return;
+        }
+        const radius = 14;
+        idxs.forEach((idx, i) => {
+          const angle = -Math.PI / 2 + (2 * Math.PI * i) / idxs.length;
+          markerOffsets.set(idx, [radius * Math.cos(angle), radius * Math.sin(angle)]);
+        });
+      });
+
       // Numbered shift markers.
       shifts.forEach((s, idx) => {
         const number = idx + 1;
@@ -470,7 +491,8 @@ export function PlanlaegSynMapView({
             ${s.address ? `<div style="font-size:12px;color:#777;margin-top:4px">${escapeHtml(s.address)}</div>` : ""}
           </div>`
         );
-        const marker = new mapboxgl.Marker({ element: el, anchor: "center" })
+        const offset = markerOffsets.get(idx) ?? [0, 0];
+        const marker = new mapboxgl.Marker({ element: el, anchor: "center", offset })
           .setLngLat([s.lng as number, s.lat as number])
           .setPopup(popup)
           .addTo(map);

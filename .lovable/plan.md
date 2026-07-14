@@ -1,88 +1,33 @@
-## Validate the SQL normalizer before rebuilding the view
+## Problem
 
-The previous migration attempt bundled the helper function and the `inspector_capacity_view` rebuild in one step. The user is right to gate this: the regex `,\s*(st\.?|kl\.?|\d+\.?)\s*(tv|th|mf|mid|sal|\.?\s*\d+)?(,|$)` is the same shape that has misbehaved twice before, and if the SQL string doesn't produce byte-identical output to the TypeScript `stripFloorDoor`, the view rebuild fixes nothing.
+On the `/planlaeg-syn` route map, when Rasmus Kristiansen is selected on 2026-08-03, only 2 of his 4 numbered pins appear. The 4 shifts include two pairs sharing identical coordinates (Skovvejen 15 apt. 2.5 and 1.3 both geocode to 56.164395, 10.216678; Sønder Allé 9 3.tv and Amaliegade 20B 2.2 also collide). Mapbox stacks identical-coord markers so upper pins hide the ones underneath.
 
-Split into two turns.
+Backend is correct — the view returns all 4 shifts with valid lat/lng. Fix is rendering-only.
 
-### Turn 1 (this migration) — function only
+## Approach (Option A — fan out)
 
-Create `public.normalize_dk_address(text)` and nothing else. No behavior change: the view still uses its old exact-match join and continues to return NULL for the same shifts. Adding the function alone cannot break anything.
+When 2+ numbered stops share the same coordinate, offset each marker by a small pixel amount arranged in a circle around the true point using Mapbox `Marker.setOffset({ x, y })`. This keeps the true `LngLat` (so the driving polyline still connects the real coordinate) but visually separates the pins so all are clickable.
 
-```sql
-CREATE OR REPLACE FUNCTION public.normalize_dk_address(addr text)
-RETURNS text
-LANGUAGE sql
-IMMUTABLE
-SET search_path = public
-AS $$
-  SELECT lower(trim(
-    regexp_replace(
-      regexp_replace(
-        COALESCE(addr, ''),
-        ',\s*(st\.?|kl\.?|\d+\.?)\s*(tv|th|mf|mid|sal|\.?\s*\d+)?(,|$)',
-        '\3',
-        'gi'
-      ),
-      '\s{2,}', ' ', 'g'
-    )
-  )) || ', danmark'
-$$;
-```
+## Changes
 
-### Turn 2 — three acceptance tests, then decide
+Two files, same shape of change:
 
-Run all three read-only queries; go/no-go depends on the results.
+1. `src/components/planlaeg-syn/PlanlaegSynMapView.tsx` — the numbered shifts loop around line 448.
+2. `src/components/inspections/RouteMapView.tsx` — the numbered assignments loop around line 490.
 
-1. Shape check — every row must keep postcode + city:
-   ```sql
-   SELECT addr, public.normalize_dk_address(addr) AS normalized
-   FROM (VALUES
-     ('Skovvejen 15, 2. 5, 8000 Aarhus C'),
-     ('Amaliegade 20B, 2. 2, 8000 Aarhus C'),
-     ('Amaliegade 20B, 8000 Aarhus C'),
-     ('Strynøgade 5, 1. 105, 2100 København Ø'),
-     ('Roskildevej 33A, 5. 601, 2500 Valby'),
-     ('Bispevej 1C, st. tv, 2400 København NV'),
-     ('Hegnet 41, 4000 Roskilde'),
-     ('Gartnerbyen 2, 5. 5, 5200 Odense V')
-   ) AS t(addr);
-   ```
+In each:
 
-2. Cache-hit lift — must jump meaningfully vs the current baseline:
-   ```sql
-   SELECT count(*) AS total_shifts,
-          count(mcc.normalized_address) AS would_match_cache
-   FROM supabase_shifts ss
-   LEFT JOIN mapbox_coords_cache mcc
-     ON mcc.normalized_address = public.normalize_dk_address(ss.address);
-   ```
+- Before creating markers, group stops by a coordinate key (e.g. `${lat.toFixed(6)},${lng.toFixed(6)}`).
+- For each group with size > 1, compute a per-marker pixel offset arranged evenly on a 14px-radius circle (angle = `(2π · i) / n`, starting at `-π/2` so the first pin sits directly above the true point).
+- Pass `{ offset: [dx, dy] }` to the `mapboxgl.Marker({ element, anchor: "center", offset: [dx, dy] })` constructor.
+- Groups of size 1 get `offset: [0, 0]` (unchanged behaviour).
 
-3. Original repro — all 6 Rasmus rows must resolve:
-   ```sql
-   SELECT ss.address, mcc.lat, mcc.lon
-   FROM supabase_shifts ss
-   LEFT JOIN mapbox_coords_cache mcc
-     ON mcc.normalized_address = public.normalize_dk_address(ss.address)
-   WHERE ss.inspector_name = 'Rasmus Kristiansen'
-     AND ss.date_local = '2026-08-03';
-   ```
+Stop numbering stays sequential by `start_time` (already the case in both files — no change to sort order). The route polyline uses the true coordinates, unchanged.
 
-**Go criteria (all must hold):**
-- Test 1: no row collapses to just the street; every result contains the original postcode and city.
-- Test 2: `would_match_cache` climbs substantially over the current baseline (~243).
-- Test 3: all 6 Rasmus rows return non-null `lat` / `lon`.
+## Acceptance
 
-If any test fails, stop and inspect `mapbox_coords_cache.normalized_address` to find where SQL and TS diverge — do not rebuild the view.
-
-### Turn 3 (only after Turn 2 passes) — rebuild the view
-
-`CREATE OR REPLACE VIEW public.inspector_capacity_view` with the join changed to:
-```sql
-LEFT JOIN mapbox_coords_cache mcc
-  ON mcc.normalized_address = public.normalize_dk_address(ss.address)
-```
-Everything else in the view is preserved verbatim. No frontend changes.
-
-## What this turn will do
-
-I will call the migration tool with **only the `CREATE OR REPLACE FUNCTION`** above — no view change. After you approve and run it, I will execute the three acceptance queries and report the numbers before proposing the view rebuild.
+- Rasmus on 2026-08-03: all 4 numbered pins visible on the map — two pairs shown as fanned circles of 2 pins each.
+- Each pin's popup opens correctly on hover and shows the right address including floor/door.
+- Non-colliding routes look identical to today.
+- Route polyline is unchanged (still connects the shared true coordinate).
+- No changes to the SQL view, normalizer, or geocoding.
