@@ -486,6 +486,29 @@ export function RouteMapView({
         addRouteToMap();
       }
 
+      // Group assignments by coordinate so overlapping numbered pins can be fanned out.
+      const coordGroups = new Map<string, string[]>();
+      route.assignments.forEach((assignment) => {
+        const inspection = inspectionsMap.get(assignment.inspection_id);
+        if (!inspection?.lat || !inspection?.lng) return;
+        const key = `${inspection.lat.toFixed(6)},${inspection.lng.toFixed(6)}`;
+        const arr = coordGroups.get(key) ?? [];
+        arr.push(assignment.inspection_id);
+        coordGroups.set(key, arr);
+      });
+      const markerOffsets = new Map<string, [number, number]>();
+      coordGroups.forEach((ids) => {
+        if (ids.length === 1) {
+          markerOffsets.set(ids[0], [0, 0]);
+          return;
+        }
+        const radius = 14;
+        ids.forEach((id, i) => {
+          const angle = -Math.PI / 2 + (2 * Math.PI * i) / ids.length;
+          markerOffsets.set(id, [radius * Math.cos(angle), radius * Math.sin(angle)]);
+        });
+      });
+
       // Add numbered markers
       route.assignments.forEach((assignment) => {
         const inspection = inspectionsMap.get(assignment.inspection_id);
@@ -539,8 +562,9 @@ export function RouteMapView({
           </div>
         `);
 
-        // Create marker
-        const marker = new mapboxgl.Marker({ element: el })
+        // Create marker (fan out if this coordinate has multiple stops)
+        const offset = markerOffsets.get(assignment.inspection_id) ?? [0, 0];
+        const marker = new mapboxgl.Marker({ element: el, offset })
           .setLngLat([inspection.lng, inspection.lat])
           .setPopup(popup)
           .addTo(map.current!);
