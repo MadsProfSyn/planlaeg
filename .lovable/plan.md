@@ -1,20 +1,52 @@
-# Change inspector map marker to a person icon
+## Root cause
 
-## What changes
-On `/planlaeg-syn` map, replace the orange teardrop pin SVG used for inspector home locations with a Lucide `User` icon, keeping the same orange color (`INSPECTOR_COLOR`) and existing badge for booked count.
+On the map tab, the map filters shifts by `typeof lat === "number" && typeof lng === "number"`. Any shift where `lat`/`lng` come back `null` is silently dropped from the numbered route markers.
 
-## Where
-`src/components/planlaeg-syn/PlanlaegSynMapView.tsx`, inside the `if (showInspectors && !routeMode)` block (around lines 300–323) where the inspector marker DOM element's `innerHTML` is built.
+For Rasmus Kristiansen on Monday 3 August, the DB view `inspector_capacity_view` returns 6 shifts, but 3 of them have `lat: null, lng: null`:
 
-## How
-- Replace the current teardrop `<svg>` (path + inner white circle) with the Lucide `User` SVG path, inlined as an SVG string so it stays in the marker's DOM injection (Mapbox markers are built via `innerHTML`, not React).
-- Use the same 24×34 container so anchoring/positioning stays identical (`anchor: "bottom"`), meaning no drift changes.
-  - Draw a filled orange circle background (r=12) centered in the box, with white stroke, matching current visual weight.
-  - Overlay the Lucide `User` glyph in white on top (stroke=white, fill=none), sized ~16px, centered.
-- Keep the booked-count badge markup unchanged.
-- No changes to logic, state, popups, route mode, bounds fitting, or any other marker type (inspections, booked shifts).
+| Shift | Address | lat/lng |
+|---|---|---|
+| 08:00–08:55 IF | Skovvejen 15, 2. 5, 8000 Aarhus C | NULL |
+| 08:55–09:50 IF | Skovvejen 15, 1. 3, 8000 Aarhus C | NULL |
+| 10:10–11:10 IF | Sønder Allé 9, 3. tv, 8000 Aarhus C | ok |
+| 11:10–12:10 IF | Amaliegade 20B, 2. 2, 8000 Aarhus C | NULL |
+| 13:35–14:30 IF | Amaliegade 20B, 8000 Aarhus C | ok |
+| 14:50–15:45 IF | Dirch Passers Gade 30, 2. tv, 8000 Aarhus C | ok |
 
-## Out of scope
-- No color changes (still `INSPECTOR_COLOR` orange).
-- No changes to route-mode numbered markers, inspection pins, or booked-shift pins.
-- No dependency additions — the raw SVG path from `lucide-react`'s `User` icon is inlined as a string (same icon set already used across the app).
+Those are exactly the 3 the user cannot see on the map.
+
+### Why lat/lng is NULL
+
+`inspector_capacity_view` joins shift addresses to the geocode cache using an **exact string match**:
+
+```sql
+LEFT JOIN mapbox_coords_cache mcc
+  ON mcc.normalized_address = lower(trim(ss.address)) || ', danmark'
+```
+
+But `mapbox_coords_cache.normalized_address` is written by the geocoding Edge Function using a **different normalisation** — it strips Danish floor/door segments (`stripFloorDoor`) before storing. So the cache contains:
+
+- `skovvejen 15, 8000 aarhus c, danmark`
+- `amaliegade 20b, 8000 aarhus c, danmark`
+
+…but the view looks for:
+
+- `skovvejen 15, 2. 5, 8000 aarhus c, danmark`
+- `amaliegade 20b, 2. 2, 8000 aarhus c, danmark`
+
+No match → NULL → shift dropped from the map. The base address (Amaliegade 20B without floor/door) happens to match verbatim, which is why that one row succeeds.
+
+The pattern is: any shift whose address contains a floor/door segment (`, 2. 5`, `, 1. 3`, `, 2. 2`, `, st. tv`, etc.) will always miss the cache, even after successful geocoding — which is why the same 3 keep disappearing.
+
+### Where the fix belongs (for a follow-up build turn)
+
+Two symmetrical options, only one is needed:
+
+1. **Fix the view's join key** to strip floor/door before matching (mirror `stripFloorDoor` + append `, danmark`). This aligns the view with the writer and immediately un-hides the 3 shifts with no re-geocoding.
+2. **Also** (recommended in addition) write a small helper SQL function `normalize_dk_address(text)` used by both the view and any future geocoder path, so drift can't recur.
+
+No frontend change is needed — the map's `typeof number` filter is correct; it just never received coordinates for those rows.
+
+## Deliverable of this turn
+
+This is investigation only, per the request. No code changes proposed for approval yet — confirm you want me to fix it via option 1 (patch the view) or option 1 + 2 (view + shared normaliser), and I will write the migration in the next turn.
