@@ -1543,6 +1543,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      normalize_dk_address: { Args: { addr: string }; Returns: string }
       ping_vrp_worker: { Args: never; Returns: undefined }
       promote_user: { Args: { target_email: string }; Returns: undefined }
       reassign_inspector_manual: {
