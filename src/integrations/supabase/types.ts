@@ -941,6 +941,33 @@ export type Database = {
           },
         ]
       }
+      rapport_errors: {
+        Row: {
+          address: string | null
+          created_at: string | null
+          email_sent: boolean | null
+          errors: string[] | null
+          id: string
+          report_type: string | null
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string | null
+          email_sent?: boolean | null
+          errors?: string[] | null
+          id?: string
+          report_type?: string | null
+        }
+        Update: {
+          address?: string | null
+          created_at?: string | null
+          email_sent?: boolean | null
+          errors?: string[] | null
+          id?: string
+          report_type?: string | null
+        }
+        Relationships: []
+      }
       role_mappings: {
         Row: {
           role_id: string | null
