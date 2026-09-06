@@ -1,18 +1,18 @@
 ## Plan
 
-Change the existing `Sync vagter` button on `/planlaeg-syn` to `Sync data` and have it run both sync operations in parallel for the selected date.
+Opret en ny admin-bruger: **august@profsyn.dk** med den valgte adgangskode, så August kan logge ind med det samme — uden e-mailbekræftelse.
 
-## Changes
+## Trin
 
-- `src/pages/PlanlaegSyn.tsx`
-  - Rename button label `Sync vagter` → `Sync data` (keep the same icon and loading spinner, update the `title` tooltip accordingly).
-  - Update `handleSyncShifts` (rename to `handleSyncData`) to run in parallel:
-    - `supabase.functions.invoke("sync-workfeed-shifts", { body: { startDate: selectedDate, endDate: selectedDate } })`
-    - `fetch(workfeed-ingest-availability?from=<selectedDate ISO start>&to=<selectedDate ISO end>, POST, Bearer <session token>)` — same call pattern already used on `/availability`.
-  - Use `Promise.allSettled` so a failure in one doesn't block the other; show a single toast summarising `Synkroniseret X vagter og Y tilgængelighedsposter` (or a partial error toast if one side fails).
-  - After completion, invalidate: `existing-scheduled-inspections`, `planlaeg-inspectors`.
-  - Reuse the existing `isSyncing` state — no new button, no new state.
+1. Mint en admin-session for en eksisterende admin-bruger (via `lovable auth-session --json --user <uuid>`), så jeg kan kalde den eksisterende `admin-create-user` edge function, som kræver et admin-login.
+2. Kald `admin-create-user` med:
+   - email: `august@profsyn.dk`
+   - password: den angivne adgangskode
+   - `email_confirm: true` er indbygget i funktionen — ingen e-mailflow.
+   - Funktionen opretter også automatisk en række i `profiles` via den eksisterende `handle_new_user`-trigger.
+3. Giv admin-rolle: kør `select public.promote_user('august@profsyn.dk')` (eksisterende security-definer-funktion, der indsætter i `user_roles`).
+4. Bekræft resultatet: verificér at brugeren findes i `auth.users` og har `admin`-rollen i `user_roles`.
 
-## Out of scope
+## Ingen kodeændringer
 
-- No changes to Edge Functions, DB schema, `/availability` page, normalizer, or geocoding.
+Alt genbruger eksisterende funktioner (`admin-create-user`, `promote_user`). Ingen ændringer i appen eller databasens struktur.
