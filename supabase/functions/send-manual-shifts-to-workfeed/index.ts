@@ -1,5 +1,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// 2026-10-07: Beskyttelse mod dobbeltbooking. Et syn sendes ikke til WorkFeed,
+// hvis det allerede er sendt, eller hvis samme Monday-item allerede er sendt for samme dato.
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -47,7 +50,7 @@ interface ManualShiftRequest {
 interface AssignmentResult {
   monday_item_id: number;
   wf_shift_id: string | null;
-  status: "success" | "failed";
+  status: "success" | "failed" | "skipped";
   monday_synced: boolean;
   error?: string;
 }
@@ -72,10 +75,10 @@ function localTimeToUTC(date: string, time: string): { date: string; time: strin
   const timeParts = time.split(":");
   const hours = parseInt(timeParts[0], 10);
   const minutes = parseInt(timeParts[1], 10);
-  
+
   // Create a date object for the given local time to check DST
   const testDate = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
-  
+
   // Use Intl to determine the timezone offset for Copenhagen on this date
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone: "Europe/Copenhagen",
@@ -83,7 +86,7 @@ function localTimeToUTC(date: string, time: string): { date: string; time: strin
   });
   const parts = formatter.formatToParts(testDate);
   const offsetPart = parts.find((p) => p.type === "timeZoneName")?.value || "GMT+1";
-  
+
   // Parse offset (e.g., "GMT+1" or "GMT+2")
   const offsetMatch = offsetPart.match(/GMT([+-])(\d+)/);
   let offsetHours = 1; // Default to +1 (winter time)
@@ -91,13 +94,13 @@ function localTimeToUTC(date: string, time: string): { date: string; time: strin
     const sign = offsetMatch[1] === "+" ? 1 : -1;
     offsetHours = sign * parseInt(offsetMatch[2], 10);
   }
-  
+
   // Calculate UTC time by subtracting the offset
   let utcHours = hours - offsetHours;
   let utcDay = day;
   let utcMonth = month;
   let utcYear = year;
-  
+
   // Handle day wraparound for early morning times
   if (utcHours < 0) {
     utcHours += 24;
@@ -124,10 +127,10 @@ function localTimeToUTC(date: string, time: string): { date: string; time: strin
       }
     }
   }
-  
+
   const utcDateStr = `${utcYear}-${String(utcMonth).padStart(2, "0")}-${String(utcDay).padStart(2, "0")}`;
   const utcTimeStr = `${String(utcHours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:00`;
-  
+
   return { date: utcDateStr, time: utcTimeStr };
 }
 
@@ -146,12 +149,12 @@ async function updateMondayItem(
 
   try {
     const normalizedTime = normalizeTime(startTime);
-    
+
     // Convert local Copenhagen time to UTC for Monday.com
     const utc = localTimeToUTC(date, normalizedTime);
-    
+
     console.log(`[monday-sync] Time conversion: local ${date} ${normalizedTime} → UTC ${utc.date} ${utc.time}`);
-    
+
     const columnValues = {
       text_mkyw2jhq: inspectorName,
       date5: { date: utc.date, time: utc.time },
@@ -346,11 +349,12 @@ Deno.serve(async (req) => {
     const results: AssignmentResult[] = [];
     let successCount = 0;
     let failedCount = 0;
+    let skippedCount = 0;
     let mondaySyncedCount = 0;
 
     for (const assignment of assignments) {
       let mondaySynced = false;
-      
+
       try {
         console.log(`[send-manual-shifts] Processing monday_item_id: ${assignment.monday_item_id}`);
 
@@ -363,6 +367,45 @@ Deno.serve(async (req) => {
 
         if (mondayError || !mondayItem) {
           throw new Error(`Monday item not found: ${mondayError?.message}`);
+        }
+
+        // 1b. Beskyttelse mod dobbeltbooking
+        if (mondayItem.wf_shift_id) {
+          console.warn(`[send-manual-shifts] ⏭️ monday_item_id ${assignment.monday_item_id} er allerede sendt (${mondayItem.wf_shift_id}) – springes over`);
+          results.push({
+            monday_item_id: assignment.monday_item_id,
+            wf_shift_id: mondayItem.wf_shift_id,
+            status: "skipped",
+            monday_synced: false,
+            error: "Synet er allerede sendt til WorkFeed",
+          });
+          skippedCount++;
+          continue;
+        }
+
+        if (mondayItem.item_id) {
+          const { data: alreadySent } = await supabase
+            .from("monday_items_selected")
+            .select("id, wf_shift_id, scheduled_inspector_name")
+            .eq("item_id", mondayItem.item_id)
+            .eq("scheduled_date", assignment.date)
+            .not("wf_shift_id", "is", null)
+            .neq("id", mondayItem.id)
+            .limit(1);
+
+          if (alreadySent && alreadySent.length > 0) {
+            const who = alreadySent[0].scheduled_inspector_name || "en anden konsulent";
+            console.warn(`[send-manual-shifts] ⏭️ Monday-item ${mondayItem.item_id} er allerede sendt for ${assignment.date} (${who}) – dublet springes over`);
+            results.push({
+              monday_item_id: assignment.monday_item_id,
+              wf_shift_id: null,
+              status: "skipped",
+              monday_synced: false,
+              error: `Synet er allerede sendt for ${assignment.date} (${who})`,
+            });
+            skippedCount++;
+            continue;
+          }
         }
 
         // 2. Fetch inspector with department
@@ -506,13 +549,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`[send-manual-shifts] Completed: ${successCount} success, ${failedCount} failed, ${mondaySyncedCount} monday synced`);
+    console.log(`[send-manual-shifts] Completed: ${successCount} success, ${failedCount} failed, ${skippedCount} skipped, ${mondaySyncedCount} monday synced`);
 
     return new Response(
       JSON.stringify({
         success: failedCount === 0,
         sent: successCount,
         failed: failedCount,
+        skipped: skippedCount,
         monday_synced: mondaySyncedCount,
         results,
       }),

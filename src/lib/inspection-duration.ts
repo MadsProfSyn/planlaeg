@@ -46,36 +46,36 @@ async function ensureCacheLoaded(): Promise<void> {
   if (fetchPromise) return fetchPromise;
 
   fetchPromise = (async () => {
+    let ok = false;
     try {
       const [durRes, modRes] = await Promise.all([
         supabase.from("inspection_durations").select("*"),
         (supabase as any).from("inspection_duration_modifiers").select("*"),
       ]);
 
-      if (durRes.data && durRes.data.length > 0) {
+      if (!durRes.error && durRes.data && durRes.data.length > 0) {
         const m: Record<string, Record<number, number>> = {};
         for (const row of durRes.data) {
           if (!m[row.inspection_type]) m[row.inspection_type] = {};
           m[row.inspection_type][row.rooms] = row.minutes;
         }
         cachedMatrix = m;
-      } else {
-        cachedMatrix = FALLBACK_MATRIX;
       }
 
-      if (modRes.data && (modRes.data as any[]).length > 0) {
+      if (!modRes.error && modRes.data && (modRes.data as any[]).length > 0) {
         const mods: Record<string, { minutes: number; applies_to: string[] }> = {};
         for (const row of modRes.data as any[]) {
           mods[row.modifier_name] = { minutes: row.minutes, applies_to: row.applies_to };
         }
         cachedModifiers = mods;
-      } else {
-        cachedModifiers = FALLBACK_MODIFIERS;
       }
+
+      ok = !!(cachedMatrix && cachedModifiers);
     } catch {
-      cachedMatrix = FALLBACK_MATRIX;
-      cachedModifiers = FALLBACK_MODIFIERS;
+      ok = false;
     }
+    // Allow a later call to retry if not fully loaded
+    if (!ok) fetchPromise = null;
   })();
 
   return fetchPromise;

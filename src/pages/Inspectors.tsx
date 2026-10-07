@@ -251,7 +251,7 @@ export default function Inspectors() {
       
       toast({
         title: "Synkronisering fuldført",
-        description: `${data.new_inspectors_created} oprettet, ${data.inspectors_deactivated || 0} deaktiveret`
+        description: `${data.new_inspectors_created} oprettet, ${data.inspectors_deactivated || 0} deaktiveret, ${data.phones_updated || 0} telefonnumre og ${data.addresses_updated || 0} adresser opdateret fra WorkFeed`
       });
       
       queryClient.invalidateQueries({ queryKey: ["inspectors"] });

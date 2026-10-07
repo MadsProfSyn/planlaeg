@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { clearDurationCache, preloadDurationCache } from '@/lib/inspection-duration';
 
 interface Profile {
   id: string;
@@ -49,6 +50,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(session?.user ?? null);
           setLoading(false);
           return;
+        }
+
+        if (event === 'SIGNED_IN' || (event === 'INITIAL_SESSION' && session)) {
+          clearDurationCache();
+          preloadDurationCache();
+        } else if (event === 'SIGNED_OUT') {
+          clearDurationCache();
         }
 
         setSession(session);

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
 import { Search, X } from "lucide-react";
@@ -15,6 +16,7 @@ interface InspectionsPanelProps {
   isLoading: boolean;
   selectedIds: number[];
   onSelect: (id: number) => void;
+  onSelectMany: (ids: number[]) => void;
   hiddenIds?: Set<number>;
   isDragActive?: boolean;
 }
@@ -122,10 +124,12 @@ export function InspectionsPanel({
   isLoading,
   selectedIds,
   onSelect,
+  onSelectMany,
   hiddenIds,
   isDragActive,
 }: InspectionsPanelProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [countInput, setCountInput] = useState("");
 
   const visibleInspections = hiddenIds
     ? inspections.filter((i) => !hiddenIds.has(i.id))
@@ -139,6 +143,14 @@ export function InspectionsPanel({
     );
   }, [visibleInspections, searchQuery]);
 
+  const count = parseInt(countInput, 10);
+  const canSelectCount = !isNaN(count) && count > 0 && filteredInspections.length > 0;
+
+  const handleSelectCount = () => {
+    if (!canSelectCount) return;
+    onSelectMany(filteredInspections.slice(0, count).map((i) => i.id));
+  };
+
   return (
     <Card className="flex flex-col h-full min-h-0 overflow-hidden">
       <CardHeader className="pb-3 flex-shrink-0 space-y-2">
@@ -151,6 +163,42 @@ export function InspectionsPanel({
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"
           />
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Input
+            type="number"
+            placeholder="Antal"
+            min={1}
+            max={filteredInspections.length}
+            value={countInput}
+            onChange={(e) => setCountInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleSelectCount();
+              }
+            }}
+            className="w-20 h-9"
+          />
+          <Button size="sm" variant="outline" onClick={handleSelectCount} disabled={!canSelectCount}>
+            Vælg
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => onSelectMany(filteredInspections.map((i) => i.id))}
+            disabled={filteredInspections.length === 0}
+          >
+            Vælg alle
+          </Button>
+          {selectedIds.length > 0 && (
+            <>
+              <span className="text-xs text-muted-foreground">{selectedIds.length} valgt</span>
+              <Button size="sm" variant="ghost" onClick={() => onSelectMany([])}>
+                Ryd valg
+              </Button>
+            </>
+          )}
         </div>
       </CardHeader>
       <CardContent className="flex-1 min-h-0 overflow-hidden p-0">

@@ -1554,6 +1554,10 @@ export type Database = {
         }
         Returns: Json
       }
+      replace_shifts_window: {
+        Args: { p_from: string; p_rows: Json; p_to: string }
+        Returns: number
+      }
       save_vrp_solution: {
         Args: {
           p_assignments: Json
@@ -1585,8 +1589,6 @@ export type Database = {
         }
         Returns: Json
       }
-      show_limit: { Args: never; Returns: number }
-      show_trgm: { Args: { "": string }; Returns: string[] }
       sync_workfeed_availability_stub: { Args: never; Returns: undefined }
     }
     Enums: {
