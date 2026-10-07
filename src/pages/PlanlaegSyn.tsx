@@ -65,6 +65,11 @@ export default function PlanlaegSyn() {
   const [selectedInspectionIds, setSelectedInspectionIds] = useState<number[]>([]);
   const [selectedInspectorId, setSelectedInspectorId] = useState<string | null>(null);
 
+  // Clear selection when date or landsdel changes
+  useEffect(() => {
+    setSelectedInspectionIds([]);
+  }, [selectedDate, selectedLandsdel]);
+
   // NEW assignments state (drag-dropped by user)
   const [newAssignments, setNewAssignments] = useState<Map<string, MondayItem[]>>(new Map());
 
@@ -709,45 +714,32 @@ export default function PlanlaegSyn() {
           throw new Error("Edge function error");
         }
 
-        if (!data?.success && data?.failed > 0) {
-          toast.error(`${data.failed} inspektion${data.failed !== 1 ? "er" : ""} fejlede`);
-        } else {
+        const sent = data?.sent || 0;
+        const skipped = data?.skipped || 0;
+        const failed = data?.failed || 0;
+
+        if (sent > 0) {
           toast.success(
-            `${data.sent} ny${data.sent !== 1 ? "e" : ""} inspektion${data.sent !== 1 ? "er" : ""} sendt til WorkFeed`,
+            `${sent} ny${sent !== 1 ? "e" : ""} inspektion${sent !== 1 ? "er" : ""} sendt til WorkFeed`,
           );
+        }
+        if (skipped > 0) {
+          toast.info(`${skipped} syn var allerede sendt til WorkFeed og blev ikke sendt igen`);
+        }
+        if (failed > 0) {
+          const firstFailed = Array.isArray(data?.results)
+            ? data.results.find((r: any) => r.status === "failed")
+            : null;
+          toast.error(`${failed} inspektion(er) fejlede: ${firstFailed?.error || "Ukendt fejl"}`);
+        }
 
-          // Insert shifts locally into supabase_shifts for immediate visibility
-          if (data.results && Array.isArray(data.results)) {
-            const shiftsToInsert = data.results
-              .filter((r: any) => r.success && r.wf_shift_id)
-              .map((r: any) => {
-                const assignment = payload.assignments.find((a) => a.monday_item_id === r.monday_item_id);
-                const inspector = inspectors.find((i) => i.inspector_uuid === assignment?.inspector_id);
-
-                return {
-                  wf_shift_id: r.wf_shift_id,
-                  wf_employee_id: r.wf_employee_id || "",
-                  inspector_id: assignment?.inspector_id || "",
-                  inspector_name: inspector?.navn || "",
-                  department: inspector?.afdeling || "Unknown",
-                  type: "Syn",
-                  status: "RELEASED",
-                  date_local: sendDate,
-                  start_time_local: assignment?.start_time || null,
-                  end_time_local: assignment?.end_time || null,
-                  wf_role_id: r.wf_role_id || null,
-                  inspection_queue_id: null,
-                  sync_status: "synced",
-                };
-              });
-
-            if (shiftsToInsert.length > 0) {
-              const { error: insertError } = await supabase.from("supabase_shifts").insert(shiftsToInsert);
-              if (insertError) {
-                console.warn("Failed to insert shifts locally (will sync later):", insertError);
-              }
-            }
-          }
+        // Sync shifts from WorkFeed before clearing pending state
+        try {
+          await supabase.functions.invoke("sync-workfeed-shifts", {
+            body: { startDate: sendDate, endDate: sendDate },
+          });
+        } catch (syncError) {
+          console.warn("Sync after send failed:", syncError);
         }
 
         // Clear pending state and refresh queries
@@ -756,15 +748,6 @@ export default function PlanlaegSyn() {
         queryClient.invalidateQueries({ queryKey: ["planlaeg-inspections"] });
         queryClient.invalidateQueries({ queryKey: ["existing-scheduled-inspections"] });
         queryClient.invalidateQueries({ queryKey: ["planlaeg-inspectors"] });
-
-        // Background sync - fire and forget
-        supabase.functions.invoke("sync-workfeed-shifts", {
-          body: { startDate: sendDate, endDate: sendDate },
-        }).then(() => {
-          queryClient.invalidateQueries({ queryKey: ["planlaeg-inspectors"] });
-        }).catch((syncError) => {
-          console.warn("Background sync failed:", syncError);
-        });
       })
       .catch((err) => {
         console.error("Send to WorkFeed error:", err);
@@ -860,6 +843,7 @@ export default function PlanlaegSyn() {
               isLoading={isLoadingInspections}
               selectedIds={selectedInspectionIds}
               onSelect={handleInspectionSelect}
+              onSelectMany={setSelectedInspectionIds}
               hiddenIds={assignedInspectionIds}
               isDragActive={activeDragId !== null}
             />
