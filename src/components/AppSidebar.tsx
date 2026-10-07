@@ -12,10 +12,12 @@ import {
   ChevronRight,
   Clock,
   LogOut,
+  Activity,
 } from "lucide-react";
 import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSystemStatus } from "@/hooks/useSystemStatus";
 import {
   Sidebar,
   SidebarContent,
@@ -89,6 +91,11 @@ const navigationItems = [
     adminOnly: true,
     hidden: true,
   },
+  {
+    title: "Systemstatus",
+    url: "/systemstatus",
+    icon: Activity,
+  },
 ];
 
 const adminNavigationItems = [
@@ -122,6 +129,7 @@ export function AppSidebar() {
   const { hasRole, profile, signOut } = useAuth();
   const location = useLocation();
   const { inspectorCount: warningCount } = useInspectorWarnings();
+  const { worstStatus: systemStatus } = useSystemStatus();
   const { state } = useSidebar();
   const isCollapsed = state === "collapsed";
   const isOnAdminRoute = location.pathname.startsWith("/admin");
@@ -186,6 +194,12 @@ export function AppSidebar() {
                           >
                             {warningCount}
                           </span>
+                        )}
+                        {item.url === "/systemstatus" && systemStatus !== "ok" && (
+                          <span
+                            className={`ml-auto h-2 w-2 shrink-0 rounded-full ${systemStatus === "error" ? "bg-red-500" : "bg-amber-500"}`}
+                            title={systemStatus === "error" ? "Noget kræver opmærksomhed" : "Der er advarsler"}
+                          />
                         )}
                       </NavLink>
                     </SidebarMenuButton>
