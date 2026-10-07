@@ -660,6 +660,36 @@ export type Database = {
         }
         Relationships: []
       }
+      integration_events: {
+        Row: {
+          action: string
+          created_at: string
+          id: number
+          item_id: number | null
+          message: string | null
+          ok: boolean
+          source: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: number
+          item_id?: number | null
+          message?: string | null
+          ok?: boolean
+          source: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: number
+          item_id?: number | null
+          message?: string | null
+          ok?: boolean
+          source?: string
+        }
+        Relationships: []
+      }
       job_queue: {
         Row: {
           completed_at: string | null
@@ -1530,6 +1560,17 @@ export type Database = {
           label: string | null
           priority: number | null
           warning: string | null
+        }
+        Relationships: []
+      }
+      system_status: {
+        Row: {
+          detail: string | null
+          key: string | null
+          label: string | null
+          last_at: string | null
+          sort_order: number | null
+          status: string | null
         }
         Relationships: []
       }
