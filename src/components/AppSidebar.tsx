@@ -28,7 +28,9 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarTrigger,
+  useSidebar,
 } from "@/components/ui/sidebar";
+import { useInspectorWarnings } from "@/hooks/useInspectorWarnings";
 import {
   Collapsible,
   CollapsibleContent,
@@ -119,6 +121,9 @@ const adminNavigationItems = [
 export function AppSidebar() {
   const { hasRole, profile, signOut } = useAuth();
   const location = useLocation();
+  const { inspectorCount: warningCount } = useInspectorWarnings();
+  const { state } = useSidebar();
+  const isCollapsed = state === "collapsed";
   const isOnAdminRoute = location.pathname.startsWith("/admin");
   const [adminOpen, setAdminOpen] = useState(isOnAdminRoute);
 
@@ -163,8 +168,25 @@ export function AppSidebar() {
                             : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                         }
                       >
-                        <item.icon className="h-4 w-4" />
+                        {item.url === "/inspectors" && warningCount > 0 ? (
+                          <span className="relative inline-flex">
+                            <item.icon className="h-4 w-4" />
+                            {isCollapsed && (
+                              <span className="absolute -right-1 -top-1 h-2 w-2 rounded-full bg-amber-500" title={`${warningCount} synskonsulenter kræver handling`} />
+                            )}
+                          </span>
+                        ) : (
+                          <item.icon className="h-4 w-4" />
+                        )}
                         <span>{item.title}</span>
+                        {item.url === "/inspectors" && warningCount > 0 && !isCollapsed && (
+                          <span
+                            className="ml-auto rounded-full bg-amber-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-background"
+                            title={`${warningCount} synskonsulenter kræver handling`}
+                          >
+                            {warningCount}
+                          </span>
+                        )}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
