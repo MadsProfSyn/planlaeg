@@ -2,6 +2,10 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 
+// 2026-10-07: Vagterne hentes, geokodes og skrives nu i ét hug (RPC replace_shifts_window),
+// så bookede vagter ikke forsvinder i planlæggeren mens synkroniseringen kører.
+// Adresser slås op i cachen samlet i stedet for én ad gangen (fra ~90 sek. til få sekunder).
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -53,26 +57,64 @@ function stripFloorDoor(address: string): string {
     .trim();
 }
 
-// Geocode an address using Mapbox with caching.
-// Token is read per-invocation (not at module load) so a cold deploy never silently fails.
 type GeocodeOutcome =
   | { status: "success"; lat: number; lng: number; source: "cache" | "mapbox" }
   | { status: "failed"; reason: string }
   | { status: "no_address" };
 
+type CacheMap = Map<string, { lat: number; lon: number }>;
+
+// Hent alle relevante cache-nøgler i få kald (i stedet for 2 kald pr. vagt)
+async function loadCoordsCache(
+  supabase: ReturnType<typeof createClient>,
+  addresses: string[],
+): Promise<CacheMap> {
+  const keys = new Set<string>();
+  for (const a of addresses) {
+    keys.add(rawNormalizeAddress(a));
+    keys.add(normalizeAddress(a));
+  }
+  const all = [...keys];
+  const cache: CacheMap = new Map();
+  const CHUNK = 50;
+  for (let i = 0; i < all.length; i += CHUNK) {
+    const chunk = all.slice(i, i + CHUNK);
+    const { data, error } = await supabase
+      .from("mapbox_coords_cache")
+      .select("normalized_address, lat, lon")
+      .in("normalized_address", chunk);
+    if (error) {
+      console.warn(`Cache lookup failed for chunk ${i / CHUNK}: ${error.message}`);
+      continue;
+    }
+    for (const r of data || []) {
+      if (r.lat && r.lon) cache.set(r.normalized_address, { lat: r.lat, lon: r.lon });
+    }
+  }
+  return cache;
+}
+
+// Geocode an address using Mapbox with caching.
+// If a preloaded cache map is given it is used first; otherwise the database cache is queried.
 async function geocodeAddress(
   supabase: ReturnType<typeof createClient>,
   address: string | null,
   mapboxToken: string,
+  preloaded?: CacheMap,
 ): Promise<GeocodeOutcome> {
   if (!address) return { status: "no_address" };
 
   const rawKey = rawNormalizeAddress(address);
   const strippedKey = normalizeAddress(address);
+  const keysToTry = rawKey === strippedKey ? [rawKey] : [rawKey, strippedKey];
 
   // Cache-first under BOTH conventions: legacy (raw, floor/door intact) then stripped.
-  const keysToTry = rawKey === strippedKey ? [rawKey] : [rawKey, strippedKey];
   for (const key of keysToTry) {
+    if (preloaded) {
+      const hit = preloaded.get(key);
+      if (hit) return { status: "success", lat: hit.lat, lng: hit.lon, source: "cache" };
+      continue;
+    }
     const { data: cached } = await supabase
       .from("mapbox_coords_cache")
       .select("lat, lon")
@@ -107,6 +149,9 @@ async function geocodeAddress(
             { normalized_address: rawKey, lat, lon: lng, updated_at: now },
           ];
       await supabase.from("mapbox_coords_cache").upsert(rows, { onConflict: "normalized_address" });
+      if (preloaded) {
+        for (const r of rows) preloaded.set(r.normalized_address, { lat, lon: lng });
+      }
 
       return { status: "success", lat, lng, source: "mapbox" };
     }
@@ -132,9 +177,9 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
-    const { startDate, endDate } = await req.json();
+    const { startDate, endDate } = await req.json().catch(() => ({}));
 
-    // Default to today + 90 days ahead (extended from 45 for better future coverage)
+    // Default to today + 90 days ahead
     const today = new Date();
     const todayStr = today.toISOString().split("T")[0];
     const ninetyDaysLater = new Date();
@@ -144,10 +189,9 @@ serve(async (req) => {
     const fromDate = startDate || todayStr;
     const toDate = endDate || defaultEndDate;
 
-    console.log(`Syncing shifts for ${fromDate} to ${toDate} (CLEAN-SLATE mode)`);
+    console.log(`Syncing shifts for ${fromDate} to ${toDate} (atomic replace)`);
 
     // Build inspector lookup map
-    console.log("Loading inspector mappings...");
     const { data: inspectors, error: inspectorsError } = await supabaseClient
       .from("inspectors")
       .select("id, full_name, wf_employee_id")
@@ -164,27 +208,21 @@ serve(async (req) => {
         name: inspector.full_name,
       });
     }
-    console.log(`Loaded ${inspectorMap.size} inspector mappings`);
 
     // Load department mappings
-    console.log("Loading department mappings...");
     const { data: departments } = await supabaseClient.from("departments").select("wf_department_id, name");
-
     const departmentMap = new Map();
     for (const dept of departments || []) {
       departmentMap.set(dept.wf_department_id, dept.name);
     }
-    console.log(`Loaded ${departmentMap.size} department mappings`);
 
     // Load role mappings
-    console.log("Loading role mappings...");
     const { data: roleMappings } = await supabaseClient.from("role_mappings").select("wf_role_id, wf_role_name");
-
     const roleMap = new Map();
     for (const role of roleMappings || []) {
       roleMap.set(role.wf_role_id, role.wf_role_name);
     }
-    console.log(`Loaded ${roleMap.size} role mappings`);
+    console.log(`Loaded ${inspectorMap.size} inspectors, ${departmentMap.size} departments, ${roleMap.size} roles`);
 
     // Fetch shifts from Workfeed API
     const workfeedApiKey = Deno.env.get("WORKFEED_API_KEY");
@@ -220,41 +258,36 @@ serve(async (req) => {
     }
 
     const workfeedData = await workfeedResponse.json();
-    console.log(`Received ${workfeedData.length || 0} shifts from Workfeed`);
-
-    // CLEAN-SLATE: Delete all existing shifts for this date range
-    console.log(`Deleting existing shifts from ${fromDate} to ${toDate}...`);
-    const { error: deleteError } = await supabaseClient
-      .from("supabase_shifts")
-      .delete()
-      .gte("date_local", fromDate)
-      .lte("date_local", toDate);
-
-    if (deleteError) {
-      console.error("Failed to delete existing shifts:", deleteError);
-      throw new Error(`Failed to delete existing shifts: ${deleteError.message}`);
+    if (!Array.isArray(workfeedData)) {
+      // Afbryd uden at røre eksisterende vagter, hvis WorkFeed svarer med noget uventet
+      throw new Error(`Unexpected WorkFeed response (not an array)`);
     }
-    console.log("Successfully deleted existing shifts for date range");
+    console.log(`Received ${workfeedData.length} shifts from Workfeed`);
 
-    let synced = 0;
+    // Preload coordinates cache for all addresses in one go
+    const allAddresses = workfeedData
+      .map((s) => extractAddress(s.comment))
+      .filter((a): a is string => !!a);
+    const coordsCache = await loadCoordsCache(supabaseClient, allAddresses);
+    console.log(`Preloaded ${coordsCache.size} cached coordinates for ${allAddresses.length} addresses`);
+
     let unmapped = 0;
     let errors = 0;
     let addressesExtracted = 0;
     let geocoded = 0;
     let geocodeFailed = 0;
     let noAddress = 0;
+    let mapboxCalls = 0;
 
-    // Process each shift from WorkFeed
+    const rowsById = new Map<string, Record<string, unknown>>();
+
     for (const shift of workfeedData) {
       try {
-        // Skip unassigned shifts
         if (!shift.employeeID) {
-          console.warn(`Shift ${shift.id} missing employeeID - skipping (unassigned)`);
           unmapped++;
           continue;
         }
 
-        // Look up inspector
         const inspector = inspectorMap.get(shift.employeeID);
         if (!inspector) {
           console.warn(`No inspector found for wf_employee_id: ${shift.employeeID} (shift: ${shift.id})`);
@@ -262,7 +295,6 @@ serve(async (req) => {
           continue;
         }
 
-        // Convert times
         let startTimeLocal = null;
         let endTimeLocal = null;
         let duration = null;
@@ -277,21 +309,14 @@ serve(async (req) => {
           }
         }
 
-        // Extract date
         const dateLocal = shift.start ? shift.start.split("T")[0] : fromDate;
-
-        // Get mappings
         const departmentName = departmentMap.get(shift.departmentID) || "Unknown";
         const roleAbbreviation = roleMap.get(shift.roleID) || "Unknown";
 
-        // Extract address
         const address = extractAddress(shift.comment);
-        if (address) {
-          addressesExtracted++;
-        }
+        if (address) addressesExtracted++;
 
-        // Geocode the address (cache-first; observable outcome)
-        const outcome = await geocodeAddress(supabaseClient, address, mapboxToken);
+        const outcome = await geocodeAddress(supabaseClient, address, mapboxToken, coordsCache);
         let lat: number | null = null;
         let lng: number | null = null;
         let geocodeStatus: "success" | "failed" | "no_address" = "no_address";
@@ -301,20 +326,18 @@ serve(async (req) => {
           geocodeStatus = "success";
           geocoded++;
           if (outcome.source === "mapbox") {
-            // Rate-limit only real Mapbox calls
-            await new Promise(resolve => setTimeout(resolve, 100));
+            mapboxCalls++;
+            await new Promise((resolve) => setTimeout(resolve, 100)); // rate-limit only real Mapbox calls
           }
         } else if (outcome.status === "failed") {
           geocodeStatus = "failed";
           geocodeFailed++;
           console.warn(`Shift ${shift.id} geocode failed (${outcome.reason}) for "${address}"`);
         } else {
-          geocodeStatus = "no_address";
           noAddress++;
         }
 
-        // Prepare shift data
-        const shiftData = {
+        rowsById.set(shift.id, {
           wf_shift_id: shift.id,
           wf_employee_id: shift.employeeID,
           inspector_id: inspector.id,
@@ -333,25 +356,27 @@ serve(async (req) => {
           lat,
           lng,
           geocode_status: geocodeStatus,
-        };
-
-        // Insert the shift
-        const { error: insertError } = await supabaseClient.from("supabase_shifts").insert(shiftData);
-
-        if (insertError) {
-          console.error("Error inserting shift:", insertError);
-          errors++;
-        } else {
-          synced++;
-          if (synced <= 3) {
-            console.log(`✓ Synced ${roleAbbreviation} shift for ${inspector.name} at ${address || "no address"}`);
-          }
-        }
+        });
       } catch (shiftError) {
         console.error("Error processing shift:", shiftError);
         errors++;
       }
     }
+
+    const rows = [...rowsById.values()];
+
+    // Atomic replace: delete + insert in one database transaction
+    const { data: written, error: replaceError } = await supabaseClient.rpc("replace_shifts_window", {
+      p_from: fromDate,
+      p_to: toDate,
+      p_rows: rows,
+    });
+
+    if (replaceError) {
+      throw new Error(`Failed to write shifts: ${replaceError.message}`);
+    }
+
+    const synced = typeof written === "number" ? written : rows.length;
 
     const response = {
       success: true,
@@ -362,12 +387,13 @@ serve(async (req) => {
       geocoded,
       geocodeFailed,
       noAddress,
-      total: workfeedData.length || 0,
+      mapboxCalls,
+      total: workfeedData.length,
       dateRange: {
         from: fromDate,
         to: toDate,
       },
-      summary: `Synced ${synced} shifts (${addressesExtracted} with addresses, ${geocoded} geocoded, ${geocodeFailed} geocode failures, ${noAddress} no address), ${unmapped} unmapped, ${errors} errors`,
+      summary: `Synced ${synced} shifts (${addressesExtracted} with addresses, ${geocoded} geocoded, ${geocodeFailed} geocode failures, ${noAddress} no address, ${mapboxCalls} Mapbox calls), ${unmapped} unmapped, ${errors} errors`,
     };
 
     console.log("Sync completed:", response);
