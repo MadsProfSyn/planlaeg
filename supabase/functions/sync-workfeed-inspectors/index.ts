@@ -308,6 +308,17 @@ serve(async (req) => {
       }
     }
 
+    // Step 5b: Gem WorkFeed-status på konsulenterne (bruges til advarsler på siden Synskonsulenter)
+    const wfActiveIds = employees.filter(emp => emp.accessLevel !== 'admin').map(emp => emp.id);
+    const wfOfficeIds = employees.filter(emp => emp.accessLevel === 'admin').map(emp => emp.id);
+    const { error: statusError } = await supabase.rpc('set_inspector_wf_status', {
+      p_active: wfActiveIds,
+      p_office: wfOfficeIds,
+    });
+    if (statusError) {
+      result.errors.push(`Error saving WorkFeed status: ${statusError.message}`);
+    }
+
     // Step 6: Geocode new/changed home addresses
     for (const id of toGeocode) {
       await triggerGeocode(supabaseUrl, supabaseServiceKey, id);

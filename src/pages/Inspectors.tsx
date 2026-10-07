@@ -33,6 +33,21 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useInspectorWarnings, type InspectorWarning } from "@/hooks/useInspectorWarnings";
+import { InspectorWarningsCard } from "@/components/inspectors/InspectorWarningsCard";
+
+const INSPECTOR_SELECT = `
+          id,
+          full_name,
+          email,
+          phone,
+          address,
+          notes,
+          is_active,
+          department_id,
+          department:departments(name),
+          inspector_skills(inspection_type, is_active)
+        `;
 
 interface InspectorWithDetails {
   id: string;
@@ -94,6 +109,7 @@ export default function Inspectors() {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { warnings, inspectorCount: warningInspectorCount } = useInspectorWarnings();
 
   const handleSort = useCallback((field: typeof sortField) => {
     if (sortField === field) {
@@ -207,8 +223,62 @@ export default function Inspectors() {
     });
   };
 
-  const handleSaveComplete = () => {
+  const refreshAfterWarningAction = () => {
     queryClient.invalidateQueries({ queryKey: ["inspectors"] });
+    queryClient.invalidateQueries({ queryKey: ["inspector-warnings"] });
+    setTimeout(() => {
+      queryClient.invalidateQueries({ queryKey: ["inspector-warnings"] });
+    }, 4000);
+  };
+
+  const handleSaveComplete = () => {
+    refreshAfterWarningAction();
+  };
+
+  const handleActivateWarning = async (w: InspectorWarning) => {
+    const { error } = await supabase
+      .from("inspectors")
+      .update({ is_active: true, ignore_wf_warning: false })
+      .eq("id", w.inspector_id);
+    if (error) {
+      toast({ title: "Fejl", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: `${w.full_name} er aktiveret igen – ledige dage hentes fra WorkFeed` });
+    supabase.functions.invoke("sync-availability-cron").then(({ error: syncError }) => {
+      if (syncError) console.warn("sync-availability-cron failed:", syncError);
+    }).catch((e) => console.warn("sync-availability-cron failed:", e));
+    refreshAfterWarningAction();
+  };
+
+  const handleIgnoreWarning = async (w: InspectorWarning) => {
+    const { error } = await supabase
+      .from("inspectors")
+      .update({ ignore_wf_warning: true })
+      .eq("id", w.inspector_id);
+    if (error) {
+      toast({ title: "Fejl", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: `Advarslen for ${w.full_name} er skjult` });
+    refreshAfterWarningAction();
+  };
+
+  const handleFixWarning = async (w: InspectorWarning) => {
+    let inspector = inspectors?.find((i) => i.id === w.inspector_id);
+    if (!inspector) {
+      const { data, error } = await supabase
+        .from("inspectors")
+        .select(INSPECTOR_SELECT)
+        .eq("id", w.inspector_id)
+        .maybeSingle();
+      if (error || !data) {
+        toast({ title: "Fejl", description: "Kunne ikke hente synskonsulent", variant: "destructive" });
+        return;
+      }
+      inspector = data as unknown as InspectorWithDetails;
+    }
+    handleEdit(inspector);
   };
 
   const handleDelete = async () => {
@@ -266,6 +336,13 @@ export default function Inspectors() {
 
   return (
     <div className="container mx-auto py-6 space-y-6">
+      <InspectorWarningsCard
+        warnings={warnings}
+        inspectorCount={warningInspectorCount}
+        onActivate={handleActivateWarning}
+        onIgnore={handleIgnoreWarning}
+        onFix={handleFixWarning}
+      />
       <Card>
         <CardHeader>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
