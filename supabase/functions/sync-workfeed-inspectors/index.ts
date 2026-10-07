@@ -47,6 +47,7 @@ interface SyncResult {
   created: Array<{ name: string; email: string | null; department: string }>;
   deactivated: Array<{ name: string; email: string | null }>;
   updated: Array<{ name: string; fields: string[] }>;
+  skipped: string[];
   errors: string[];
 }
 
@@ -70,6 +71,22 @@ function buildAddress(emp: WorkFeedEmployee): string {
   const zipCity = `${(emp.zip || '').trim()} ${(emp.city || '').trim()}`.trim();
   if (!zipCity) return '';
   return [street, zipCity].join(', ');
+}
+
+// Afdeling i ruteplanlæggeren: medarbejderens primære afdeling i WorkFeed.
+// Har medarbejderen ingen primær afdeling, bruges den første kendte afdeling blandt de øvrige
+// (ikke "Test", og ikke for administratorer/kontorpersonale).
+function resolveDepartment(
+  emp: WorkFeedEmployee,
+  deptMap: Map<string, { id: string; name: string }>,
+): { id: string; name: string } | null {
+  if (emp.primaryDepartmentID) return deptMap.get(emp.primaryDepartmentID) ?? null;
+  if (emp.accessLevel === 'admin') return null;
+  for (const id of emp.departmentIDs || []) {
+    const d = deptMap.get(id);
+    if (d && d.name.toLowerCase() !== 'test') return d;
+  }
+  return null;
 }
 
 function sameAddress(a?: string | null, b?: string | null): boolean {
@@ -111,6 +128,7 @@ serve(async (req) => {
     created: [],
     deactivated: [],
     updated: [],
+    skipped: [],
     errors: [],
   };
 
@@ -223,9 +241,10 @@ serve(async (req) => {
     for (const emp of newEmployees) {
       const fullName = `${emp.firstname} ${emp.lastname}`.trim();
       try {
-        const deptInfo = emp.primaryDepartmentID ? deptMap.get(emp.primaryDepartmentID) : null;
+        const deptInfo = resolveDepartment(emp, deptMap);
         if (!deptInfo) {
           result.skipped_no_department++;
+          result.skipped.push(fullName);
           continue;
         }
 
