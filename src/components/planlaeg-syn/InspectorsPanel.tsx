@@ -561,11 +561,13 @@ function DroppableInspector({
                   <Plus className="h-4 w-4 text-primary flex-shrink-0" />
                 )}
               </div>
-              <p className="text-xs text-muted-foreground mt-1 truncate">
+              <p className={cn("text-xs mt-1 truncate", inspector.adresse ? "text-muted-foreground" : "text-amber-600")}>
                 {inspector.adresse || "Ingen adresse"}
               </p>
               <div className="flex flex-wrap gap-1 mt-2">
-                {inspector.synstyper.map((type) => (
+                {inspector.synstyper.length === 0 ? (
+                  <span className="text-xs text-amber-600">Ingen kompetencer registreret</span>
+                ) : inspector.synstyper.map((type) => (
                   <Badge
                     key={type}
                     className={cn(
