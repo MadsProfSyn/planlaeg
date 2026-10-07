@@ -144,6 +144,13 @@ export type Database = {
             foreignKeyName: "daily_route_totals_inspector_id_fkey"
             columns: ["inspector_id"]
             isOneToOne: false
+            referencedRelation: "inspector_warnings"
+            referencedColumns: ["inspector_id"]
+          },
+          {
+            foreignKeyName: "daily_route_totals_inspector_id_fkey"
+            columns: ["inspector_id"]
+            isOneToOne: false
             referencedRelation: "inspectors"
             referencedColumns: ["id"]
           },
@@ -412,6 +419,13 @@ export type Database = {
             foreignKeyName: "inspector_availability_inspector_fk"
             columns: ["inspector_uuid"]
             isOneToOne: false
+            referencedRelation: "inspector_warnings"
+            referencedColumns: ["inspector_id"]
+          },
+          {
+            foreignKeyName: "inspector_availability_inspector_fk"
+            columns: ["inspector_uuid"]
+            isOneToOne: false
             referencedRelation: "inspectors"
             referencedColumns: ["id"]
           },
@@ -450,6 +464,13 @@ export type Database = {
             foreignKeyName: "inspector_skills_inspector_id_fkey"
             columns: ["inspector_id"]
             isOneToOne: false
+            referencedRelation: "inspector_warnings"
+            referencedColumns: ["inspector_id"]
+          },
+          {
+            foreignKeyName: "inspector_skills_inspector_id_fkey"
+            columns: ["inspector_id"]
+            isOneToOne: false
             referencedRelation: "inspectors"
             referencedColumns: ["id"]
           },
@@ -466,13 +487,16 @@ export type Database = {
           geocode_error: string | null
           geocode_status: string | null
           id: string
+          ignore_wf_warning: boolean
           is_active: boolean | null
           lat: number | null
           lng: number | null
           notes: string | null
           phone: string | null
           updated_at: string | null
+          wf_checked_at: string | null
           wf_employee_id: string | null
+          wf_status: string | null
         }
         Insert: {
           address?: string | null
@@ -484,13 +508,16 @@ export type Database = {
           geocode_error?: string | null
           geocode_status?: string | null
           id?: string
+          ignore_wf_warning?: boolean
           is_active?: boolean | null
           lat?: number | null
           lng?: number | null
           notes?: string | null
           phone?: string | null
           updated_at?: string | null
+          wf_checked_at?: string | null
           wf_employee_id?: string | null
+          wf_status?: string | null
         }
         Update: {
           address?: string | null
@@ -502,13 +529,16 @@ export type Database = {
           geocode_error?: string | null
           geocode_status?: string | null
           id?: string
+          ignore_wf_warning?: boolean
           is_active?: boolean | null
           lat?: number | null
           lng?: number | null
           notes?: string | null
           phone?: string | null
           updated_at?: string | null
+          wf_checked_at?: string | null
           wf_employee_id?: string | null
+          wf_status?: string | null
         }
         Relationships: [
           {
@@ -819,6 +849,13 @@ export type Database = {
             foreignKeyName: "monday_items_selected_scheduled_inspector_id_fkey"
             columns: ["scheduled_inspector_id"]
             isOneToOne: false
+            referencedRelation: "inspector_warnings"
+            referencedColumns: ["inspector_id"]
+          },
+          {
+            foreignKeyName: "monday_items_selected_scheduled_inspector_id_fkey"
+            columns: ["scheduled_inspector_id"]
+            isOneToOne: false
             referencedRelation: "inspectors"
             referencedColumns: ["id"]
           },
@@ -917,6 +954,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "inspections_with_planner"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposed_assignments_inspector_id_fkey"
+            columns: ["inspector_id"]
+            isOneToOne: false
+            referencedRelation: "inspector_warnings"
+            referencedColumns: ["inspector_id"]
           },
           {
             foreignKeyName: "proposed_assignments_inspector_id_fkey"
@@ -1047,6 +1091,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "shifts_inspector_id_fkey"
+            columns: ["inspector_id"]
+            isOneToOne: false
+            referencedRelation: "inspector_warnings"
+            referencedColumns: ["inspector_id"]
+          },
           {
             foreignKeyName: "shifts_inspector_id_fkey"
             columns: ["inspector_id"]
@@ -1290,6 +1341,13 @@ export type Database = {
             foreignKeyName: "fk_supabase_shifts_inspector"
             columns: ["inspector_id"]
             isOneToOne: false
+            referencedRelation: "inspector_warnings"
+            referencedColumns: ["inspector_id"]
+          },
+          {
+            foreignKeyName: "fk_supabase_shifts_inspector"
+            columns: ["inspector_id"]
+            isOneToOne: false
             referencedRelation: "inspectors"
             referencedColumns: ["id"]
           },
@@ -1463,6 +1521,18 @@ export type Database = {
         }
         Relationships: []
       }
+      inspector_warnings: {
+        Row: {
+          available_days_ahead: number | null
+          department: string | null
+          full_name: string | null
+          inspector_id: string | null
+          label: string | null
+          priority: number | null
+          warning: string | null
+        }
+        Relationships: []
+      }
       vw_postcode_to_department: {
         Row: {
           afdeling: string | null
@@ -1588,6 +1658,10 @@ export type Database = {
           p_time_ranges?: Json
         }
         Returns: Json
+      }
+      set_inspector_wf_status: {
+        Args: { p_active: string[]; p_office: string[] }
+        Returns: number
       }
       sync_workfeed_availability_stub: { Args: never; Returns: undefined }
     }
