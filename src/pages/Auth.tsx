@@ -25,6 +25,10 @@ export default function Auth() {
       navigate('/reset-password');
       return;
     }
+    if (user && !loading && user.user_metadata?.needs_password === true) {
+      navigate('/set-password');
+      return;
+    }
     if (user && !loading) {
       navigate('/alle-syn');
     }

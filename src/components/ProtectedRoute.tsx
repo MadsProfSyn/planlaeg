@@ -21,5 +21,9 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     return <Navigate to="/" replace />;
   }
 
+  if (user.user_metadata?.needs_password === true) {
+    return <Navigate to="/set-password" replace />;
+  }
+
   return <>{children}</>;
 }

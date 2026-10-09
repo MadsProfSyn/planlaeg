@@ -33,7 +33,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Search, UserPlus, UserMinus, Plus, Loader2, Trash2 } from 'lucide-react';
+import { Search, UserPlus, UserMinus, Plus, Loader2, Trash2, Mail } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { da } from 'date-fns/locale';
@@ -56,14 +56,54 @@ export default function Users() {
   } | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [createEmail, setCreateEmail] = useState('');
-  const [createPassword, setCreatePassword] = useState('');
   const [createFullName, setCreateFullName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<UserWithRoles | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [resendingId, setResendingId] = useState<string | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user: currentUser } = useAuth();
+
+  const invalidateUsers = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] }),
+      queryClient.invalidateQueries({ queryKey: ['admin-users-pending'] }),
+    ]);
+  };
+
+  const { data: pendingIds = new Set<string>() } = useQuery({
+    queryKey: ['admin-users-pending'],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('admin-create-user', {
+        body: { action: 'status' },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return new Set<string>((data?.pending ?? []).map((p: { id: string }) => p.id));
+    },
+  });
+
+  const handleResend = async (target: UserWithRoles) => {
+    setResendingId(target.id);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-create-user', {
+        body: {
+          action: 'resend',
+          user_id: target.id,
+          redirect_to: `${window.location.origin}/set-password`,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      await invalidateUsers();
+      toast({ title: adminStrings.common.success, description: `Ny invitation sendt til ${target.email}` });
+    } catch (error: any) {
+      toast({ title: adminStrings.common.error, description: error.message, variant: 'destructive' });
+    } finally {
+      setResendingId(null);
+    }
+  };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -74,7 +114,7 @@ export default function Users() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      await queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      await invalidateUsers();
       toast({ title: adminStrings.common.success, description: `Bruger ${deleteTarget.email} er slettet` });
       setDeleteTarget(null);
     } catch (error: any) {
@@ -178,24 +218,23 @@ export default function Users() {
       const { data, error } = await supabase.functions.invoke('admin-create-user', {
         body: {
           email: createEmail,
-          password: createPassword,
           full_name: createFullName || '',
+          redirect_to: `${window.location.origin}/set-password`,
         },
       });
 
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
 
-      await queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      await invalidateUsers();
 
       toast({
         title: adminStrings.common.success,
-        description: `Bruger ${createEmail} er oprettet og kan logge ind med det samme`
+        description: `Invitation sendt til ${createEmail}`
       });
 
       // Reset form and close dialog
       setCreateEmail('');
-      setCreatePassword('');
       setCreateFullName('');
       setShowCreateDialog(false);
     } catch (error: any) {
@@ -220,7 +259,7 @@ export default function Users() {
         </div>
         <Button onClick={() => setShowCreateDialog(true)} className="gap-2">
           <Plus className="h-4 w-4" />
-          Opret bruger
+          Inviter bruger
         </Button>
       </div>
 
@@ -272,6 +311,7 @@ export default function Users() {
                 ) : users && users.length > 0 ? (
                   users.map((user) => {
                     const isAdmin = user.roles.includes('admin');
+                    const isPending = pendingIds.has(user.id);
                     return (
                       <TableRow key={user.id} className="h-14 hover:bg-muted/30 transition-colors">
                         <TableCell className="font-medium">
@@ -288,6 +328,11 @@ export default function Users() {
                             <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-muted border border-muted-foreground/30">
                               Bruger
                             </span>
+                            {isPending && (
+                              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-300">
+                                Inviteret – ikke logget ind endnu
+                              </span>
+                            )}
                           </div>
                         </TableCell>
                         <TableCell>
@@ -295,6 +340,20 @@ export default function Users() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
+                          {isPending && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleResend(user)}
+                              disabled={resendingId === user.id}
+                              className="gap-2 border-2"
+                            >
+                              {resendingId === user.id
+                                ? <Loader2 className="h-4 w-4 animate-spin" />
+                                : <Mail className="h-4 w-4" />}
+                              <span className="hidden sm:inline">Send invitation igen</span>
+                            </Button>
+                          )}
                           {currentUser?.id !== user.id && (
                             <Button
                               variant="outline"
@@ -404,9 +463,9 @@ export default function Users() {
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Opret ny bruger</DialogTitle>
+            <DialogTitle>Inviter ny bruger</DialogTitle>
             <DialogDescription>
-              Opret en ny brugerkonto manuelt. Brugeren vil modtage en bekræftelsesmail.
+              Brugeren får en mail med et link, hvor de selv vælger deres kodeord.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateUser} className="space-y-4">
@@ -431,18 +490,6 @@ export default function Users() {
                 required
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="create-password">Kodeord *</Label>
-              <Input
-                id="create-password"
-                type="password"
-                placeholder="Minimum 6 tegn"
-                value={createPassword}
-                onChange={(e) => setCreatePassword(e.target.value)}
-                required
-                minLength={6}
-              />
-            </div>
             <DialogFooter>
               <Button
                 type="button"
@@ -453,7 +500,7 @@ export default function Users() {
               </Button>
               <Button type="submit" disabled={isCreating}>
                 {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Opret bruger
+                Send invitation
               </Button>
             </DialogFooter>
           </form>
