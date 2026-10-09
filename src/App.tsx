@@ -22,6 +22,7 @@ import Users from "./pages/admin/Users";
 import SynVariabler from "./pages/admin/SynVariabler";
 import NotFound from "./pages/NotFound";
 import ResetPassword from "./pages/ResetPassword";
+import SetPassword from "./pages/SetPassword";
 import { ErrorBoundary } from "@/components/utility/ErrorBoundary";
 
 const queryClient = new QueryClient();
@@ -38,6 +39,7 @@ const App = () => {
               <Routes>
                 <Route path="/" element={<Auth />} />
                 <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="/set-password" element={<SetPassword />} />
                 <Route path="/inspections" element={<ProtectedRoute><AppLayout><Inspections /></AppLayout></ProtectedRoute>} />
                 <Route path="/scheduled" element={<ProtectedRoute><AppLayout><Scheduled /></AppLayout></ProtectedRoute>} />
                 <Route path="/alle-syn" element={<ProtectedRoute><AppLayout><AlleSyn /></AppLayout></ProtectedRoute>} />
