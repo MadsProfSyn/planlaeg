@@ -33,7 +33,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Search, UserPlus, UserMinus, Plus, Loader2 } from 'lucide-react';
+import { Search, UserPlus, UserMinus, Plus, Loader2, Trash2 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { da } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -58,8 +59,30 @@ export default function Users() {
   const [createPassword, setCreatePassword] = useState('');
   const [createFullName, setCreateFullName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<UserWithRoles | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user: currentUser } = useAuth();
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-delete-user', {
+        body: { user_id: deleteTarget.id },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      await queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      toast({ title: adminStrings.common.success, description: `Bruger ${deleteTarget.email} er slettet` });
+      setDeleteTarget(null);
+    } catch (error: any) {
+      toast({ title: adminStrings.common.error, description: error.message, variant: 'destructive' });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const { data: users, isLoading } = useQuery({
     queryKey: ['admin-users', searchQuery],
@@ -271,6 +294,18 @@ export default function Users() {
                           {format(new Date(user.created_at), 'dd/MM/yyyy', { locale: da })}
                         </TableCell>
                         <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                          {currentUser?.id !== user.id && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setDeleteTarget(user)}
+                              className="gap-2 border-2 text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              <span className="hidden sm:inline">Slet</span>
+                            </Button>
+                          )}
                           {isAdmin ? (
                             <Button
                               variant="outline"
@@ -292,6 +327,7 @@ export default function Users() {
                               <span className="hidden sm:inline">{adminStrings.users.makeAdmin}</span>
                             </Button>
                           )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     );
@@ -336,6 +372,29 @@ export default function Users() {
               }}
             >
               {adminStrings.common.confirm}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete User Dialog */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && !isDeleting && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Slet bruger</AlertDialogTitle>
+            <AlertDialogDescription>
+              Er du sikker på, at du vil slette {deleteTarget?.email}? Brugeren kan ikke længere logge ind. Dette kan ikke fortrydes.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>{adminStrings.common.cancel}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); handleDelete(); }}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Slet
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
