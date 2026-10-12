@@ -26,7 +26,7 @@ serve(async (req) => {
     const response = await fetch(syncUrl, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

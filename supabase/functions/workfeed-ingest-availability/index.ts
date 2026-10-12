@@ -5,6 +5,7 @@
  */ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { Temporal } from "npm:@js-temporal/polyfill";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import { requireStaff } from '../_shared/auth.ts';
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -194,6 +195,9 @@ serve(async (req) => {
       headers: corsHeaders,
     });
   }
+
+  const denied = await requireStaff(req);
+  if (denied) return denied;
   try {
     if (req.method !== "POST") {
       return new Response(

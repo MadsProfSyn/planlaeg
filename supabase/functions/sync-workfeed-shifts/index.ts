@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import { requireStaff } from '../_shared/auth.ts';
 
 // 2026-10-07: Vagterne hentes, geokodes og skrives nu i ét hug (RPC replace_shifts_window),
 // så bookede vagter ikke forsvinder i planlæggeren mens synkroniseringen kører.
@@ -170,6 +171,9 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const denied = await requireStaff(req);
+  if (denied) return denied;
 
   try {
     const supabaseClient = createClient(

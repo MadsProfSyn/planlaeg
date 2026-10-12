@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { requireStaff } from '../_shared/auth.ts';
 
 // 2026-10-07: Beskyttelse mod dobbeltbooking. Et syn sendes ikke til WorkFeed,
 // hvis det allerede er sendt, eller hvis samme Monday-item allerede er sendt for samme dato.
@@ -328,6 +329,9 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const denied = await requireStaff(req);
+  if (denied) return denied;
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
