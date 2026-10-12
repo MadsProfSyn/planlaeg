@@ -533,6 +533,33 @@ export default function Users() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Email Failed Dialog */}
+      <Dialog open={!!emailFailedInfo} onOpenChange={(o) => !o && setEmailFailedInfo(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mailen kunne ikke sendes</DialogTitle>
+            <DialogDescription>{emailFailedInfo?.message}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <textarea
+              readOnly
+              value={emailFailedInfo?.link ?? ''}
+              onFocus={(e) => e.currentTarget.select()}
+              className="w-full h-24 resize-none rounded-md border bg-muted/30 p-2 text-xs font-mono break-all"
+            />
+            <div className="flex items-center gap-2">
+              <Button variant="outline" className="gap-2" onClick={handleCopyInviteLink}>
+                {linkCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {linkCopied ? 'Link kopieret' : 'Kopiér link'}
+              </Button>
+              <Button variant="outline" onClick={() => setEmailFailedInfo(null)}>
+                Luk
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
