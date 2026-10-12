@@ -234,15 +234,20 @@ export default function Users() {
 
       await invalidateUsers();
 
-      toast({
-        title: adminStrings.common.success,
-        description: `Invitation sendt til ${createEmail}`
-      });
-
       // Reset form and close dialog
       setCreateEmail('');
       setCreateFullName('');
       setShowCreateDialog(false);
+
+      if (data?.email_failed && data?.invite_link) {
+        setEmailFailedInfo({ message: data.message ?? '', link: data.invite_link });
+        return;
+      }
+
+      toast({
+        title: adminStrings.common.success,
+        description: `Invitation sendt til ${createEmail}`
+      });
     } catch (error: any) {
       toast({
         title: adminStrings.common.error,
