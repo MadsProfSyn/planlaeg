@@ -33,7 +33,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Search, UserPlus, UserMinus, Plus, Loader2, Trash2, Mail } from 'lucide-react';
+import { Search, UserPlus, UserMinus, Plus, Loader2, Trash2, Mail, Copy, Check } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { da } from 'date-fns/locale';
@@ -61,6 +61,8 @@ export default function Users() {
   const [deleteTarget, setDeleteTarget] = useState<UserWithRoles | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [resendingId, setResendingId] = useState<string | null>(null);
+  const [emailFailedInfo, setEmailFailedInfo] = useState<{ message: string; link: string } | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user: currentUser } = useAuth();
@@ -97,6 +99,10 @@ export default function Users() {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       await invalidateUsers();
+      if (data?.email_failed && data?.invite_link) {
+        setEmailFailedInfo({ message: data.message ?? '', link: data.invite_link });
+        return;
+      }
       toast({ title: adminStrings.common.success, description: `Ny invitation sendt til ${target.email}` });
     } catch (error: any) {
       toast({ title: adminStrings.common.error, description: error.message, variant: 'destructive' });
