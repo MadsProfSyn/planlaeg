@@ -33,7 +33,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Search, UserPlus, UserMinus, Plus, Loader2, Trash2, Mail } from 'lucide-react';
+import { Search, UserPlus, UserMinus, Plus, Loader2, Trash2, Mail, Copy, Check } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { da } from 'date-fns/locale';
@@ -61,6 +61,8 @@ export default function Users() {
   const [deleteTarget, setDeleteTarget] = useState<UserWithRoles | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [resendingId, setResendingId] = useState<string | null>(null);
+  const [emailFailedInfo, setEmailFailedInfo] = useState<{ message: string; link: string } | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user: currentUser } = useAuth();
@@ -97,6 +99,10 @@ export default function Users() {
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       await invalidateUsers();
+      if (data?.email_failed && data?.invite_link) {
+        setEmailFailedInfo({ message: data.message ?? '', link: data.invite_link });
+        return;
+      }
       toast({ title: adminStrings.common.success, description: `Ny invitation sendt til ${target.email}` });
     } catch (error: any) {
       toast({ title: adminStrings.common.error, description: error.message, variant: 'destructive' });
@@ -228,15 +234,20 @@ export default function Users() {
 
       await invalidateUsers();
 
-      toast({
-        title: adminStrings.common.success,
-        description: `Invitation sendt til ${createEmail}`
-      });
-
       // Reset form and close dialog
       setCreateEmail('');
       setCreateFullName('');
       setShowCreateDialog(false);
+
+      if (data?.email_failed && data?.invite_link) {
+        setEmailFailedInfo({ message: data.message ?? '', link: data.invite_link });
+        return;
+      }
+
+      toast({
+        title: adminStrings.common.success,
+        description: `Invitation sendt til ${createEmail}`
+      });
     } catch (error: any) {
       toast({
         title: adminStrings.common.error,
@@ -246,6 +257,22 @@ export default function Users() {
     } finally {
       setIsCreating(false);
     }
+  };
+
+  const handleCopyInviteLink = async () => {
+    if (!emailFailedInfo) return;
+    try {
+      await navigator.clipboard.writeText(emailFailedInfo.link);
+    } catch {
+      const el = document.createElement('textarea');
+      el.value = emailFailedInfo.link;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+    }
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
   };
 
   return (
@@ -504,6 +531,33 @@ export default function Users() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Email Failed Dialog */}
+      <Dialog open={!!emailFailedInfo} onOpenChange={(o) => !o && setEmailFailedInfo(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mailen kunne ikke sendes</DialogTitle>
+            <DialogDescription>{emailFailedInfo?.message}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <textarea
+              readOnly
+              value={emailFailedInfo?.link ?? ''}
+              onFocus={(e) => e.currentTarget.select()}
+              className="w-full h-24 resize-none rounded-md border bg-muted/30 p-2 text-xs font-mono break-all"
+            />
+            <div className="flex items-center gap-2">
+              <Button variant="outline" className="gap-2" onClick={handleCopyInviteLink}>
+                {linkCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {linkCopied ? 'Link kopieret' : 'Kopiér link'}
+              </Button>
+              <Button variant="outline" onClick={() => setEmailFailedInfo(null)}>
+                Luk
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
