@@ -6,6 +6,8 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 //   { action: 'resend', user_id, redirect_to } → send invitationen igen til en bruger, der ikke er kommet i gang
 //   { action: 'status' }                       → brugere, der endnu ikke har logget ind / valgt kodeord
 // Forventede fejl returneres med status 200 og { error }, så teksten kan vises direkte i appen.
+// Kan mailen ikke sendes (fx fejl i mailopsætningen), laves linket i stedet og returneres som
+// { success: true, email_failed: true, invite_link }, så administratoren selv kan sende det til brugeren.
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -29,6 +31,20 @@ function safeRedirect(value: unknown): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+const EMAIL_FAILED_TEXT =
+  'Mailen kunne ikke sendes (mailopsætningen i Supabase fejler). Send linket herunder til brugeren selv – det kan kun bruges én gang.';
+
+// Inviterede brugere skal have rollen 'user' for at få adgang til data.
+// Databasen giver den automatisk ved invitation – dette er en ekstra sikring.
+// deno-lint-ignore no-explicit-any
+async function grantUserRole(admin: any, userId: string | undefined) {
+  if (!userId) return;
+  const { error } = await admin
+    .from('user_roles')
+    .upsert({ user_id: userId, role: 'user' }, { onConflict: 'user_id,role', ignoreDuplicates: true });
+  if (error) console.error('[admin-create-user] Kunne ikke give rollen user:', error.message);
 }
 
 Deno.serve(async (req) => {
@@ -101,6 +117,7 @@ Deno.serve(async (req) => {
       if (findError || !target?.email) return json({ error: 'Brugeren blev ikke fundet' });
 
       const metadata = { ...(target.user_metadata ?? {}), needs_password: true };
+      await grantUserRole(admin, target.id);
 
       if (!target.email_confirmed_at) {
         // Har ikke åbnet invitationen endnu → ny invitationsmail
@@ -108,16 +125,44 @@ Deno.serve(async (req) => {
           data: metadata,
           redirectTo,
         });
-        if (inviteError) return json({ error: inviteError.message });
-        return json({ success: true, kind: 'invite', email: target.email });
+        if (!inviteError) return json({ success: true, kind: 'invite', email: target.email });
+
+        const { data: link, error: linkError } = await admin.auth.admin.generateLink({
+          type: 'invite',
+          email: target.email,
+          options: { data: metadata, redirectTo },
+        });
+        if (linkError || !link?.properties?.action_link) return json({ error: inviteError.message });
+        return json({
+          success: true,
+          kind: 'invite',
+          email: target.email,
+          email_failed: true,
+          invite_link: link.properties.action_link,
+          message: EMAIL_FAILED_TEXT,
+        });
       }
 
       // Har allerede bekræftet sin mail (fx åbnet linket uden at vælge kodeord) → mail med link til at vælge kodeord
       const { error: updateError } = await admin.auth.admin.updateUserById(target.id, { user_metadata: metadata });
       if (updateError) return json({ error: updateError.message });
       const { error: recoveryError } = await admin.auth.resetPasswordForEmail(target.email, { redirectTo });
-      if (recoveryError) return json({ error: recoveryError.message });
-      return json({ success: true, kind: 'recovery', email: target.email });
+      if (!recoveryError) return json({ success: true, kind: 'recovery', email: target.email });
+
+      const { data: link, error: linkError } = await admin.auth.admin.generateLink({
+        type: 'recovery',
+        email: target.email,
+        options: { redirectTo },
+      });
+      if (linkError || !link?.properties?.action_link) return json({ error: recoveryError.message });
+      return json({
+        success: true,
+        kind: 'recovery',
+        email: target.email,
+        email_failed: true,
+        invite_link: link.properties.action_link,
+        message: EMAIL_FAILED_TEXT,
+      });
     }
 
     // ── Ny bruger: send invitation ───────────────────────────────────────────
@@ -141,9 +186,27 @@ Deno.serve(async (req) => {
           error: 'Der findes allerede en bruger med denne email. Er brugeren ikke kommet i gang, så brug "Send invitation igen" i listen.',
         });
       }
-      return json({ error: `Invitationen kunne ikke sendes: ${inviteError.message}` });
+
+      // Mailen kunne ikke sendes → lav linket uden mail, så administratoren selv kan sende det
+      const { data: link, error: linkError } = await admin.auth.admin.generateLink({
+        type: 'invite',
+        email,
+        options: { data: { full_name, needs_password: true }, redirectTo },
+      });
+      if (linkError || !link?.properties?.action_link) {
+        return json({ error: `Invitationen kunne ikke sendes: ${inviteError.message}` });
+      }
+      await grantUserRole(admin, link.user?.id);
+      return json({
+        success: true,
+        user: { id: link.user?.id, email: link.user?.email },
+        email_failed: true,
+        invite_link: link.properties.action_link,
+        message: EMAIL_FAILED_TEXT,
+      });
     }
 
+    await grantUserRole(admin, invited.user?.id);
     return json({ success: true, user: { id: invited.user?.id, email: invited.user?.email } });
   } catch (e) {
     return json({ error: (e as Error).message }, 500);
