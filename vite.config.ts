@@ -14,9 +14,9 @@ export default defineConfig(({ mode }) => ({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          mapbox: ["mapbox-gl", "react-map-gl"],
-          charts: ["recharts"],
+        manualChunks(id: string) {
+          if (id.includes("node_modules/mapbox-gl") || id.includes("node_modules/react-map-gl")) return "mapbox";
+          if (id.includes("node_modules/recharts")) return "charts";
         },
       },
     },
