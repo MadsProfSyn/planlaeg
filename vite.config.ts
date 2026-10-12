@@ -10,6 +10,17 @@ export default defineConfig(({ mode }) => ({
     port: 8080,
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  esbuild: mode === "production" ? { pure: ["console.log", "console.debug", "console.info"] } : undefined,
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          mapbox: ["mapbox-gl", "react-map-gl"],
+          charts: ["recharts"],
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
