@@ -11,16 +11,6 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   esbuild: mode === "production" ? { pure: ["console.log", "console.debug", "console.info"] } : undefined,
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks(id: string) {
-          if (id.includes("node_modules/mapbox-gl") || id.includes("node_modules/react-map-gl")) return "mapbox";
-          if (id.includes("node_modules/recharts")) return "charts";
-        },
-      },
-    },
-  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
