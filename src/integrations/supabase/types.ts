@@ -1655,6 +1655,10 @@ export type Database = {
         Returns: boolean
       }
       is_staff: { Args: never; Returns: boolean }
+      link_external_workfeed_bookings: {
+        Args: { p_window_days?: number }
+        Returns: number
+      }
       normalize_dk_address: { Args: { addr: string }; Returns: string }
       ping_vrp_worker: { Args: never; Returns: undefined }
       promote_user: { Args: { target_email: string }; Returns: undefined }
