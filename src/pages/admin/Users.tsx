@@ -259,6 +259,22 @@ export default function Users() {
     }
   };
 
+  const handleCopyInviteLink = async () => {
+    if (!emailFailedInfo) return;
+    try {
+      await navigator.clipboard.writeText(emailFailedInfo.link);
+    } catch {
+      const el = document.createElement('textarea');
+      el.value = emailFailedInfo.link;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+    }
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
+  };
+
   return (
     <div className="flex flex-col gap-6 p-4 md:p-6">
       <div className="flex items-center justify-between">
