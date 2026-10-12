@@ -1,6 +1,5 @@
 import {
   CalendarCheck,
-  ClipboardList,
   Users,
   UserX,
   Shield,
@@ -99,13 +98,6 @@ const navigationItems = [
 ];
 
 const adminNavigationItems = [
-  {
-    title: "Planlæg syn (Automatisk)",
-    url: "/inspections",
-    icon: ClipboardList,
-    adminOnly: true,
-    badge: "Beta",
-  },
   {
     title: "Min konto",
     url: "/admin/account",
