@@ -6,6 +6,8 @@ import { AlleSynTable, type AlleSynSortField, type SortDir } from "@/components/
 import { AlleSynFiltersBar } from "@/components/alle-syn/AlleSynFiltersBar";
 import { EditMondayItemDialog } from "@/components/alle-syn/EditMondayItemDialog";
 import { MondayItem } from "@/lib/supabase";
+import { Button } from "@/components/ui/button";
+import { Trash2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -53,6 +55,34 @@ export default function AlleSyn() {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [selectingAll, setSelectingAll] = useState(false);
+  const [knownAddresses, setKnownAddresses] = useState<Map<number, string>>(new Map());
+
+  // Reset selection when filters/sort change
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [searchQuery, selectedRegion, date, sortField, sortDir]);
+
+  // Shared filter builder used by list and "select all"
+  const applyFilters = useCallback(
+    (query: any) => {
+      let q = query.is("wf_shift_id", null);
+      if (selectedRegion) q = q.eq("landsdel", selectedRegion);
+      if (date) q = q.gte("dato_tid", `${date}T00:00:00`).lte("dato_tid", `${date}T23:59:59`);
+      if (searchQuery && searchQuery.trim().length >= 2) {
+        const words = searchQuery.trim().replace(/,/g, " ").split(/\s+/).filter((w) => w.length > 0);
+        for (const word of words) {
+          q = q.or(`Kunde.ilike.%${word}%,lejemalsnr.ilike.%${word}%,adresse.ilike.%${word}%`);
+        }
+      }
+      return q;
+    },
+    [selectedRegion, date, searchQuery]
+  );
+
   // Fetch regions once
   useEffect(() => {
     supabase
@@ -71,25 +101,9 @@ export default function AlleSyn() {
     const start = (page - 1) * PAGE_SIZE;
     const end = start + PAGE_SIZE - 1;
 
-    let query = supabase
-      .from("monday_items_selected")
-      .select("*", { count: "exact" })
-      .is("wf_shift_id", null);
-
-    if (selectedRegion) {
-      query = query.eq("landsdel", selectedRegion);
-    }
-    if (date) {
-      query = query.gte("dato_tid", `${date}T00:00:00`).lte("dato_tid", `${date}T23:59:59`);
-    }
-    if (searchQuery && searchQuery.trim().length >= 2) {
-      const words = searchQuery.trim().replace(/,/g, " ").split(/\s+/).filter(w => w.length > 0);
-      for (const word of words) {
-        query = query.or(
-          `Kunde.ilike.%${word}%,lejemalsnr.ilike.%${word}%,adresse.ilike.%${word}%`
-        );
-      }
-    }
+    let query = applyFilters(
+      supabase.from("monday_items_selected").select("*", { count: "exact" })
+    );
 
     const ascending = sortDir === "asc";
     query = query
@@ -102,11 +116,23 @@ export default function AlleSyn() {
     if (error) {
       toast({ title: "Fejl", description: error.message, variant: "destructive" });
     } else {
-      setItems((data || []) as MondayItem[]);
-      setCount(total || 0);
+      const rows = (data || []) as MondayItem[];
+      const totalCount = total || 0;
+      const lastPage = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+      if (rows.length === 0 && page > lastPage) {
+        setPage(lastPage);
+        return;
+      }
+      setItems(rows);
+      setCount(totalCount);
+      setKnownAddresses((prev) => {
+        const next = new Map(prev);
+        rows.forEach((r) => next.set(r.id, r.adresse || r.Kunde || `#${r.id}`));
+        return next;
+      });
     }
     setIsLoading(false);
-  }, [page, searchQuery, selectedRegion, date, sortField, sortDir, toast]);
+  }, [page, applyFilters, sortField, sortDir, toast]);
 
   useEffect(() => {
     fetchItems();
@@ -143,6 +169,76 @@ export default function AlleSyn() {
     }
     setPage(1);
   };
+
+  const allOnPageSelected = items.length > 0 && items.every((i) => selectedIds.has(i.id));
+
+  const handleToggle = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleToggleAll = (checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      items.forEach((i) => (checked ? next.add(i.id) : next.delete(i.id)));
+      return next;
+    });
+  };
+
+  const handleSelectAllMatching = async () => {
+    setSelectingAll(true);
+    const { data, error } = await applyFilters(
+      supabase.from("monday_items_selected").select("id")
+    ).range(0, 1999);
+    setSelectingAll(false);
+    if (error) {
+      toast({ title: "Fejl", description: error.message, variant: "destructive" });
+      return;
+    }
+    setSelectedIds(new Set(((data || []) as { id: number }[]).map((r) => r.id)));
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    setBulkDeleting(true);
+    let deleted = 0;
+    for (let i = 0; i < ids.length; i += 200) {
+      const chunk = ids.slice(i, i + 200);
+      const { error, count: c } = await supabase
+        .from("monday_items_selected")
+        .delete({ count: "exact" })
+        .in("id", chunk);
+      if (error) {
+        toast({
+          title: "Fejl ved sletning",
+          description: `${error.message}${deleted ? ` (${deleted} syn blev slettet før fejlen)` : ""}`,
+          variant: "destructive",
+        });
+        setBulkDeleting(false);
+        setBulkOpen(false);
+        setSelectedIds(new Set());
+        fetchItems();
+        return;
+      }
+      deleted += c ?? chunk.length;
+    }
+    toast({ title: "Slettet", description: `${deleted} syn er slettet` });
+    setBulkDeleting(false);
+    setBulkOpen(false);
+    setSelectedIds(new Set());
+    fetchItems();
+  };
+
+  const selectedCount = selectedIds.size;
+  const selectedAddresses = Array.from(selectedIds)
+    .map((id) => knownAddresses.get(id))
+    .filter(Boolean) as string[];
+  const shownAddresses = selectedAddresses.slice(0, 5);
+  const otherCount = selectedCount - shownAddresses.length;
 
   const handleEdit = (item: MondayItem) => {
     setEditItem(item);
@@ -200,7 +296,34 @@ export default function AlleSyn() {
         isLoading={isLoading}
       />
 
+      {selectedCount > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-md border bg-muted/50 px-3 py-2 text-sm">
+          <span className="font-medium">{selectedCount} valgt</span>
+          {allOnPageSelected && count > items.length && selectedCount < count && (
+            <button
+              type="button"
+              className="text-primary underline-offset-4 hover:underline disabled:opacity-50"
+              onClick={handleSelectAllMatching}
+              disabled={selectingAll}
+            >
+              {selectingAll ? "Henter…" : `Vælg alle ${count} syn, der matcher`}
+            </button>
+          )}
+          <div className="ml-auto flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+              Fravælg
+            </Button>
+            <Button variant="destructive" size="sm" onClick={() => setBulkOpen(true)}>
+              <Trash2 className="h-4 w-4 mr-1" /> Slet valgte ({selectedCount})
+            </Button>
+          </div>
+        </div>
+      )}
+
       <AlleSynTable
+        selectedIds={selectedIds}
+        onToggle={handleToggle}
+        onToggleAll={handleToggleAll}
         items={items}
         isLoading={isLoading}
         onEdit={handleEdit}
@@ -263,6 +386,35 @@ export default function AlleSyn() {
           <AlertDialogFooter>
             <AlertDialogCancel>Annuller</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmDelete}>Slet</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={bulkOpen} onOpenChange={(o) => !bulkDeleting && setBulkOpen(o)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Slet {selectedCount} syn?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  Synene fjernes fra ruteplanlæggeren. Det kan ikke fortrydes, men et syn kan sendes igen fra Monday (Til planlæg).
+                </p>
+                {shownAddresses.length > 0 && (
+                  <ul className="list-disc pl-5 text-foreground">
+                    {shownAddresses.map((a, i) => (
+                      <li key={i} className="truncate">{a}</li>
+                    ))}
+                  </ul>
+                )}
+                {otherCount > 0 && <p>… og {otherCount} andre</p>}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkDeleting}>Annuller</AlertDialogCancel>
+            <Button variant="destructive" onClick={handleBulkDelete} disabled={bulkDeleting}>
+              {bulkDeleting ? "Sletter…" : `Slet ${selectedCount} syn`}
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
