@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
 import { MondayItem } from "@/lib/supabase";
 import { getEffectiveDuration } from "@/lib/inspection-duration";
 
@@ -34,6 +35,9 @@ interface AlleSynTableProps {
   sortField: AlleSynSortField;
   sortDir: SortDir;
   onSort: (field: AlleSynSortField) => void;
+  selectedIds: Set<number>;
+  onToggle: (id: number) => void;
+  onToggleAll: (checked: boolean) => void;
 }
 
 function extractNote(item: MondayItem): string {
@@ -81,14 +85,14 @@ function SortHeader({
   );
 }
 
-export function AlleSynTable({ items, isLoading, onEdit, onDelete, sortField, sortDir, onSort }: AlleSynTableProps) {
+export function AlleSynTable({ items, isLoading, onEdit, onDelete, sortField, sortDir, onSort, selectedIds, onToggle, onToggleAll }: AlleSynTableProps) {
   if (isLoading) {
     return (
       <div className="rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
-              {["Kunde", "Adresse", "Synstype", "Dato/tid", "Værelser", "Note", "Varighed", ""].map((h) => (
+              {["", "Kunde", "Adresse", "Synstype", "Dato/tid", "Værelser", "Note", "Varighed", ""].map((h) => (
                 <TableHead key={h}>{h}</TableHead>
               ))}
             </TableRow>
@@ -96,7 +100,7 @@ export function AlleSynTable({ items, isLoading, onEdit, onDelete, sortField, so
           <TableBody>
             {Array.from({ length: 8 }).map((_, i) => (
               <TableRow key={i}>
-                {Array.from({ length: 8 }).map((_, j) => (
+                {Array.from({ length: 9 }).map((_, j) => (
                   <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                 ))}
               </TableRow>
@@ -115,11 +119,22 @@ export function AlleSynTable({ items, isLoading, onEdit, onDelete, sortField, so
     );
   }
 
+  const selectedOnPage = items.filter((i) => selectedIds.has(i.id)).length;
+  const allSelected = items.length > 0 && selectedOnPage === items.length;
+  const someSelected = selectedOnPage > 0 && !allSelected;
+
   return (
     <div className="rounded-md border">
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead className="w-10">
+              <Checkbox
+                checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                onCheckedChange={(v) => onToggleAll(v === true)}
+                aria-label="Vælg alle på siden"
+              />
+            </TableHead>
             <TableHead><SortHeader label="Kunde" field="Kunde" sortField={sortField} sortDir={sortDir} onSort={onSort} /></TableHead>
             <TableHead><SortHeader label="Adresse" field="adresse" sortField={sortField} sortDir={sortDir} onSort={onSort} /></TableHead>
             <TableHead><SortHeader label="Synstype" field="synstype" sortField={sortField} sortDir={sortDir} onSort={onSort} /></TableHead>
@@ -135,7 +150,14 @@ export function AlleSynTable({ items, isLoading, onEdit, onDelete, sortField, so
             const note = extractNote(item);
             const dur = getDisplayDuration(item);
             return (
-              <TableRow key={item.id}>
+              <TableRow key={item.id} className={selectedIds.has(item.id) ? "bg-muted/50" : undefined}>
+                <TableCell>
+                  <Checkbox
+                    checked={selectedIds.has(item.id)}
+                    onCheckedChange={() => onToggle(item.id)}
+                    aria-label="Vælg syn"
+                  />
+                </TableCell>
                 <TableCell className="font-medium max-w-[140px] truncate">{item.Kunde || "—"}</TableCell>
                 <TableCell className="max-w-[200px] truncate">{item.adresse || "—"}</TableCell>
                 <TableCell>{item.synstype || "—"}</TableCell>
