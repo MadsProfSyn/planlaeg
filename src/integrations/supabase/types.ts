@@ -1607,7 +1607,22 @@ export type Database = {
     }
     Functions: {
       cleanup_old_jobs: { Args: { hours_old?: number }; Returns: number }
+      cph_date: { Args: { p: string }; Returns: string }
       demote_admin: { Args: { target_email: string }; Returns: undefined }
+      find_duplicate_syn: {
+        Args: {
+          p_adresse: string
+          p_dato: string
+          p_item_id: number
+          p_lejemalsnr: string
+          p_synstype: string
+        }
+        Returns: {
+          id: number
+          item_id: number
+          wf_shift_id: string
+        }[]
+      }
       get_availability_overview: {
         Args: { p_target_dates: string[] }
         Returns: {
@@ -1709,6 +1724,7 @@ export type Database = {
         Args: { p_active: string[]; p_office: string[] }
         Returns: number
       }
+      syn_address_key: { Args: { p: string }; Returns: string }
       sync_workfeed_availability_stub: { Args: never; Returns: undefined }
     }
     Enums: {
