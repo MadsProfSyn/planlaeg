@@ -23,6 +23,7 @@ export type AlleSynSortField =
   | "dato_tid"
   | "antal_vaerelser"
   | "note"
+  | "yderligere_info"
   | "duration_minutes";
 
 export type SortDir = "asc" | "desc";
@@ -92,7 +93,7 @@ export function AlleSynTable({ items, isLoading, onEdit, onDelete, sortField, so
         <Table>
           <TableHeader>
             <TableRow>
-              {["", "Kunde", "Adresse", "Synstype", "Dato/tid", "Værelser", "Note", "Varighed", ""].map((h, i) => (
+              {["", "Kunde", "Adresse", "Synstype", "Dato/tid", "Værelser", "Note", "Yderligere info", "Varighed", ""].map((h, i) => (
                 <TableHead key={i}>{h}</TableHead>
               ))}
             </TableRow>
@@ -100,7 +101,7 @@ export function AlleSynTable({ items, isLoading, onEdit, onDelete, sortField, so
           <TableBody>
             {Array.from({ length: 8 }).map((_, i) => (
               <TableRow key={i}>
-                {Array.from({ length: 9 }).map((_, j) => (
+                {Array.from({ length: 10 }).map((_, j) => (
                   <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                 ))}
               </TableRow>
@@ -141,6 +142,7 @@ export function AlleSynTable({ items, isLoading, onEdit, onDelete, sortField, so
             <TableHead><SortHeader label="Dato/tid" field="dato_tid" sortField={sortField} sortDir={sortDir} onSort={onSort} /></TableHead>
             <TableHead className="text-center"><SortHeader label="Værelser" field="antal_vaerelser" sortField={sortField} sortDir={sortDir} onSort={onSort} /></TableHead>
             <TableHead><SortHeader label="Note" field="note" sortField={sortField} sortDir={sortDir} onSort={onSort} /></TableHead>
+            <TableHead><SortHeader label="Yderligere info" field="yderligere_info" sortField={sortField} sortDir={sortDir} onSort={onSort} /></TableHead>
             <TableHead className="text-center"><SortHeader label="Varighed" field="duration_minutes" sortField={sortField} sortDir={sortDir} onSort={onSort} /></TableHead>
             <TableHead className="w-10" />
           </TableRow>
@@ -168,6 +170,7 @@ export function AlleSynTable({ items, isLoading, onEdit, onDelete, sortField, so
                 </TableCell>
                 <TableCell className="text-center">{item.antal_vaerelser ?? "—"}</TableCell>
                 <TableCell className="max-w-[160px] truncate" title={note}>{note || "—"}</TableCell>
+                <TableCell className="max-w-[180px] truncate" title={item.yderligere_info || undefined}>{item.yderligere_info || "—"}</TableCell>
                 <TableCell className="text-center whitespace-nowrap">
                   {dur.value} min
                   {dur.isManual ? (

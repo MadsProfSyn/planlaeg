@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { cn } from "@/lib/utils";
-import { Search, X } from "lucide-react";
+import { Info, Search, X } from "lucide-react";
 import type { MondayItem } from "@/lib/supabase";
 
 interface InspectionsPanelProps {
@@ -79,6 +79,12 @@ function DraggableInspection({ inspection, isSelected, onSelect }: DraggableInsp
           <p className="text-xs text-muted-foreground mt-1">
             {inspection.antal_vaerelser ?? "?"} værelser
           </p>
+          {inspection.yderligere_info?.trim() && (
+            <div className="flex items-start gap-1 mt-1 text-muted-foreground" title={inspection.yderligere_info}>
+              <Info className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+              <span className="text-xs line-clamp-2">{inspection.yderligere_info}</span>
+            </div>
+          )}
         </div>
         <div className="flex flex-col items-end gap-1">
           <Badge className={cn("flex-shrink-0", getTypeColor(abbr))}>

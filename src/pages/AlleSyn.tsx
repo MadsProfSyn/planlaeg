@@ -75,7 +75,7 @@ export default function AlleSyn() {
       if (searchQuery && searchQuery.trim().length >= 2) {
         const words = searchQuery.trim().replace(/,/g, " ").split(/\s+/).filter((w) => w.length > 0);
         for (const word of words) {
-          q = q.or(`Kunde.ilike.%${word}%,lejemalsnr.ilike.%${word}%,adresse.ilike.%${word}%`);
+          q = q.or(`Kunde.ilike.%${word}%,lejemalsnr.ilike.%${word}%,adresse.ilike.%${word}%,yderligere_info.ilike.%${word}%`);
         }
       }
       return q;

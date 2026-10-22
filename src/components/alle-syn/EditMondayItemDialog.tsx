@@ -29,6 +29,7 @@ export function EditMondayItemDialog({ open, onClose, item, onSave }: EditMonday
     dato_tid: "",
     antal_vaerelser: "" as string,
     note: "",
+    yderligere_info: "",
     duration_minutes: "" as string,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -57,6 +58,7 @@ export function EditMondayItemDialog({ open, onClose, item, onSave }: EditMonday
           : "",
         antal_vaerelser: item.antal_vaerelser?.toString() || "",
         note: (item as any).note || rawNote,
+        yderligere_info: item.yderligere_info || "",
         duration_minutes: (item as any).duration_minutes?.toString() || "",
       });
     }
@@ -74,6 +76,7 @@ export function EditMondayItemDialog({ open, onClose, item, onSave }: EditMonday
         dato_tid: formData.dato_tid || null,
         antal_vaerelser: formData.antal_vaerelser ? parseInt(formData.antal_vaerelser) : null,
         note: formData.note || null,
+        yderligere_info: formData.yderligere_info || null,
         duration_minutes: formData.duration_minutes ? parseInt(formData.duration_minutes) : null,
       };
       await onSave(item.id, updates);
@@ -118,6 +121,10 @@ export function EditMondayItemDialog({ open, onClose, item, onSave }: EditMonday
           <div className="grid gap-1.5">
             <Label htmlFor="edit-note">Note</Label>
             <Textarea id="edit-note" value={formData.note} onChange={(e) => setFormData((f) => ({ ...f, note: e.target.value }))} rows={2} />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="edit-yderligere">Yderligere informationer</Label>
+            <Textarea id="edit-yderligere" value={formData.yderligere_info} onChange={(e) => setFormData((f) => ({ ...f, yderligere_info: e.target.value }))} rows={2} />
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="edit-duration">Varighed (minutter)</Label>
