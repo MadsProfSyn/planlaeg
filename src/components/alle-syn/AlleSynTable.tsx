@@ -92,8 +92,8 @@ export function AlleSynTable({ items, isLoading, onEdit, onDelete, sortField, so
         <Table>
           <TableHeader>
             <TableRow>
-              {["", "Kunde", "Adresse", "Synstype", "Dato/tid", "Værelser", "Note", "Varighed", ""].map((h) => (
-                <TableHead key={h}>{h}</TableHead>
+              {["", "Kunde", "Adresse", "Synstype", "Dato/tid", "Værelser", "Note", "Varighed", ""].map((h, i) => (
+                <TableHead key={i}>{h}</TableHead>
               ))}
             </TableRow>
           </TableHeader>
@@ -176,13 +176,15 @@ export function AlleSynTable({ items, isLoading, onEdit, onDelete, sortField, so
                     <Badge variant="outline" className="ml-1 text-xs font-normal">auto</Badge>
                   )}
                 </TableCell>
-                <TableCell className="flex gap-1">
-                  <Button variant="ghost" size="icon" onClick={() => onEdit(item)}>
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="hover:bg-destructive/10" onClick={() => onDelete(item.id)}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
+                <TableCell>
+                  <div className="flex gap-1 justify-end">
+                    <Button variant="ghost" size="icon" onClick={() => onEdit(item)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="hover:bg-destructive/10" onClick={() => onDelete(item.id)}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             );
