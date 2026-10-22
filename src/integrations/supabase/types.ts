@@ -803,6 +803,7 @@ export type Database = {
           scheduled_start_time: string | null
           synstype: string | null
           wf_shift_id: string | null
+          yderligere_info: string | null
         }
         Insert: {
           adresse?: string | null
@@ -838,6 +839,7 @@ export type Database = {
           scheduled_start_time?: string | null
           synstype?: string | null
           wf_shift_id?: string | null
+          yderligere_info?: string | null
         }
         Update: {
           adresse?: string | null
@@ -873,6 +875,7 @@ export type Database = {
           scheduled_start_time?: string | null
           synstype?: string | null
           wf_shift_id?: string | null
+          yderligere_info?: string | null
         }
         Relationships: [
           {
