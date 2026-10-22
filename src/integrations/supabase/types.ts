@@ -1150,8 +1150,11 @@ export type Database = {
           inspector_name: string
           message_preview: string | null
           phone: string | null
+          responded_at: string | null
+          response_status: string | null
           sent_at: string | null
           sent_by: string | null
+          sent_by_name: string | null
           status: string
           target_date: string
         }
@@ -1164,8 +1167,11 @@ export type Database = {
           inspector_name: string
           message_preview?: string | null
           phone?: string | null
+          responded_at?: string | null
+          response_status?: string | null
           sent_at?: string | null
           sent_by?: string | null
+          sent_by_name?: string | null
           status: string
           target_date: string
         }
@@ -1178,8 +1184,11 @@ export type Database = {
           inspector_name?: string
           message_preview?: string | null
           phone?: string | null
+          responded_at?: string | null
+          response_status?: string | null
           sent_at?: string | null
           sent_by?: string | null
+          sent_by_name?: string | null
           status?: string
           target_date?: string
         }
