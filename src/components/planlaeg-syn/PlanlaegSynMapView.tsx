@@ -72,6 +72,7 @@ export function PlanlaegSynMapView({
           title: i.Kunde || i.adresse || "Synsopgave",
           subtitle: i.adresse || "",
           extra: i.synstype || "",
+          info: i.yderligere_info?.trim() || "",
         })),
     [inspections]
   );
@@ -280,6 +281,7 @@ export function PlanlaegSynMapView({
               <div style="font-weight:600;margin-bottom:2px">${escapeHtml(p.title)}</div>
               <div style="font-size:12px;color:#555">${escapeHtml(p.subtitle)}</div>
               ${p.extra ? `<div style="font-size:12px;color:#777;margin-top:4px">${escapeHtml(p.extra)}</div>` : ""}
+              ${(p as { info?: string }).info ? `<div title="${escapeHtml((p as { info?: string }).info!)}" style="font-size:12px;color:#555;margin-top:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">ℹ︎ ${escapeHtml((p as { info?: string }).info!)}</div>` : ""}
             </div>`
           );
         });
