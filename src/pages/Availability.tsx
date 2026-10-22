@@ -428,6 +428,7 @@ ProfSyn`;
       // Clear selection after successful send
       if (sent > 0) {
         setSelectedInspectors(new Set());
+        setActiveTab("sms-history");
       }
     } catch (error: any) {
       console.error("Error sending SMS reminders:", error);
@@ -541,7 +542,7 @@ ProfSyn`;
         </TabsContent>
 
         <TabsContent value="sms-history">
-          <SmsHistoryTab initialDate={filters.date} />
+          <SmsHistoryTab />
         </TabsContent>
       </Tabs>
 
